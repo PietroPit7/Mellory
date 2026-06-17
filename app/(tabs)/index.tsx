@@ -179,6 +179,80 @@ function getCollectionIcon(item: (typeof collections)[number]) {
   return item.icon;
 }
 
+// Liste tematiche generate al volo dai luoghi reali trovati nella zona.
+type ZoneTheme = {
+  id: string;
+  title: string;
+  hint: string;
+  icon: string;
+  match: (place: DashboardPlace) => boolean;
+};
+
+const ZONE_THEMES: ZoneTheme[] = [
+  {
+    id: "near",
+    title: "Vicinissimi",
+    hint: "A due passi da te",
+    icon: "\u2726",
+    match: (place) => place.distanceMeters <= 700,
+  },
+  {
+    id: "dinner",
+    title: "A cena",
+    hint: "Ristoranti e pizzerie",
+    icon: "\u25CC",
+    match: (place) =>
+      place.categoryId === "restaurant" || place.categoryId === "pizzeria",
+  },
+  {
+    id: "aperitivo",
+    title: "Aperitivo",
+    hint: "Bar e pub",
+    icon: "\u25C7",
+    match: (place) => place.categoryId === "bar" || place.categoryId === "pub",
+  },
+  {
+    id: "coffee",
+    title: "Caff\u00E8 & colazione",
+    hint: "Caff\u00E8 e forni",
+    icon: "\u25D0",
+    match: (place) =>
+      place.categoryId === "cafe" || place.categoryId === "bakery",
+  },
+  {
+    id: "sweet",
+    title: "Dolce",
+    hint: "Gelaterie e pasticcerie",
+    icon: "\u273A",
+    match: (place) =>
+      place.categoryId === "ice_cream" || place.categoryId === "pastry",
+  },
+  {
+    id: "see",
+    title: "Da vedere",
+    hint: "Attrazioni e cultura",
+    icon: "\u2727",
+    match: (place) => place.categoryId === "attrazione",
+  },
+];
+
+type ZoneList = ZoneTheme & {
+  places: DashboardPlace[];
+  count: number;
+};
+
+function buildZoneLists(places: DashboardPlace[]): ZoneList[] {
+  return ZONE_THEMES.map((theme) => {
+    const themePlaces = places.filter(theme.match);
+
+    return {
+      ...theme,
+      places: themePlaces,
+      count: themePlaces.length,
+    };
+  }).filter((list) => list.count > 0);
+}
+
 function hasGeoapifyApiKey() {
   return GEOAPIFY_API_KEY.trim().length > 0;
 }
@@ -719,6 +793,7 @@ export default function HomeScreen() {
   const [categories, setCategories] =
     useState<DashboardCategory[]>(defaultCategories);
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [places, setPlaces] = useState<DashboardPlace[]>([]);
   const [guidePlaces, setGuidePlaces] = useState<DashboardPlace[]>([]);
   const placesScrollRef = useRef<ScrollView>(null);
@@ -735,11 +810,19 @@ export default function HomeScreen() {
     [citySuggestions]
   );
 
+  const zoneLists = useMemo(() => buildZoneLists(places), [places]);
+
+  const activeTheme = useMemo(
+    () => zoneLists.find((list) => list.id === activeThemeId) ?? null,
+    [zoneLists, activeThemeId]
+  );
+
   const filteredPlaces = useMemo(() => {
+    if (activeTheme) return places.filter(activeTheme.match);
     if (selectedCategoryId === "all") return places;
 
     return places.filter((place) => place.categoryId === selectedCategoryId);
-  }, [places, selectedCategoryId]);
+  }, [activeTheme, places, selectedCategoryId]);
 
   const hasDashboard = activeContext !== null;
   const hasPlaces = filteredPlaces.length > 0;
@@ -828,6 +911,7 @@ export default function HomeScreen() {
     setMessage("");
     setActiveContext(context);
     setSelectedCategoryId("all");
+    setActiveThemeId(null);
     setPlaces([]);
     setGuidePlaces([]);
 
@@ -1351,7 +1435,10 @@ export default function HomeScreen() {
                       styles.categoryChip,
                       isSelected && styles.categoryChipSelected,
                     ]}
-                    onPress={() => setSelectedCategoryId(category.id)}
+                    onPress={() => {
+                      setSelectedCategoryId(category.id);
+                      setActiveThemeId(null);
+                    }}
                   >
                     <Text
                       style={[
@@ -1387,15 +1474,93 @@ export default function HomeScreen() {
             </ScrollView>
           </View>
 
+          {zoneLists.length > 0 && (
+            <View style={styles.zoneSection}>
+              <Text style={styles.zoneKicker}>RACCOLTE DI ZONA</Text>
+              <Text style={styles.zoneHeading}>Liste pronte, dai dati reali</Text>
+              <Text style={styles.zoneSubtitle}>
+                Costruite al volo dai locali trovati qui intorno.
+              </Text>
+
+              <View style={styles.zoneGrid}>
+                {zoneLists.map((list) => {
+                  const isActive = activeThemeId === list.id;
+
+                  return (
+                    <Pressable
+                      key={list.id}
+                      style={[
+                        styles.zoneCard,
+                        isActive && styles.zoneCardActive,
+                      ]}
+                      onPress={() => {
+                        setActiveThemeId((current) =>
+                          current === list.id ? null : list.id
+                        );
+                        setSelectedCategoryId("all");
+                      }}
+                    >
+                      <View style={styles.zoneCardTop}>
+                        <View
+                          style={[
+                            styles.zoneIconWrap,
+                            isActive && styles.zoneIconWrapActive,
+                          ]}
+                        >
+                          <Text style={styles.zoneIcon}>{list.icon}</Text>
+                        </View>
+
+                        <Text
+                          style={[
+                            styles.zoneCount,
+                            isActive && styles.zoneCountActive,
+                          ]}
+                        >
+                          {list.count}
+                        </Text>
+                      </View>
+
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.zoneTitle,
+                          isActive && styles.zoneTitleActive,
+                        ]}
+                      >
+                        {list.title}
+                      </Text>
+
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.zoneHint,
+                          isActive && styles.zoneHintActive,
+                        ]}
+                      >
+                        {list.hint}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           {hasPlaces && (
             <View style={styles.placesPanel}>
               <View style={styles.panelHeader}>
                 {renderCarouselControls("places")}
 
-                <Text style={styles.panelKicker}>SELEZIONE REALE</Text>
-                <Text style={styles.panelTitle}>Scorri i suggerimenti</Text>
+                <Text style={styles.panelKicker}>
+                  {activeTheme ? "RACCOLTA DI ZONA" : "SELEZIONE REALE"}
+                </Text>
+                <Text style={styles.panelTitle}>
+                  {activeTheme ? activeTheme.title : "Scorri i suggerimenti"}
+                </Text>
                 <Text style={styles.panelText}>
-                  I locali cambiano in base alla categoria scelta.
+                  {activeTheme
+                    ? activeTheme.hint
+                    : "I locali cambiano in base alla categoria scelta."}
                 </Text>
               </View>
 
@@ -2076,6 +2241,104 @@ function createStyles(colors: MelloryThemeColors) {
     fontSize: 12,
     fontWeight: "900",
     marginTop: "auto",
+  },
+  zoneSection: {
+    marginBottom: 18,
+  },
+  zoneKicker: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 3,
+    marginBottom: 12,
+  },
+  zoneHeading: {
+    color: colors.cream,
+    fontSize: 27,
+    lineHeight: 31,
+    fontFamily: "serif",
+    fontWeight: "900",
+    letterSpacing: -0.6,
+    marginBottom: 8,
+  },
+  zoneSubtitle: {
+    color: colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  zoneGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 16,
+  },
+  zoneCard: {
+    flex: 1,
+    minWidth: "47%",
+    minHeight: 132,
+    borderRadius: 25,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(255, 248, 239, 0.08)",
+    padding: 18,
+    justifyContent: "space-between",
+  },
+  zoneCardActive: {
+    backgroundColor: colors.paper,
+    borderColor: colors.paper,
+  },
+  zoneCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  zoneIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 999,
+    backgroundColor: "rgba(216, 78, 127, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(216, 78, 127, 0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  zoneIconWrapActive: {
+    backgroundColor: "rgba(216, 78, 127, 0.16)",
+  },
+  zoneIcon: {
+    color: colors.pink,
+    fontSize: 21,
+    fontWeight: "900",
+  },
+  zoneCount: {
+    color: colors.muted,
+    fontSize: 22,
+    fontFamily: "serif",
+    fontWeight: "900",
+  },
+  zoneCountActive: {
+    color: colors.paperText,
+  },
+  zoneTitle: {
+    color: colors.cream,
+    fontSize: 21,
+    lineHeight: 25,
+    fontFamily: "serif",
+    fontWeight: "900",
+    marginBottom: 5,
+  },
+  zoneTitleActive: {
+    color: colors.paperText,
+  },
+  zoneHint: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  zoneHintActive: {
+    color: colors.paperText,
+    opacity: 0.7,
   },
   realSearchCard: {
     backgroundColor: colors.paper,
