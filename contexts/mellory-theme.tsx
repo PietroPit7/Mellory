@@ -198,7 +198,12 @@ export function MelloryThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     applyWebThemeVariables(colors);
-    Appearance.setColorScheme(preference);
+
+    // react-native-web non implementa Appearance.setColorScheme: chiamarlo
+    // farebbe crashare l'app sul web. Lo invochiamo solo dove esiste davvero.
+    if (Platform.OS !== "web" && typeof Appearance.setColorScheme === "function") {
+      Appearance.setColorScheme(preference);
+    }
   }, [colors, preference]);
 
   const setPreference = useCallback(
