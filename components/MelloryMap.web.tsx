@@ -102,17 +102,23 @@ export default function MelloryMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRefs = useRef<maplibregl.Marker[]>([]);
+  const initialCenterRef = useRef(center);
   const [hasMapError, setHasMapError] = useState(false);
 
+  // La mappa viene creata una sola volta: ricrearla a ogni cambio di centro
+  // causava flicker e perdita dell'interazione. I cambi di centro sono gestiti
+  // in modo fluido dall'effetto easeTo qui sotto.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+
+    const initialCenter = initialCenterRef.current;
 
     try {
       mapRef.current = new maplibregl.Map({
         container: containerRef.current,
         style: MELLORY_MAP_STYLE,
-        center: [center.longitude, center.latitude],
-        zoom: center.zoom,
+        center: [initialCenter.longitude, initialCenter.latitude],
+        zoom: initialCenter.zoom,
         attributionControl: false,
       });
     } catch {
@@ -131,7 +137,7 @@ export default function MelloryMap({
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [center.latitude, center.longitude, center.zoom]);
+  }, []);
 
   useEffect(() => {
     mapRef.current?.easeTo({
@@ -234,7 +240,7 @@ export default function MelloryMap({
 const styles = {
   frame: {
     position: "relative",
-    height: 540,
+    height: 640,
     width: "100%",
     borderRadius: 28,
     overflow: "hidden",

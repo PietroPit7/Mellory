@@ -178,7 +178,7 @@ export default function MelloryMap({
 const styles = StyleSheet.create({
   frame: {
     position: "relative",
-    height: 540,
+    height: 640,
     borderRadius: 28,
     overflow: "hidden",
     backgroundColor: colors.black,

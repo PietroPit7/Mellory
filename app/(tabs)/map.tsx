@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Keyboard,
   Pressable,
   ScrollView,
@@ -863,6 +864,16 @@ export default function MapScreen() {
     setMapRegion(region);
   }, []);
 
+  const areaSearchAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(areaSearchAnim, {
+      toValue: shouldShowAreaSearch ? 1 : 0,
+      duration: 260,
+      useNativeDriver: true,
+    }).start();
+  }, [areaSearchAnim, shouldShowAreaSearch]);
+
   return (
     <View style={styles.root}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -879,6 +890,11 @@ export default function MapScreen() {
           </Text>
 
           <View style={styles.searchBox}>
+            <View style={styles.searchLens}>
+              <View style={styles.searchLensCircle} />
+              <View style={styles.searchLensHandle} />
+            </View>
+
             <TextInput
               value={searchQuery}
               onChangeText={(value) => {
@@ -890,46 +906,44 @@ export default function MapScreen() {
                   setSelectedSearchLabel("");
                 }
               }}
-              placeholder="Cerca città, es. Milano, Roma, Parigi..."
-              placeholderTextColor={colors.muted}
+              placeholder="Cerca città o locale"
+              placeholderTextColor={colors.textMuted}
               autoCapitalize="words"
+              autoCorrect={false}
               returnKeyType="search"
               onSubmitEditing={handleSearchPress}
               style={styles.searchInput}
             />
 
+            {(isSuggesting || isSearchingPlaces) && !isLocatingUser ? (
+              <ActivityIndicator color={colors.pink} />
+            ) : null}
+
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Usa la mia posizione"
               style={[
-                styles.searchButton,
-                isSearchingPlaces && styles.searchButtonDisabled,
+                styles.positionButton,
+                (isLocatingUser || isSearchingPlaces) &&
+                  styles.positionButtonDisabled,
               ]}
-              onPress={handleSearchPress}
-              disabled={isSearchingPlaces}
+              onPress={searchPlacesAroundUser}
+              disabled={isLocatingUser || isSearchingPlaces}
             >
-              <Text style={styles.searchButtonText}>
-                {isSuggesting || isSearchingPlaces ? "Cerco" : "Cerca"}
+              <View style={styles.positionIcon}>
+                <View
+                  style={[
+                    styles.positionDot,
+                    isLocatingUser && styles.positionDotLoading,
+                  ]}
+                />
+              </View>
+
+              <Text numberOfLines={1} style={styles.positionText}>
+                {isLocatingUser ? "Ti localizzo" : "Mia posizione"}
               </Text>
             </Pressable>
           </View>
-
-          <Pressable
-            style={[
-              styles.nearMeButton,
-              (isLocatingUser || isSearchingPlaces) &&
-                styles.nearMeButtonDisabled,
-            ]}
-            onPress={searchPlacesAroundUser}
-            disabled={isLocatingUser || isSearchingPlaces}
-          >
-            <View style={styles.nearMeIcon}>
-              <View style={styles.nearMeIconRing} />
-              <View style={styles.nearMeIconDot} />
-            </View>
-
-            <Text style={styles.nearMeButtonText}>
-              {isLocatingUser ? "Ti localizzo" : "Mia posizione"}
-            </Text>
-          </Pressable>
 
           {(placeSuggestions.length > 0 || citySuggestions.length > 0) &&
           mode === "search" ? (
@@ -1081,18 +1095,33 @@ export default function MapScreen() {
             onRegionChange={handleMapRegionChange}
           />
 
-          {shouldShowAreaSearch ? (
-            <View pointerEvents="box-none" style={styles.searchAreaButtonWrap}>
-              <Pressable
-                style={styles.searchAreaButton}
-                onPress={searchPlacesAroundMapRegion}
-              >
-                <Text style={styles.searchAreaButtonText}>
-                  Cerca in questa zona
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
+          <Animated.View
+            pointerEvents={shouldShowAreaSearch ? "box-none" : "none"}
+            style={[
+              styles.searchAreaButtonWrap,
+              {
+                opacity: areaSearchAnim,
+                transform: [
+                  {
+                    translateY: areaSearchAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Pressable
+              style={styles.searchAreaButton}
+              onPress={searchPlacesAroundMapRegion}
+            >
+              <View style={styles.searchAreaDot} />
+              <Text style={styles.searchAreaButtonText}>
+                Cerca in questa zona
+              </Text>
+            </Pressable>
+          </Animated.View>
 
           {isMapLoading ? (
             <View style={styles.mapLoadingOverlay}>
@@ -1270,83 +1299,88 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   searchBox: {
-    minHeight: 56,
+    minHeight: 72,
     borderRadius: 999,
-    backgroundColor: colors.black,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.08)",
+    backgroundColor: colors.paper,
     flexDirection: "row",
     alignItems: "center",
-    paddingLeft: 18,
-    paddingRight: 6,
-    gap: 10,
+    paddingLeft: 20,
+    paddingRight: 8,
+    gap: 11,
+  },
+  searchLens: {
+    width: 24,
+    height: 24,
+    position: "relative",
+  },
+  searchLensCircle: {
+    width: 15,
+    height: 15,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.muted,
+    position: "absolute",
+    left: 2,
+    top: 2,
+  },
+  searchLensHandle: {
+    width: 9,
+    height: 2,
+    borderRadius: 999,
+    backgroundColor: colors.muted,
+    position: "absolute",
+    right: 2,
+    bottom: 4,
+    transform: [{ rotate: "45deg" }],
   },
   searchInput: {
     flex: 1,
-    color: colors.cream,
-    fontSize: 15,
-    minHeight: 52,
+    minWidth: 0,
+    color: colors.paperText,
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: "600",
   },
-  searchButton: {
-    minWidth: 86,
-    minHeight: 44,
+  positionButton: {
+    minHeight: 48,
     borderRadius: 999,
-    backgroundColor: colors.pink,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-  searchButtonDisabled: {
-    opacity: 0.72,
-  },
-  searchButtonText: {
-    color: colors.cream,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  nearMeButton: {
-    alignSelf: "flex-start",
-    minHeight: 42,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,248,239,0.06)",
+    backgroundColor: colors.paperText,
     borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.1)",
+    borderColor: colors.softBorder,
+    paddingHorizontal: 13,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 9,
-    paddingHorizontal: 14,
-    marginTop: 10,
+    gap: 7,
+    flexShrink: 0,
+    maxWidth: 150,
   },
-  nearMeButtonDisabled: {
-    opacity: 0.62,
+  positionButtonDisabled: {
+    opacity: 0.72,
   },
-  nearMeIcon: {
+  positionIcon: {
     width: 19,
     height: 19,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: colors.paper,
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
   },
-  nearMeIconRing: {
-    width: 17,
-    height: 17,
+  positionDot: {
+    width: 6,
+    height: 6,
     borderRadius: 999,
-    borderWidth: 1.6,
-    borderColor: colors.gold,
-    opacity: 0.82,
+    backgroundColor: colors.paper,
   },
-  nearMeIconDot: {
-    position: "absolute",
-    width: 5,
-    height: 5,
-    borderRadius: 999,
+  positionDotLoading: {
     backgroundColor: colors.pink,
   },
-  nearMeButtonText: {
-    color: colors.cream,
+  positionText: {
+    color: colors.paper,
     fontSize: 12,
     fontWeight: "900",
+    flexShrink: 1,
   },
   suggestionsBox: {
     backgroundColor: colors.black,
@@ -1514,23 +1548,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   searchAreaButton: {
-    minHeight: 42,
+    minHeight: 44,
     borderRadius: 999,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.paper,
     borderWidth: 1,
     borderColor: "rgba(255,248,239,0.3)",
     paddingHorizontal: 18,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 9,
     shadowColor: "#000",
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 9 },
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  searchAreaDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: colors.pink,
   },
   searchAreaButtonText: {
-    color: colors.black,
-    fontSize: 12,
+    color: colors.paperText,
+    fontSize: 12.5,
     fontWeight: "900",
+    letterSpacing: 0.2,
   },
   mapLoadingText: {
     color: colors.cream,
