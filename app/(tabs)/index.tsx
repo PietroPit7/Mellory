@@ -799,6 +799,7 @@ export default function HomeScreen() {
   const placesScrollRef = useRef<ScrollView>(null);
   const guideScrollRef = useRef<ScrollView>(null);
   const loadingPulse = useRef(new Animated.Value(0)).current;
+  const contentFade = useRef(new Animated.Value(0)).current;
   const styles = useMemo(() => createStyles(colors), [colors]);
   const carouselOffsets = useRef<Record<CarouselKey, number>>({
     places: 0,
@@ -905,6 +906,19 @@ export default function HomeScreen() {
       loop.stop();
     };
   }, [isLoading, loadingPulse]);
+
+  useEffect(() => {
+    if (isLoading) {
+      contentFade.setValue(0);
+      return;
+    }
+
+    Animated.timing(contentFade, {
+      toValue: 1,
+      duration: 420,
+      useNativeDriver: true,
+    }).start();
+  }, [contentFade, isLoading]);
 
   async function loadDashboard(context: SearchContext) {
     setIsLoading(true);
@@ -1403,7 +1417,19 @@ export default function HomeScreen() {
       )}
 
       {!isLoading && (
-        <>
+        <Animated.View
+          style={{
+            opacity: contentFade,
+            transform: [
+              {
+                translateY: contentFade.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [12, 0],
+                }),
+              },
+            ],
+          }}
+        >
           <View style={styles.dashboardHeader}>
             <Text style={styles.overlineMuted}>
               {hasDashboard ? "DASHBOARD DI ZONA" : "SCORCIATOIE"}
@@ -1648,7 +1674,7 @@ export default function HomeScreen() {
               </ScrollView>
             </View>
           )}
-        </>
+        </Animated.View>
       )}
 
       <View style={styles.realSearchCard}>
