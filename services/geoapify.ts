@@ -17,6 +17,15 @@ const PLACE_SUGGESTION_LIMIT = 10;
 const PLACE_LIMIT = 120;
 const PLACE_RADIUS_METERS = 6500;
 
+// OpenStreetMap (Overpass) è la fonte verificata dalla community: la uniamo a
+// Geoapify per avere molti più locali certi nella stessa zona.
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.openstreetmap.ru/api/interpreter",
+];
+const OVERPASS_MAX_RESULTS = 220;
+
 const PLACE_CATEGORIES = [
   "catering.restaurant",
   "catering.restaurant.pizza",
@@ -349,6 +358,252 @@ type NearbyPlacesOptions = {
   limit?: number;
 };
 
+type OverpassElement = {
+  type: "node" | "way" | "relation";
+  id: number;
+  lat?: number;
+  lon?: number;
+  center?: { lat?: number; lon?: number };
+  tags?: Record<string, string>;
+};
+
+function getBestTag(
+  tags: Record<string, string> | undefined,
+  keys: string[]
+) {
+  if (!tags) return "";
+  for (const key of keys) {
+    const value = cleanText(tags[key]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function normalizePlaceName(name: string) {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getOsmCategoryBase(tags: Record<string, string> | undefined) {
+  if (!tags) return "Luogo";
+
+  const amenity = cleanText(tags.amenity).toLowerCase();
+  const shop = cleanText(tags.shop).toLowerCase();
+  const tourism = cleanText(tags.tourism).toLowerCase();
+  const cuisine = cleanText(tags.cuisine).toLowerCase();
+
+  if (amenity === "restaurant") {
+    return cuisine.includes("pizza") ? "Pizzeria" : "Ristorante";
+  }
+  if (amenity === "fast_food") {
+    return cuisine.includes("pizza") ? "Pizzeria" : "Fast food";
+  }
+  if (amenity === "cafe") return "Caffè";
+  if (amenity === "bar" || amenity === "biergarten") return "Bar";
+  if (amenity === "pub") return "Pub";
+  if (amenity === "ice_cream") return "Gelateria";
+  if (shop === "bakery") return "Forno";
+  if (shop === "pastry" || shop === "confectionery") return "Pasticceria";
+  if (shop === "ice_cream") return "Gelateria";
+  if (shop === "coffee" || shop === "chocolate") return "Caffè";
+  if (tourism === "attraction" || tourism === "museum" || tourism === "gallery") {
+    return "Attrazione";
+  }
+
+  return "Luogo";
+}
+
+function getOsmCategory(
+  tags: Record<string, string> | undefined,
+  categoryBase: string
+) {
+  const cuisine = cleanText(tags?.cuisine);
+  if (!cuisine) return categoryBase;
+
+  const firstCuisine = cuisine.split(",")[0]?.trim();
+  if (!firstCuisine) return categoryBase;
+
+  const capitalized =
+    firstCuisine.charAt(0).toUpperCase() + firstCuisine.slice(1);
+
+  return `${categoryBase} · ${capitalized}`;
+}
+
+function getOsmDetail(tags: Record<string, string> | undefined) {
+  if (!tags) return "";
+
+  const street = cleanText(tags["addr:street"]);
+  const houseNumber = cleanText(tags["addr:housenumber"]);
+  const city = cleanText(tags["addr:city"]);
+  const streetLine = [street, houseNumber].filter(Boolean).join(" ");
+
+  return [streetLine, city].filter(Boolean).join(", ");
+}
+
+function osmElementToNearbyPlace(
+  element: OverpassElement,
+  origin: Coordinates
+): NearbyPlace | null {
+  const tags = element.tags;
+  const name = getBestTag(tags, ["name", "name:it"]);
+  if (!name) return null;
+
+  const latitude = element.lat ?? element.center?.lat;
+  const longitude = element.lon ?? element.center?.lon;
+
+  if (typeof latitude !== "number" || typeof longitude !== "number") {
+    return null;
+  }
+
+  const categoryBase = getOsmCategoryBase(tags);
+  if (categoryBase === "Luogo") return null;
+
+  const distanceMeters = getDistanceMeters(
+    origin.latitude,
+    origin.longitude,
+    latitude,
+    longitude
+  );
+
+  return {
+    id: `osm-${element.type}-${element.id}`,
+    name,
+    category: getOsmCategory(tags, categoryBase),
+    categoryBase,
+    detail: getOsmDetail(tags),
+    distance: formatDistance(distanceMeters),
+    distanceMeters,
+    latitude,
+    longitude,
+    website: getBestTag(tags, ["website", "contact:website", "url"]),
+    phone: getBestTag(tags, ["phone", "contact:phone"]),
+    openingHours: getBestTag(tags, ["opening_hours"]),
+    editorialAwards: "",
+  };
+}
+
+function buildNearbyOverpassQuery(
+  latitude: number,
+  longitude: number,
+  radiusMeters: number
+) {
+  const around = `around:${radiusMeters},${latitude},${longitude}`;
+
+  return `
+    [out:json][timeout:25];
+    (
+      nwr(${around})["name"]["amenity"~"^(restaurant|bar|cafe|pub|fast_food|ice_cream|biergarten)$"];
+      nwr(${around})["name"]["shop"~"^(bakery|pastry|confectionery|coffee|chocolate|ice_cream)$"];
+      nwr(${around})["name"]["tourism"~"^(attraction|museum|gallery)$"];
+    );
+    out center tags ${OVERPASS_MAX_RESULTS};
+  `;
+}
+
+async function fetchOverpassNearby(
+  latitude: number,
+  longitude: number,
+  radiusMeters: number
+): Promise<NearbyPlace[]> {
+  const query = buildNearbyOverpassQuery(latitude, longitude, radiusMeters);
+  const origin = { latitude, longitude };
+
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        },
+        body: `data=${encodeURIComponent(query)}`,
+      });
+
+      if (!response.ok) continue;
+
+      const data = (await response.json()) as { elements?: OverpassElement[] };
+      const elements = Array.isArray(data.elements) ? data.elements : [];
+
+      return elements
+        .map((element) => osmElementToNearbyPlace(element, origin))
+        .filter((place): place is NearbyPlace => place !== null);
+    } catch {
+      // Prova l'endpoint Overpass successivo senza interrompere il flusso.
+    }
+  }
+
+  return [];
+}
+
+async function fetchGeoapifyNearby(
+  latitude: number,
+  longitude: number,
+  radiusMeters: number,
+  limit: number
+): Promise<NearbyPlace[]> {
+  if (!hasGeoapifyApiKey()) return [];
+
+  const apiKey = GEOAPIFY_API_KEY;
+  const origin = { latitude, longitude };
+  const url = `${PLACES_ENDPOINT}?categories=${encodeURIComponent(
+    PLACE_CATEGORIES
+  )}&filter=circle:${longitude},${latitude},${radiusMeters}&bias=proximity:${longitude},${latitude}&limit=${limit}&lang=it&apiKey=${encodeURIComponent(
+    apiKey
+  )}`;
+
+  const response = await fetch(url);
+  if (!response.ok) return [];
+
+  const data =
+    (await response.json()) as GeoapifyFeatureCollection<GeoapifyPlaceProperties>;
+  const features = Array.isArray(data.features) ? data.features : [];
+
+  return features
+    .map((feature, index) => toNearbyPlace(feature, index, origin))
+    .filter((place): place is NearbyPlace => place !== null);
+}
+
+// Unisce locali da fonti diverse: deduplica per nome normalizzato + coordinate
+// arrotondate e, sui doppioni, conserva i contatti disponibili da entrambe.
+function mergeNearbyPlaces(places: NearbyPlace[], limit: number) {
+  const uniquePlaces = new Map<string, NearbyPlace>();
+
+  places.forEach((place) => {
+    const key = `${normalizePlaceName(place.name)}|${place.latitude.toFixed(
+      4
+    )}|${place.longitude.toFixed(4)}`;
+    const existing = uniquePlaces.get(key);
+
+    if (!existing) {
+      uniquePlaces.set(key, place);
+      return;
+    }
+
+    uniquePlaces.set(key, {
+      ...existing,
+      detail: existing.detail || place.detail,
+      website: existing.website || place.website,
+      phone: existing.phone || place.phone,
+      openingHours: existing.openingHours || place.openingHours,
+      categoryBase:
+        existing.categoryBase !== "Luogo"
+          ? existing.categoryBase
+          : place.categoryBase,
+      category:
+        existing.categoryBase !== "Luogo" ? existing.category : place.category,
+    });
+  });
+
+  return Array.from(uniquePlaces.values())
+    .sort((firstPlace, secondPlace) => {
+      return firstPlace.distanceMeters - secondPlace.distanceMeters;
+    })
+    .slice(0, limit);
+}
+
 export async function fetchNearbyPlaces(
   latitude: number,
   longitude: number,
@@ -362,34 +617,20 @@ export async function fetchNearbyPlaces(
   const cachedPlaces = nearbyPlacesCache.get(cacheKey);
   if (cachedPlaces) return cachedPlaces;
 
-  const apiKey = getGeoapifyApiKey();
-  const origin = { latitude, longitude };
-  const url = `${PLACES_ENDPOINT}?categories=${encodeURIComponent(
-    PLACE_CATEGORIES
-  )}&filter=circle:${longitude},${latitude},${radiusMeters}&bias=proximity:${longitude},${latitude}&limit=${limit}&lang=it&apiKey=${encodeURIComponent(
-    apiKey
-  )}`;
+  // Geoapify e Overpass in parallelo: se una fonte fallisce, usiamo l'altra.
+  const [geoapifyPlaces, overpassPlaces] = await Promise.all([
+    fetchGeoapifyNearby(latitude, longitude, radiusMeters, limit).catch(
+      () => [] as NearbyPlace[]
+    ),
+    fetchOverpassNearby(latitude, longitude, radiusMeters).catch(
+      () => [] as NearbyPlace[]
+    ),
+  ]);
 
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(
-      "Non riesco a caricare i luoghi da Geoapify. Controlla la chiave API o riprova tra poco."
-    );
-  }
-
-  const data =
-    (await response.json()) as GeoapifyFeatureCollection<GeoapifyPlaceProperties>;
-  const features = Array.isArray(data.features) ? data.features : [];
-
-  const places = features
-    .map((feature, index) => toNearbyPlace(feature, index, origin))
-    .filter((place): place is NearbyPlace => place !== null)
-    .sort((firstPlace, secondPlace) => {
-      return firstPlace.distanceMeters - secondPlace.distanceMeters;
-    });
-
-  const uniquePlaces = dedupePlaces(places, limit);
+  const uniquePlaces = mergeNearbyPlaces(
+    [...geoapifyPlaces, ...overpassPlaces],
+    limit
+  );
 
   nearbyPlacesCache.set(cacheKey, uniquePlaces);
 
