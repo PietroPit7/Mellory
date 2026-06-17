@@ -4,13 +4,13 @@ import { useMemo, useState } from "react";
 import {
   Alert,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
+import { PressableScale } from "@/components/pressable-scale";
 import {
   type MelloryThemeColors,
   type MelloryThemePreference,
@@ -97,9 +97,9 @@ export default function SettingsScreen() {
       <View style={styles.safeTop} />
 
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <PressableScale style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backIcon}>{"\u2190"}</Text>
-        </Pressable>
+        </PressableScale>
 
         <Text style={styles.title}>Impostazioni</Text>
       </View>
@@ -112,7 +112,7 @@ export default function SettingsScreen() {
             const isActive = preference === option.id;
 
             return (
-              <Pressable
+              <PressableScale
                 key={option.id}
                 style={[
                   styles.optionRow,
@@ -132,7 +132,7 @@ export default function SettingsScreen() {
                 <Text style={styles.optionLabel}>{option.label}</Text>
 
                 {isActive ? <View style={styles.activeDot} /> : null}
-              </Pressable>
+              </PressableScale>
             );
           })}
         </View>
@@ -152,7 +152,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>DATI</Text>
 
-        <Pressable
+        <PressableScale
           style={[styles.resetButton, isResetting && styles.resetButtonDisabled]}
           onPress={handleResetPress}
           disabled={isResetting}
@@ -167,7 +167,7 @@ export default function SettingsScreen() {
           <Text style={styles.resetText}>
             {isResetting ? "Reset in corso" : "Reset di Mellory"}
           </Text>
-        </Pressable>
+        </PressableScale>
 
         {resetMessage ? (
           <Text style={styles.resetFeedback}>{resetMessage}</Text>

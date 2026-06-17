@@ -3,7 +3,6 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import { PressableScale } from "@/components/pressable-scale";
 import { melloryThemeVars } from "@/contexts/mellory-theme";
 
 const FAVORITES_STORAGE_KEY = "mellory:favorites";
@@ -592,7 +592,7 @@ export default function ListsScreen() {
           const isSelected = selectedCollection?.id === collection.id;
 
           return (
-            <Pressable
+            <PressableScale
               key={collection.id}
               style={[
                 styles.collectionCard,
@@ -628,7 +628,7 @@ export default function ListsScreen() {
               <View style={styles.countBubble}>
                 <Text style={styles.countText}>{collection.count}</Text>
               </View>
-            </Pressable>
+            </PressableScale>
           );
         })}
       </View>
@@ -659,7 +659,7 @@ export default function ListsScreen() {
 
         <View style={styles.colorRow}>
           {customListColors.map((color) => (
-            <Pressable
+            <PressableScale
               key={color}
               style={[
                 styles.colorDot,
@@ -671,7 +671,7 @@ export default function ListsScreen() {
           ))}
         </View>
 
-        <Pressable
+        <PressableScale
           style={[
             styles.createButton,
             draftTitle.trim().length === 0 && styles.createButtonDisabled,
@@ -680,7 +680,7 @@ export default function ListsScreen() {
           disabled={draftTitle.trim().length === 0}
         >
           <Text style={styles.createButtonText}>Crea lista</Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
       {selectedCollection && (
@@ -697,12 +697,12 @@ export default function ListsScreen() {
             </View>
 
             {selectedCollection.kind === "custom" ? (
-              <Pressable
+              <PressableScale
                 style={styles.deleteListButton}
                 onPress={deleteSelectedCustomList}
               >
                 <Text style={styles.deleteListText}>Elimina</Text>
-              </Pressable>
+              </PressableScale>
             ) : null}
           </View>
 
@@ -715,7 +715,7 @@ export default function ListsScreen() {
                   : selectedCollection.color;
 
                 return (
-                  <Pressable
+                  <PressableScale
                     key={place.id}
                     style={styles.placeCard}
                     onPress={() => openPlaceDetail(place)}
@@ -753,7 +753,7 @@ export default function ListsScreen() {
                     </View>
 
                     {selectedCollection.kind === "custom" ? (
-                      <Pressable
+                      <PressableScale
                         style={styles.removePlaceButton}
                         onPress={(event) => {
                           event.stopPropagation?.();
@@ -761,11 +761,11 @@ export default function ListsScreen() {
                         }}
                       >
                         <Text style={styles.removePlaceText}>×</Text>
-                      </Pressable>
+                      </PressableScale>
                     ) : (
                       <Text style={styles.placeArrow}>›</Text>
                     )}
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </View>
@@ -776,12 +776,12 @@ export default function ListsScreen() {
                 Aggiungi locali da Cerca o dalla scheda dettaglio per ritrovarli
                 qui.
               </Text>
-              <Pressable
+              <PressableScale
                 style={styles.emptyButton}
                 onPress={() => router.push("/explore" as never)}
               >
                 <Text style={styles.emptyButtonText}>Cerca locali</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           )}
         </View>

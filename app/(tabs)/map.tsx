@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Animated,
   Keyboard,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import {
 } from "react-native";
 
 import MelloryMap from "@/components/MelloryMap";
+import { PressableScale } from "@/components/pressable-scale";
 import { melloryThemeVars } from "@/contexts/mellory-theme";
 import {
   fetchCitySuggestions,
@@ -919,7 +919,7 @@ export default function MapScreen() {
               <ActivityIndicator color={colors.pink} />
             ) : null}
 
-            <Pressable
+            <PressableScale
               accessibilityRole="button"
               accessibilityLabel="Usa la mia posizione"
               style={[
@@ -942,7 +942,7 @@ export default function MapScreen() {
               <Text numberOfLines={1} style={styles.positionText}>
                 {isLocatingUser ? "Ti localizzo" : "Mia posizione"}
               </Text>
-            </Pressable>
+            </PressableScale>
           </View>
 
           {(placeSuggestions.length > 0 || citySuggestions.length > 0) &&
@@ -953,7 +953,7 @@ export default function MapScreen() {
                   <Text style={styles.suggestionGroupTitle}>Locali</Text>
 
                   {placeSuggestions.slice(0, 6).map((place) => (
-                    <Pressable
+                    <PressableScale
                       key={place.id}
                       style={styles.suggestionRow}
                       onPress={() => handlePlaceSuggestionPress(place)}
@@ -970,7 +970,7 @@ export default function MapScreen() {
                       </View>
 
                       <Text style={styles.suggestionArrow}>›</Text>
-                    </Pressable>
+                    </PressableScale>
                   ))}
                 </View>
               ) : null}
@@ -980,7 +980,7 @@ export default function MapScreen() {
               ) : null}
 
               {citySuggestions.slice(0, 5).map((city) => (
-                <Pressable
+                <PressableScale
                   key={`${city.cityLabel}-${city.latitude}-${city.longitude}`}
                   style={styles.suggestionRow}
                   onPress={() => searchPlacesAroundCity(city)}
@@ -993,7 +993,7 @@ export default function MapScreen() {
                   </View>
 
                   <Text style={styles.suggestionArrow}>›</Text>
-                </Pressable>
+                </PressableScale>
               ))}
             </View>
           ) : null}
@@ -1003,7 +1003,7 @@ export default function MapScreen() {
           ) : null}
 
           <View style={styles.modeRow}>
-            <Pressable
+            <PressableScale
               style={[
                 styles.modeButton,
                 mode === "search" && styles.modeButtonActive,
@@ -1018,9 +1018,9 @@ export default function MapScreen() {
               >
                 Ricerca
               </Text>
-            </Pressable>
+            </PressableScale>
 
-            <Pressable
+            <PressableScale
               style={[
                 styles.modeButton,
                 mode === "saved" && styles.modeButtonActive,
@@ -1035,7 +1035,7 @@ export default function MapScreen() {
               >
                 Salvati
               </Text>
-            </Pressable>
+            </PressableScale>
           </View>
         </View>
 
@@ -1049,7 +1049,7 @@ export default function MapScreen() {
               const isActive = selectedCategory === category;
 
               return (
-                <Pressable
+                <PressableScale
                   key={category}
                   style={[
                     styles.categoryChip,
@@ -1065,7 +1065,7 @@ export default function MapScreen() {
                   >
                     {category}
                   </Text>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </ScrollView>
@@ -1112,7 +1112,7 @@ export default function MapScreen() {
               },
             ]}
           >
-            <Pressable
+            <PressableScale
               style={styles.searchAreaButton}
               onPress={searchPlacesAroundMapRegion}
             >
@@ -1120,7 +1120,7 @@ export default function MapScreen() {
               <Text style={styles.searchAreaButtonText}>
                 Cerca in questa zona
               </Text>
-            </Pressable>
+            </PressableScale>
           </Animated.View>
 
           {isMapLoading ? (
@@ -1151,16 +1151,16 @@ export default function MapScreen() {
           </View>
 
           {mode === "saved" ? (
-            <Pressable style={styles.smallRefreshButton} onPress={refreshSavedPlaces}>
+            <PressableScale style={styles.smallRefreshButton} onPress={refreshSavedPlaces}>
               <Text style={styles.smallRefreshButtonText}>Aggiorna</Text>
-            </Pressable>
+            </PressableScale>
           ) : null}
         </View>
 
         {visiblePlaces.length > 0 ? (
           <View style={styles.placeList}>
             {visiblePlaces.map((place) => (
-              <Pressable
+              <PressableScale
                 key={place.id}
                 style={styles.placeCard}
                 onPress={() => openPlaceDetail(place.id)}
@@ -1229,7 +1229,7 @@ export default function MapScreen() {
                     </View>
                   ) : null}
                 </View>
-              </Pressable>
+              </PressableScale>
             ))}
           </View>
         ) : (
@@ -1241,9 +1241,9 @@ export default function MapScreen() {
               salvati.
             </Text>
 
-            <Pressable style={styles.emptyButton} onPress={refreshSavedPlaces}>
+            <PressableScale style={styles.emptyButton} onPress={refreshSavedPlaces}>
               <Text style={styles.emptyButtonText}>Mostra locali salvati</Text>
-            </Pressable>
+            </PressableScale>
           </View>
         )}
 

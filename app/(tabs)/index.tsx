@@ -7,7 +7,6 @@ import {
   Keyboard,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { PressableScale } from "@/components/pressable-scale";
 import {
   type MelloryThemeColors,
   useMelloryTheme,
@@ -1107,7 +1107,7 @@ export default function HomeScreen() {
         <Text style={styles.suggestionGroupTitle}>{title}</Text>
 
         {items.map((item) => (
-          <Pressable
+          <PressableScale
             key={item.id}
             style={styles.suggestionItem}
             onPress={() => handleSuggestionPress(item)}
@@ -1120,7 +1120,7 @@ export default function HomeScreen() {
                 {item.detail}
               </Text>
             </View>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
     );
@@ -1134,7 +1134,7 @@ export default function HomeScreen() {
         <Text style={styles.suggestionGroupTitle}>Locali</Text>
 
         {items.slice(0, 6).map((item) => (
-          <Pressable
+          <PressableScale
             key={item.id}
             style={styles.suggestionItem}
             onPress={() => handlePlaceSuggestionPress(item)}
@@ -1151,7 +1151,7 @@ export default function HomeScreen() {
                   : item.category}
               </Text>
             </View>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
     );
@@ -1159,7 +1159,7 @@ export default function HomeScreen() {
 
   function renderPlaceCard(place: DashboardPlace) {
     return (
-      <Pressable
+      <PressableScale
         key={place.id}
         style={styles.placeCard}
         onPress={() => openPlaceDetail(place)}
@@ -1189,7 +1189,7 @@ export default function HomeScreen() {
         <View style={styles.placeFooter}>
           <Text style={styles.placeFooterText}>Apri scheda</Text>
         </View>
-      </Pressable>
+      </PressableScale>
     );
   }
 
@@ -1219,23 +1219,23 @@ export default function HomeScreen() {
   function renderCarouselControls(key: CarouselKey) {
     return (
       <View style={styles.carouselControls}>
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Scorri a sinistra"
           style={styles.carouselButton}
           onPress={() => scrollCarousel(key, "left")}
         >
           <Text style={styles.carouselButtonText}>‹</Text>
-        </Pressable>
+        </PressableScale>
 
-        <Pressable
+        <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Scorri a destra"
           style={styles.carouselButton}
           onPress={() => scrollCarousel(key, "right")}
         >
           <Text style={styles.carouselButtonText}>›</Text>
-        </Pressable>
+        </PressableScale>
       </View>
     );
   }
@@ -1268,12 +1268,12 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        <Pressable
+        <PressableScale
           style={styles.settingsButton}
           onPress={() => router.push("/settings" as never)}
         >
           <Text style={styles.settingsIcon}>⚙</Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
       <View style={styles.hero}>
@@ -1325,7 +1325,7 @@ export default function HomeScreen() {
             <ActivityIndicator color={colors.pink} />
           ) : null}
 
-          <Pressable
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Usa la mia posizione"
             style={[styles.positionButton, isLoading && styles.disabled]}
@@ -1347,7 +1347,7 @@ export default function HomeScreen() {
                   ? "Aggiorna"
                   : "Mia posizione"}
             </Text>
-          </Pressable>
+          </PressableScale>
         </View>
 
         {showSuggestions && (
@@ -1429,7 +1429,7 @@ export default function HomeScreen() {
                 const isSelected = selectedCategoryId === category.id;
 
                 return (
-                  <Pressable
+                  <PressableScale
                     key={category.id}
                     style={[
                       styles.categoryChip,
@@ -1468,7 +1468,7 @@ export default function HomeScreen() {
                         {category.count}
                       </Text>
                     )}
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </ScrollView>
@@ -1495,7 +1495,7 @@ export default function HomeScreen() {
                   const topPlace = list.places[0]?.name ?? "";
 
                   return (
-                    <Pressable
+                    <PressableScale
                       key={list.id}
                       style={[
                         styles.zoneCard,
@@ -1567,7 +1567,7 @@ export default function HomeScreen() {
                           </Text>
                         </View>
                       ) : null}
-                    </Pressable>
+                    </PressableScale>
                   );
                 })}
               </ScrollView>
@@ -1631,7 +1631,7 @@ export default function HomeScreen() {
                 contentContainerStyle={styles.guideRow}
               >
                 {guidePlaces.map((place) => (
-                  <Pressable
+                  <PressableScale
                     key={place.id}
                     style={styles.guidePlace}
                     onPress={() => openPlaceDetail(place)}
@@ -1643,7 +1643,7 @@ export default function HomeScreen() {
                       {place.category}
                     </Text>
                     <Text style={styles.guidePlaceDistance}>{place.distance}</Text>
-                  </Pressable>
+                  </PressableScale>
                 ))}
               </ScrollView>
             </View>
@@ -1661,12 +1661,12 @@ export default function HomeScreen() {
           la tua guida personale.
         </Text>
 
-        <Pressable
+        <PressableScale
           style={styles.realSearchButton}
           onPress={() => openContextSearch(selectedCategoryId)}
         >
           <Text style={styles.realSearchButtonText}>Apri Cerca</Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
       <View style={styles.myMelloryCard}>
@@ -1684,7 +1684,7 @@ export default function HomeScreen() {
 
       <View style={styles.collectionGrid}>
         {collections.map((item) => (
-          <Pressable key={item.title} style={styles.collectionCard}>
+          <PressableScale key={item.title} style={styles.collectionCard}>
             <View style={styles.collectionIconWrap}>
               <Text style={styles.collectionIcon}>{getCollectionIcon(item)}</Text>
             </View>
@@ -1693,7 +1693,7 @@ export default function HomeScreen() {
               <Text style={styles.collectionTitle}>{item.title}</Text>
               <Text style={styles.collectionText}>{item.text}</Text>
             </View>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
 

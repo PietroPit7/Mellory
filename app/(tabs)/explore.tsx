@@ -6,6 +6,7 @@ import {
   fetchNearbyPlaces as fetchGeoapifyNearbyPlaces,
   hasGeoapifyApiKey as hasGeoapifyServiceApiKey,
 } from "@/services/geoapify";
+import { PressableScale } from "@/components/pressable-scale";
 import { melloryThemeVars } from "@/contexts/mellory-theme";
 import * as Location from "expo-location";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -13,7 +14,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -766,9 +766,9 @@ export default function ExploreScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <PressableScale style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>‹</Text>
-        </Pressable>
+        </PressableScale>
 
         <View style={styles.headerText}>
           <Text style={styles.title}>Cerca</Text>
@@ -816,7 +816,7 @@ export default function ExploreScreen() {
         {showCitySuggestions && (
           <View style={styles.citySuggestionsBox}>
             {citySuggestions.map((suggestion) => (
-              <Pressable
+              <PressableScale
                 key={suggestion.id}
                 style={styles.citySuggestionItem}
                 onPress={() => handleCitySuggestionPress(suggestion)}
@@ -833,12 +833,12 @@ export default function ExploreScreen() {
                     {suggestion.detail}
                   </Text>
                 </View>
-              </Pressable>
+              </PressableScale>
             ))}
           </View>
         )}
 
-        <Pressable
+        <PressableScale
           style={[styles.primaryPill, isLoading && styles.primaryPillDisabled]}
           onPress={handleNearMePress}
           disabled={isLoading}
@@ -857,7 +857,7 @@ export default function ExploreScreen() {
               </Text>
             </>
           )}
-        </Pressable>
+        </PressableScale>
       </View>
 
       {searchArea && places.length > 0 && (
@@ -935,7 +935,7 @@ export default function ExploreScreen() {
                 const isSelected = selectedCategory === category;
 
                 return (
-                  <Pressable
+                  <PressableScale
                     key={category}
                     style={[
                       styles.categoryChip,
@@ -951,7 +951,7 @@ export default function ExploreScreen() {
                     >
                       {category}
                     </Text>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </ScrollView>
@@ -978,7 +978,7 @@ export default function ExploreScreen() {
           place.editorialAwards.length > 0;
 
         return (
-          <Pressable
+          <PressableScale
             key={place.id}
             style={styles.resultCard}
             onPress={() => openPlaceDetail(place)}
@@ -1017,7 +1017,7 @@ export default function ExploreScreen() {
             </View>
 
             <View style={styles.placeActions}>
-              <Pressable
+              <PressableScale
                 style={[
                   styles.placeActionButton,
                   isFavorite && styles.placeActionButtonActive,
@@ -1035,9 +1035,9 @@ export default function ExploreScreen() {
                 >
                   {isFavorite ? "♥" : "♡"}
                 </Text>
-              </Pressable>
+              </PressableScale>
 
-              <Pressable
+              <PressableScale
                 style={[
                   styles.placeActionButtonSecondary,
                   isToTry && styles.placeActionButtonSecondaryActive,
@@ -1050,9 +1050,9 @@ export default function ExploreScreen() {
                 <Text style={[styles.tryIcon, isToTry && styles.tryIconActive]}>
                   {isToTry ? "✓" : "ï¼‹"}
                 </Text>
-              </Pressable>
+              </PressableScale>
             </View>
-          </Pressable>
+          </PressableScale>
         );
       })}
 

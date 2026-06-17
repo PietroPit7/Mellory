@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { PressableScale } from "@/components/pressable-scale";
 import { melloryThemeVars } from "@/contexts/mellory-theme";
 
 const colors = melloryThemeVars;
@@ -669,9 +670,9 @@ export default function MyMelloryScreen() {
           </Text>
         </View>
 
-        <Pressable style={styles.settingsButton} onPress={openSettings}>
+        <PressableScale style={styles.settingsButton} onPress={openSettings}>
           <Text style={styles.settingsIcon}>⚙</Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
       <View style={styles.heroCard}>
@@ -728,9 +729,9 @@ export default function MyMelloryScreen() {
             salvare un preferito oppure ï¼‹ per aggiungere un posto da provare.
           </Text>
 
-          <Pressable style={styles.emptyButton} onPress={openExplore}>
+          <PressableScale style={styles.emptyButton} onPress={openExplore}>
             <Text style={styles.emptyButtonText}>Cerca locali</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       )}
 
@@ -794,7 +795,7 @@ export default function MyMelloryScreen() {
               const status = getPlaceStatus(place);
 
               return (
-                <Pressable
+                <PressableScale
                   key={`${place.id}-${status}-${index}`}
                   style={styles.latestCard}
                   onPress={() => openPlaceDetail(place, status)}
@@ -814,7 +815,7 @@ export default function MyMelloryScreen() {
                   </Text>
 
                   <Text style={styles.latestDistance}>{place.distance}</Text>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </ScrollView>
@@ -841,7 +842,7 @@ export default function MyMelloryScreen() {
               : "";
 
             return (
-              <Pressable
+              <PressableScale
                 key={place.id}
                 style={styles.placeCard}
                 onPress={() => openPlaceDetail(place, "favorite")}
@@ -879,7 +880,7 @@ export default function MyMelloryScreen() {
                   </View>
                 </View>
 
-                <Pressable
+                <PressableScale
                   style={styles.removeButton}
                   onPress={(event) => {
                     event.stopPropagation?.();
@@ -887,8 +888,8 @@ export default function MyMelloryScreen() {
                   }}
                 >
                   <Text style={styles.removeIcon}>×</Text>
-                </Pressable>
-              </Pressable>
+                </PressableScale>
+              </PressableScale>
             );
           })}
         </View>
@@ -914,7 +915,7 @@ export default function MyMelloryScreen() {
               : "";
 
             return (
-              <Pressable
+              <PressableScale
                 key={place.id}
                 style={styles.placeCard}
                 onPress={() => openPlaceDetail(place, "try")}
@@ -952,7 +953,7 @@ export default function MyMelloryScreen() {
                   </View>
                 </View>
 
-                <Pressable
+                <PressableScale
                   style={styles.removeButton}
                   onPress={(event) => {
                     event.stopPropagation?.();
@@ -960,8 +961,8 @@ export default function MyMelloryScreen() {
                   }}
                 >
                   <Text style={styles.removeIcon}>×</Text>
-                </Pressable>
-              </Pressable>
+                </PressableScale>
+              </PressableScale>
             );
           })}
         </View>
@@ -987,7 +988,7 @@ export default function MyMelloryScreen() {
               : "";
 
             return (
-              <Pressable
+              <PressableScale
                 key={place.id}
                 style={styles.placeCard}
                 onPress={() => openPlaceDetail(place, "visited")}
@@ -1025,7 +1026,7 @@ export default function MyMelloryScreen() {
                   </View>
                 </View>
 
-                <Pressable
+                <PressableScale
                   style={styles.removeButton}
                   onPress={(event) => {
                     event.stopPropagation?.();
@@ -1033,8 +1034,8 @@ export default function MyMelloryScreen() {
                   }}
                 >
                   <Text style={styles.removeIcon}>×</Text>
-                </Pressable>
-              </Pressable>
+                </PressableScale>
+              </PressableScale>
             );
           })}
         </View>
@@ -1060,7 +1061,7 @@ export default function MyMelloryScreen() {
               : "";
 
             return (
-              <Pressable
+              <PressableScale
                 key={place.id}
                 style={styles.placeCard}
                 onPress={() => openPlaceDetail(place, "retry")}
@@ -1098,7 +1099,7 @@ export default function MyMelloryScreen() {
                   </View>
                 </View>
 
-                <Pressable
+                <PressableScale
                   style={styles.removeButton}
                   onPress={(event) => {
                     event.stopPropagation?.();
@@ -1106,8 +1107,8 @@ export default function MyMelloryScreen() {
                   }}
                 >
                   <Text style={styles.removeIcon}>×</Text>
-                </Pressable>
-              </Pressable>
+                </PressableScale>
+              </PressableScale>
             );
           })}
         </View>
@@ -1121,13 +1122,13 @@ export default function MyMelloryScreen() {
               <Text style={styles.sectionTitle}>Le tue raccolte</Text>
             </View>
 
-            <Pressable style={styles.openListsButton} onPress={openLists}>
+            <PressableScale style={styles.openListsButton} onPress={openLists}>
               <Text style={styles.openListsButtonText}>Apri</Text>
-            </Pressable>
+            </PressableScale>
           </View>
 
           {customLists.map((list) => (
-            <Pressable key={list.id} style={styles.customListCard} onPress={openLists}>
+            <PressableScale key={list.id} style={styles.customListCard} onPress={openLists}>
               <View
                 style={[
                   styles.customListAccent,
@@ -1152,7 +1153,7 @@ export default function MyMelloryScreen() {
               </View>
 
               <Text style={styles.customListArrow}>›</Text>
-            </Pressable>
+            </PressableScale>
           ))}
         </View>
       )}

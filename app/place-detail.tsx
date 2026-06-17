@@ -8,7 +8,6 @@ import {
   Image,
   Linking,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,6 +15,7 @@ import {
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { PressableScale } from "@/components/pressable-scale";
 import { melloryThemeVars } from "@/contexts/mellory-theme";
 import { enrichPlaceWithOpenData } from "@/services/placeOpenDataEnrichment";
 import type { OpenDataEnrichment } from "@/services/placeOpenDataEnrichment";
@@ -1569,7 +1569,7 @@ export default function PlaceDetailScreen() {
                   <Text style={styles.listOptionText}>{option.text}</Text>
                 </View>
 
-                <Pressable
+                <PressableScale
                   style={[
                     styles.listOptionButton,
                     isActive && styles.listOptionButtonActive,
@@ -1579,23 +1579,23 @@ export default function PlaceDetailScreen() {
                   <Text style={styles.listOptionButtonText}>
                     {isActive ? "✓" : "+"}
                   </Text>
-                </Pressable>
+                </PressableScale>
               </View>
             );
           })}
 
-          <Pressable
+          <PressableScale
             style={styles.secondarySheetButton}
             onPress={() => openSheet("customLists")}
           >
             <Text style={styles.secondarySheetButtonText}>
               Gestisci liste personalizzate
             </Text>
-          </Pressable>
+          </PressableScale>
 
-          <Pressable style={styles.sheetPrimaryButton} onPress={closeSheet}>
+          <PressableScale style={styles.sheetPrimaryButton} onPress={closeSheet}>
             <Text style={styles.sheetPrimaryButtonText}>Salva liste</Text>
-          </Pressable>
+          </PressableScale>
         </>
       );
     }
@@ -1635,7 +1635,7 @@ export default function PlaceDetailScreen() {
               contentContainerStyle={styles.colorPickerRow}
             >
               {customListColors.map((color) => (
-                <Pressable
+                <PressableScale
                   key={color}
                   style={[
                     styles.colorPickerDot,
@@ -1647,11 +1647,11 @@ export default function PlaceDetailScreen() {
               ))}
             </ScrollView>
 
-            <Pressable style={styles.sheetPrimaryButton} onPress={createCustomList}>
+            <PressableScale style={styles.sheetPrimaryButton} onPress={createCustomList}>
               <Text style={styles.sheetPrimaryButtonText}>
                 Crea lista e salva locale
               </Text>
-            </Pressable>
+            </PressableScale>
           </View>
 
           <Text style={styles.sheetSmallTitle}>Le tue liste</Text>
@@ -1670,7 +1670,7 @@ export default function PlaceDetailScreen() {
                 const isSaved = list.placeIds.includes(placeId);
 
                 return (
-                  <Pressable
+                  <PressableScale
                     key={list.id}
                     style={[
                       styles.customListCard,
@@ -1705,15 +1705,15 @@ export default function PlaceDetailScreen() {
                         {isSaved ? "✓" : "+"}
                       </Text>
                     </View>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </View>
           )}
 
-          <Pressable style={styles.sheetPrimaryButton} onPress={closeSheet}>
+          <PressableScale style={styles.sheetPrimaryButton} onPress={closeSheet}>
             <Text style={styles.sheetPrimaryButtonText}>Fatto</Text>
-          </Pressable>
+          </PressableScale>
         </>
       );
     }
@@ -1740,7 +1740,7 @@ export default function PlaceDetailScreen() {
               const isActive = experience.badges.includes(badge.label);
 
               return (
-                <Pressable
+                <PressableScale
                   key={badge.id}
                   style={[
                     styles.compactBadgeChip,
@@ -1774,14 +1774,14 @@ export default function PlaceDetailScreen() {
                   >
                     {badge.label}
                   </Text>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
 
-          <Pressable style={styles.sheetPrimaryButton} onPress={saveNote}>
+          <PressableScale style={styles.sheetPrimaryButton} onPress={saveNote}>
             <Text style={styles.sheetPrimaryButtonText}>Salva nota</Text>
-          </Pressable>
+          </PressableScale>
         </>
       );
     }
@@ -1841,9 +1841,9 @@ export default function PlaceDetailScreen() {
             style={styles.sheetTextArea}
           />
 
-          <Pressable style={styles.sheetPrimaryButton} onPress={savePersonalDetails}>
+          <PressableScale style={styles.sheetPrimaryButton} onPress={savePersonalDetails}>
             <Text style={styles.sheetPrimaryButtonText}>Salva info</Text>
-          </Pressable>
+          </PressableScale>
         </>
       );
     }
@@ -1891,7 +1891,7 @@ export default function PlaceDetailScreen() {
           />
 
           <View style={styles.returnRow}>
-            <Pressable
+            <PressableScale
               style={[
                 styles.returnButton,
                 draftWouldReturn === true && styles.returnButtonActive,
@@ -1906,9 +1906,9 @@ export default function PlaceDetailScreen() {
               >
                 Tornerei
               </Text>
-            </Pressable>
+            </PressableScale>
 
-            <Pressable
+            <PressableScale
               style={[
                 styles.returnButton,
                 draftWouldReturn === false && styles.returnButtonActive,
@@ -1923,12 +1923,12 @@ export default function PlaceDetailScreen() {
               >
                 Non tornerei
               </Text>
-            </Pressable>
+            </PressableScale>
           </View>
 
-          <Pressable style={styles.sheetPrimaryButton} onPress={saveExperienceEntry}>
+          <PressableScale style={styles.sheetPrimaryButton} onPress={saveExperienceEntry}>
             <Text style={styles.sheetPrimaryButtonText}>Salva esperienza</Text>
-          </Pressable>
+          </PressableScale>
         </>
       );
     }
@@ -1948,7 +1948,7 @@ export default function PlaceDetailScreen() {
               const isActive = experience.badges.includes(badge.label);
 
               return (
-                <Pressable
+                <PressableScale
                   key={badge.id}
                   style={[
                     styles.editorialBadge,
@@ -1990,7 +1990,7 @@ export default function PlaceDetailScreen() {
                   </View>
 
                   {isActive && <Text style={styles.editorialBadgeCheck}>✓</Text>}
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
@@ -2012,7 +2012,7 @@ export default function PlaceDetailScreen() {
               contentContainerStyle={styles.emojiRow}
             >
               {badgeEmojis.map((emoji) => (
-                <Pressable
+                <PressableScale
                   key={emoji}
                   style={[
                     styles.emojiButton,
@@ -2021,13 +2021,13 @@ export default function PlaceDetailScreen() {
                   onPress={() => setDraftBadgeEmoji(emoji)}
                 >
                   <Text style={styles.emojiText}>{emoji}</Text>
-                </Pressable>
+                </PressableScale>
               ))}
             </ScrollView>
 
-            <Pressable style={styles.sheetPrimaryButton} onPress={createCustomBadge}>
+            <PressableScale style={styles.sheetPrimaryButton} onPress={createCustomBadge}>
               <Text style={styles.sheetPrimaryButtonText}>Crea e assegna badge</Text>
-            </Pressable>
+            </PressableScale>
           </View>
         </>
       );
@@ -2045,9 +2045,9 @@ export default function PlaceDetailScreen() {
             ritrovare.
           </Text>
 
-          <Pressable style={styles.sheetPrimaryButton} onPress={pickGalleryImage}>
+          <PressableScale style={styles.sheetPrimaryButton} onPress={pickGalleryImage}>
             <Text style={styles.sheetPrimaryButtonText}>Aggiungi nuove foto</Text>
-          </Pressable>
+          </PressableScale>
 
           {experience.galleryImageUris.length === 0 ? (
             <View style={styles.galleryEmptySheet}>
@@ -2094,7 +2094,7 @@ export default function PlaceDetailScreen() {
                       )}
 
                       <View style={styles.galleryImageActions}>
-                        <Pressable
+                        <PressableScale
                           style={[
                             styles.coverSelectButton,
                             isCover && styles.coverSelectButtonActive,
@@ -2109,14 +2109,14 @@ export default function PlaceDetailScreen() {
                           >
                             {isCover ? "Attiva" : "Usa"}
                           </Text>
-                        </Pressable>
+                        </PressableScale>
 
-                        <Pressable
+                        <PressableScale
                           style={styles.removeImageButton}
                           onPress={() => removeGalleryImage(imageUri)}
                         >
                           <Text style={styles.removeImageText}>Elimina</Text>
-                        </Pressable>
+                        </PressableScale>
                       </View>
                     </View>
                   );
@@ -2166,12 +2166,12 @@ export default function PlaceDetailScreen() {
             style={styles.sheetInput}
           />
 
-          <Pressable
+          <PressableScale
             style={styles.sheetPrimaryButton}
             onPress={createEditorialRecognition}
           >
             <Text style={styles.sheetPrimaryButtonText}>Salva riconoscimento</Text>
-          </Pressable>
+          </PressableScale>
         </>
       );
     }
@@ -2201,11 +2201,11 @@ export default function PlaceDetailScreen() {
           <View style={styles.coverOverlay} />
 
           <View style={styles.coverHeader}>
-            <Pressable style={styles.roundBackButton} onPress={handleBackPress}>
+            <PressableScale style={styles.roundBackButton} onPress={handleBackPress}>
               <Text style={styles.roundBackText}>‹</Text>
-            </Pressable>
+            </PressableScale>
 
-            <Pressable
+            <PressableScale
               style={styles.coverPhotoButton}
               onPress={() => openSheet("gallery")}
             >
@@ -2214,7 +2214,7 @@ export default function PlaceDetailScreen() {
                 <View style={styles.coverPhotoIconSun} />
               </View>
               <Text style={styles.coverPhotoButtonText}>Foto</Text>
-            </Pressable>
+            </PressableScale>
           </View>
 
           <View style={styles.coverBottom}>
@@ -2297,7 +2297,7 @@ export default function PlaceDetailScreen() {
               const isActive = activeStatuses.includes(option.status);
 
               return (
-                <Pressable
+                <PressableScale
                   key={option.status}
                   style={[
                     styles.statusChip,
@@ -2334,7 +2334,7 @@ export default function PlaceDetailScreen() {
                   >
                     {option.title}
                   </Text>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
@@ -2350,20 +2350,20 @@ export default function PlaceDetailScreen() {
                 </Text>
               </View>
 
-              <Pressable
+              <PressableScale
                 style={styles.stateBadgeButton}
                 onPress={() => openSheet("badges")}
               >
                 <Text style={styles.stateBadgeButtonText}>
                   {experience.badges.length > 0 ? "Gestisci" : "Aggiungi"}
                 </Text>
-              </Pressable>
+              </PressableScale>
             </View>
 
             {experience.badges.length > 0 ? (
               <View style={styles.stateBadgeList}>
                 {stateBadgesPreview.map((badge) => (
-                  <Pressable
+                  <PressableScale
                     key={badge}
                     style={styles.stateBadgeChip}
                     onPress={() => toggleBadge(badge)}
@@ -2390,7 +2390,7 @@ export default function PlaceDetailScreen() {
                         {getBadgeCategory(badge)}
                       </Text>
                     </View>
-                  </Pressable>
+                  </PressableScale>
                 ))}
               </View>
             ) : (
@@ -2412,14 +2412,14 @@ export default function PlaceDetailScreen() {
                 </Text>
               </View>
 
-              <Pressable
+              <PressableScale
                 style={styles.stateBadgeButton}
                 onPress={() => openSheet("customLists")}
               >
                 <Text style={styles.stateBadgeButtonText}>
                   {customListsForPlace.length > 0 ? "Gestisci" : "Crea"}
                 </Text>
-              </Pressable>
+              </PressableScale>
             </View>
 
             {customListsForPlace.length > 0 ? (
@@ -2481,12 +2481,12 @@ export default function PlaceDetailScreen() {
                 ))}
               </View>
             ) : (
-              <Pressable
+              <PressableScale
                 style={styles.addDetailsButton}
                 onPress={() => openSheet("details")}
               >
                 <Text style={styles.addDetailsButtonText}>Aggiungi info</Text>
-              </Pressable>
+              </PressableScale>
             )}
           </Section>
 
@@ -2507,14 +2507,14 @@ export default function PlaceDetailScreen() {
                 </View>
 
                 {openingHoursRows.length > 2 && (
-                  <Pressable
+                  <PressableScale
                     style={styles.weekButton}
                     onPress={() => setIsHoursExpanded((value) => !value)}
                   >
                     <Text style={styles.weekLink}>
                       {isHoursExpanded ? "RIDUCI" : "VEDI SETTIMANA"}
                     </Text>
-                  </Pressable>
+                  </PressableScale>
                 )}
               </View>
             </Section>
@@ -2524,15 +2524,15 @@ export default function PlaceDetailScreen() {
             <Section title="CONTATTI">
               <View style={styles.contactRow}>
                 {hasPhone && (
-                  <Pressable style={styles.contactChipMuted} onPress={callPhone}>
+                  <PressableScale style={styles.contactChipMuted} onPress={callPhone}>
                     <Text style={styles.contactChipMutedText}>Telefono</Text>
-                  </Pressable>
+                  </PressableScale>
                 )}
 
                 {hasWebsite && (
-                  <Pressable style={styles.contactChip} onPress={openWebsite}>
+                  <PressableScale style={styles.contactChip} onPress={openWebsite}>
                     <Text style={styles.contactChipText}>Sito</Text>
-                  </Pressable>
+                  </PressableScale>
                 )}
               </View>
             </Section>
@@ -2549,12 +2549,12 @@ export default function PlaceDetailScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.galleryPreviewRow}
               >
-                <Pressable style={styles.galleryAddMini} onPress={pickGalleryImage}>
+                <PressableScale style={styles.galleryAddMini} onPress={pickGalleryImage}>
                   <Text style={styles.galleryAddMiniText}>＋</Text>
-                </Pressable>
+                </PressableScale>
 
                 {experience.galleryImageUris.slice(0, 6).map((imageUri) => (
-                  <Pressable key={imageUri} onPress={() => setCover(imageUri)}>
+                  <PressableScale key={imageUri} onPress={() => setCover(imageUri)}>
                     <Image
                       source={{ uri: imageUri }}
                       style={[
@@ -2563,17 +2563,17 @@ export default function PlaceDetailScreen() {
                           styles.galleryPreviewImageActive,
                       ]}
                     />
-                  </Pressable>
+                  </PressableScale>
                 ))}
               </ScrollView>
             ) : (
-              <Pressable style={styles.emptyActionCard} onPress={pickGalleryImage}>
+              <PressableScale style={styles.emptyActionCard} onPress={pickGalleryImage}>
                 <Text style={styles.emptyActionTitle}>Aggiungi foto</Text>
                 <Text style={styles.emptyActionText}>
                   Salva immagini del locale e scegli quella da usare come
                   copertina.
                 </Text>
-              </Pressable>
+              </PressableScale>
             )}
           </Section>
 
@@ -2600,14 +2600,14 @@ export default function PlaceDetailScreen() {
                     const isActive = experience.scores[row.key] >= value;
 
                     return (
-                      <Pressable
+                      <PressableScale
                         key={value}
                         onPress={() => updateScore(row.key, value)}
                       >
                         <Text style={[styles.star, isActive && styles.starActive]}>
                           ★
                         </Text>
-                      </Pressable>
+                      </PressableScale>
                     );
                   })}
                 </View>
@@ -2636,7 +2636,7 @@ export default function PlaceDetailScreen() {
             </Text>
 
             {experience.experiences.length === 0 ? (
-              <Pressable
+              <PressableScale
                 style={styles.diaryEmptyCard}
                 onPress={() => openSheet("experience")}
               >
@@ -2646,7 +2646,7 @@ export default function PlaceDetailScreen() {
                   Dopo una visita puoi segnare occasione, compagnia, piatto
                   migliore, spesa e voglia di tornarci.
                 </Text>
-              </Pressable>
+              </PressableScale>
             ) : (
               experience.experiences.map((entry) => (
                 <View key={entry.id} style={styles.timelineCard}>
@@ -2682,7 +2682,7 @@ export default function PlaceDetailScreen() {
             {allEditorialRecognitions.length > 0 ? (
               <View style={styles.editorialList}>
                 {allEditorialRecognitions.map((recognition) => (
-                  <Pressable
+                  <PressableScale
                     key={recognition.id}
                     style={styles.editorialCard}
                     onPress={() => openEditorialRecognition(recognition)}
@@ -2700,7 +2700,7 @@ export default function PlaceDetailScreen() {
                     </View>
 
                     <Text style={styles.awardArrow}>↗</Text>
-                  </Pressable>
+                  </PressableScale>
                 ))}
               </View>
             ) : (
@@ -2727,7 +2727,7 @@ export default function PlaceDetailScreen() {
       </ScrollView>
 
       <View style={styles.bottomBar}>
-        <Pressable
+        <PressableScale
           style={[
             styles.bottomAction,
             activeStatuses.includes("favorite") && styles.bottomActionSaved,
@@ -2737,15 +2737,15 @@ export default function PlaceDetailScreen() {
           <Text style={styles.bottomActionText}>
             {activeStatuses.includes("favorite") ? "♥ Salvato" : "♡ Salva"}
           </Text>
-        </Pressable>
+        </PressableScale>
 
-        <Pressable style={styles.bottomAction} onPress={() => openSheet("lists")}>
+        <PressableScale style={styles.bottomAction} onPress={() => openSheet("lists")}>
           <Text style={styles.bottomActionText}>☰ Lista</Text>
-        </Pressable>
+        </PressableScale>
 
-        <Pressable style={styles.bottomActionPrimary} onPress={openMaps}>
+        <PressableScale style={styles.bottomActionPrimary} onPress={openMaps}>
           <Text style={styles.bottomActionPrimaryText}>➤ Naviga</Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
       <Modal
@@ -2755,7 +2755,7 @@ export default function PlaceDetailScreen() {
         onRequestClose={closeSheet}
       >
         <View style={styles.modalBackdrop}>
-          <Pressable style={styles.modalBackdropPressable} onPress={closeSheet} />
+          <PressableScale style={styles.modalBackdropPressable} onPress={closeSheet} />
 
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
@@ -2868,9 +2868,9 @@ function Section({
         <Text style={styles.sectionKicker}>{title}</Text>
 
         {actionLabel && onAction ? (
-          <Pressable style={styles.sectionActionButton} onPress={onAction}>
+          <PressableScale style={styles.sectionActionButton} onPress={onAction}>
             <Text style={styles.sectionActionText}>{actionLabel}</Text>
-          </Pressable>
+          </PressableScale>
         ) : null}
       </View>
 
@@ -2889,10 +2889,10 @@ function ActionBox({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={styles.actionBox} onPress={onPress}>
+    <PressableScale style={styles.actionBox} onPress={onPress}>
       <Text style={styles.actionIcon}>{symbol}</Text>
       <Text style={styles.actionLabel}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -2932,9 +2932,9 @@ function SheetHeader({
     <View style={styles.sheetHeader}>
       <Text style={styles.sheetTitle}>{title}</Text>
 
-      <Pressable onPress={onClose}>
+      <PressableScale onPress={onClose}>
         <Text style={styles.sheetClose}>×</Text>
-      </Pressable>
+      </PressableScale>
     </View>
   );
 }
