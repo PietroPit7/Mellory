@@ -2490,8 +2490,12 @@ export default function PlaceDetailScreen() {
             )}
           </Section>
 
-          {hasRealHours && (
-            <Section title="ORARI">
+          <Section
+            title="ORARI"
+            actionLabel={hasRealHours ? "Modifica" : undefined}
+            onAction={hasRealHours ? () => openSheet("details") : undefined}
+          >
+            {hasRealHours ? (
               <View style={styles.hoursCard}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.hoursTitle}>Orari</Text>
@@ -2517,11 +2521,22 @@ export default function PlaceDetailScreen() {
                   </PressableScale>
                 )}
               </View>
-            </Section>
-          )}
+            ) : (
+              <PressableScale
+                style={styles.addDetailsButton}
+                onPress={() => openSheet("details")}
+              >
+                <Text style={styles.addDetailsButtonText}>Aggiungi orari</Text>
+              </PressableScale>
+            )}
+          </Section>
 
-          {hasRealContacts && (
-            <Section title="CONTATTI">
+          <Section
+            title="CONTATTI"
+            actionLabel={hasRealContacts ? "Modifica" : undefined}
+            onAction={hasRealContacts ? () => openSheet("details") : undefined}
+          >
+            {hasRealContacts ? (
               <View style={styles.contactRow}>
                 {hasPhone && (
                   <PressableScale style={styles.contactChipMuted} onPress={callPhone}>
@@ -2535,8 +2550,15 @@ export default function PlaceDetailScreen() {
                   </PressableScale>
                 )}
               </View>
-            </Section>
-          )}
+            ) : (
+              <PressableScale
+                style={styles.addDetailsButton}
+                onPress={() => openSheet("details")}
+              >
+                <Text style={styles.addDetailsButtonText}>Aggiungi contatti</Text>
+              </PressableScale>
+            )}
+          </Section>
 
           <Section
             title="LA TUA GALLERIA"
