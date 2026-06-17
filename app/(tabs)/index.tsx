@@ -194,7 +194,7 @@ const ZONE_THEMES: ZoneTheme[] = [
     title: "Vicinissimi",
     hint: "A due passi da te",
     icon: "\u2726",
-    match: (place) => place.distanceMeters <= 700,
+    match: (place) => place.distanceMeters <= 400,
   },
   {
     id: "dinner",
@@ -1482,9 +1482,17 @@ export default function HomeScreen() {
                 Costruite al volo dai locali trovati qui intorno.
               </Text>
 
-              <View style={styles.zoneGrid}>
+              <ScrollView
+                horizontal
+                nestedScrollEnabled
+                directionalLockEnabled
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.zoneRow}
+              >
                 {zoneLists.map((list) => {
                   const isActive = activeThemeId === list.id;
+                  const topPlace = list.places[0]?.name ?? "";
 
                   return (
                     <Pressable
@@ -1539,10 +1547,30 @@ export default function HomeScreen() {
                       >
                         {list.hint}
                       </Text>
+
+                      {topPlace ? (
+                        <View style={styles.zoneFooter}>
+                          <View
+                            style={[
+                              styles.zoneFooterDot,
+                              isActive && styles.zoneFooterDotActive,
+                            ]}
+                          />
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.zonePreview,
+                              isActive && styles.zonePreviewActive,
+                            ]}
+                          >
+                            {topPlace}
+                          </Text>
+                        </View>
+                      ) : null}
                     </Pressable>
                   );
                 })}
-              </View>
+              </ScrollView>
             </View>
           )}
 
@@ -2265,23 +2293,47 @@ function createStyles(colors: MelloryThemeColors) {
     color: colors.textMuted,
     fontSize: 15,
     lineHeight: 22,
+    marginBottom: 16,
   },
-  zoneGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  zoneRow: {
     gap: 12,
-    marginTop: 16,
+    paddingRight: 24,
+    paddingLeft: 0,
   },
   zoneCard: {
-    flex: 1,
-    minWidth: "47%",
-    minHeight: 132,
+    width: 196,
+    minHeight: 162,
     borderRadius: 25,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: "rgba(255, 248, 239, 0.08)",
     padding: 18,
-    justifyContent: "space-between",
+  },
+  zoneFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: "auto",
+    paddingTop: 12,
+  },
+  zoneFooterDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: colors.pink,
+  },
+  zoneFooterDotActive: {
+    backgroundColor: colors.pink,
+  },
+  zonePreview: {
+    flex: 1,
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  zonePreviewActive: {
+    color: colors.paperText,
+    opacity: 0.78,
   },
   zoneCardActive: {
     backgroundColor: colors.paper,

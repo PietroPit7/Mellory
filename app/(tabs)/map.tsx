@@ -1740,6 +1740,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   bottomSpace: {
-    height: 42,
+    height: 124,
   },
 });
