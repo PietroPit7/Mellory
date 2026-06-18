@@ -36,13 +36,6 @@ function RootNavigator() {
             animation: "slide_from_right",
           }}
         />
-
-        <Stack.Screen
-          name="modal"
-          options={{
-            presentation: "modal",
-          }}
-        />
       </Stack>
 
       <StatusBar style={resolvedTheme === "light" ? "dark" : "light"} />
