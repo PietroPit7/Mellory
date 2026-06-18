@@ -473,17 +473,223 @@ type WikipediaEnrichment = {
 };
 
 const WIKI_LANG = "it";
-// Soglia rigida: la voce deve essere praticamente sul posto.
+// Soglia rigida per la geosearch Wikipedia: la voce dev'essere sul posto.
 const WIKI_MAX_DISTANCE_METERS = 70;
+// Soglia per match via Wikidata (coord nominali della voce vs locale).
+const WIKIDATA_MAX_DISTANCE_METERS = 500;
+
+// Filtro "solo gastronomia": la voce deve descrivere un locale dove si mangia/beve.
+const FOOD_VENUE_REGEX =
+  /ristorant|restaurant|trattoria|osteria|pizzeri|pizza|caff|caf[eé]|coffee|\bbar\b|\bpub\b|gelat|pasticc|enotec|bistro|braceri|hostari|locanda|birreri|paninoteca|tavola calda|steakhouse|wine bar|cocktail/i;
 
 function stripParentheses(value: string) {
   return value.replace(/\(.*?\)/g, "").trim();
 }
 
-// Arricchimento Wikipedia SOLO con corrispondenza certa: stesso nome (a meno di
-// accenti/parentesi) e coordinate quasi coincidenti. In ogni altro caso null,
-// così non mostriamo mai dati non verificati.
-async function fetchWikipediaEnrichment(
+function looksLikeFoodVenue(text: string) {
+  return FOOD_VENUE_REGEX.test(text || "");
+}
+
+type WikipediaSummary = {
+  description: string;
+  imageUrl: string;
+  wikipediaUrl: string;
+};
+
+async function fetchWikipediaSummaryByTitle(
+  lang: string,
+  title: string
+): Promise<WikipediaSummary | null> {
+  const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
+    title
+  )}`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+
+  const summary = (await response.json()) as {
+    type?: string;
+    extract?: string;
+    thumbnail?: { source?: string };
+    originalimage?: { source?: string };
+    content_urls?: { desktop?: { page?: string } };
+  };
+
+  if (summary.type && summary.type !== "standard") return null;
+
+  return {
+    description: cleanText(summary.extract),
+    imageUrl:
+      cleanText(summary.thumbnail?.source) ||
+      cleanText(summary.originalimage?.source),
+    wikipediaUrl:
+      cleanText(summary.content_urls?.desktop?.page) ||
+      `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+  };
+}
+
+function parseWikipediaTag(tag: string) {
+  const match = tag.match(/^([a-z]{2,3}):(.+)$/i);
+  if (match) return { lang: match[1].toLowerCase(), title: match[2] };
+  return { lang: WIKI_LANG, title: tag };
+}
+
+type WikidataEntity = {
+  id?: string;
+  labels?: Record<string, { value?: string }>;
+  descriptions?: Record<string, { value?: string }>;
+  sitelinks?: Record<string, { title?: string }>;
+  claims?: Record<string, { mainsnak?: { datavalue?: { value?: unknown } } }[]>;
+};
+
+async function fetchWikidataEntity(qid: string): Promise<WikidataEntity | null> {
+  const url =
+    `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(qid)}` +
+    `&props=labels%7Cdescriptions%7Cclaims%7Csitelinks&languages=it%7Cen` +
+    `&sitefilter=itwiki%7Cenwiki&format=json&origin=*`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const data = (await response.json()) as {
+    entities?: Record<string, WikidataEntity>;
+  };
+  return data.entities?.[qid] ?? null;
+}
+
+function getWikidataDescription(entity: WikidataEntity) {
+  return (
+    cleanText(entity.descriptions?.it?.value) ||
+    cleanText(entity.descriptions?.en?.value)
+  );
+}
+
+function getWikidataLabel(entity: WikidataEntity) {
+  return (
+    cleanText(entity.labels?.it?.value) || cleanText(entity.labels?.en?.value)
+  );
+}
+
+function getWikidataImageUrl(entity: WikidataEntity) {
+  const file = entity.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+  if (typeof file !== "string" || !file) return "";
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(
+    file
+  )}?width=640`;
+}
+
+function getWikidataCoordinates(entity: WikidataEntity) {
+  const value = entity.claims?.P625?.[0]?.mainsnak?.datavalue?.value as
+    | { latitude?: number; longitude?: number }
+    | undefined;
+  if (!value || typeof value.latitude !== "number") return null;
+  return { latitude: value.latitude, longitude: value.longitude as number };
+}
+
+// Da un'entità Wikidata costruisce l'arricchimento SOLO se è un locale
+// gastronomico e (per i match da ricerca) se nome e coordinate combaciano.
+async function enrichFromWikidataEntity(
+  entity: WikidataEntity | null,
+  name: string,
+  latitude: number,
+  longitude: number,
+  trusted: boolean
+): Promise<WikipediaEnrichment | null> {
+  if (!entity) return null;
+
+  const label = getWikidataLabel(entity);
+  const description = getWikidataDescription(entity);
+
+  if (!trusted) {
+    if (normalizeText(label) !== normalizeText(name)) return null;
+    if (!looksLikeFoodVenue(description)) return null;
+
+    const coordinates = getWikidataCoordinates(entity);
+    if (!coordinates) return null;
+    const distance = getDistanceMeters({
+      firstLatitude: latitude,
+      firstLongitude: longitude,
+      secondLatitude: coordinates.latitude,
+      secondLongitude: coordinates.longitude,
+    });
+    if (distance > WIKIDATA_MAX_DISTANCE_METERS) return null;
+  }
+
+  let finalDescription = description;
+  let imageUrl = getWikidataImageUrl(entity);
+  let wikipediaUrl = "";
+  let sourceTitle = label;
+
+  const itTitle = entity.sitelinks?.itwiki?.title;
+  const enTitle = entity.sitelinks?.enwiki?.title;
+  const linkTitle = itTitle || enTitle;
+  const linkLang = itTitle ? "it" : "en";
+
+  if (linkTitle) {
+    const summary = await fetchWikipediaSummaryByTitle(linkLang, linkTitle).catch(
+      () => null
+    );
+    if (summary) {
+      finalDescription = summary.description || finalDescription;
+      imageUrl = imageUrl || summary.imageUrl;
+      wikipediaUrl = summary.wikipediaUrl;
+      sourceTitle = linkTitle;
+    }
+  }
+
+  if (!wikipediaUrl && entity.id) {
+    wikipediaUrl = `https://www.wikidata.org/wiki/${entity.id}`;
+  }
+
+  if (!finalDescription && !imageUrl) return null;
+
+  return {
+    description: finalDescription,
+    imageUrl,
+    imageAttribution: linkTitle ? "Wikipedia · CC BY-SA" : "Wikidata · CC0",
+    wikipediaTitle: sourceTitle,
+    wikipediaUrl,
+  };
+}
+
+async function fetchWikidataSearchEnrichment(
+  name: string,
+  latitude: number,
+  longitude: number
+): Promise<WikipediaEnrichment | null> {
+  const normalizedName = normalizeText(name);
+  if (normalizedName.length < 3) return null;
+
+  const url =
+    `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}` +
+    `&language=it&uselang=it&format=json&limit=6&origin=*`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as {
+    search?: { id?: string; label?: string }[];
+  };
+  const candidates = (data.search ?? []).filter(
+    (candidate) =>
+      candidate.id && normalizeText(candidate.label ?? "") === normalizedName
+  );
+
+  for (const candidate of candidates) {
+    const entity = await fetchWikidataEntity(candidate.id as string).catch(
+      () => null
+    );
+    const enriched = await enrichFromWikidataEntity(
+      entity,
+      name,
+      latitude,
+      longitude,
+      false
+    ).catch(() => null);
+    if (enriched) return enriched;
+  }
+
+  return null;
+}
+
+// Geosearch Wikipedia: cattura le voci geolocalizzate (stesso nome, <=70m).
+async function fetchWikipediaGeosearchEnrichment(
   name: string,
   latitude: number,
   longitude: number
@@ -515,40 +721,68 @@ async function fetchWikipediaEnrichment(
 
   if (!match) return null;
 
-  const summaryUrl = `https://${WIKI_LANG}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
-    match.title
-  )}`;
-  const summaryResponse = await fetch(summaryUrl);
-  if (!summaryResponse.ok) return null;
-
-  const summary = (await summaryResponse.json()) as {
-    type?: string;
-    extract?: string;
-    thumbnail?: { source?: string };
-    originalimage?: { source?: string };
-    content_urls?: { desktop?: { page?: string } };
-  };
-
-  // Solo voci enciclopediche standard (no disambigue/redirect).
-  if (summary.type && summary.type !== "standard") return null;
-
-  const description = cleanText(summary.extract);
-  const imageUrl =
-    cleanText(summary.thumbnail?.source) ||
-    cleanText(summary.originalimage?.source);
-  const wikipediaUrl =
-    cleanText(summary.content_urls?.desktop?.page) ||
-    `https://${WIKI_LANG}.wikipedia.org/wiki/${encodeURIComponent(match.title)}`;
-
-  if (!description && !imageUrl) return null;
+  const summary = await fetchWikipediaSummaryByTitle(WIKI_LANG, match.title);
+  if (!summary || (!summary.description && !summary.imageUrl)) return null;
+  if (!looksLikeFoodVenue(summary.description)) return null;
 
   return {
-    description,
-    imageUrl,
+    description: summary.description,
+    imageUrl: summary.imageUrl,
     imageAttribution: "Wikipedia · CC BY-SA",
     wikipediaTitle: match.title,
-    wikipediaUrl,
+    wikipediaUrl: summary.wikipediaUrl,
   };
+}
+
+// Risolutore verificato: 1) tag OSM wikidata/wikipedia (collegamento certo della
+// community); 2) ricerca Wikidata con verifica nome+gastronomia+coordinate;
+// 3) geosearch Wikipedia. Mai dati non verificati.
+async function fetchEncyclopediaEnrichment(
+  name: string,
+  latitude: number,
+  longitude: number,
+  osmTags: Record<string, string>
+): Promise<WikipediaEnrichment | null> {
+  const wikidataTag = cleanText(osmTags.wikidata);
+  if (/^Q\d+$/.test(wikidataTag)) {
+    const entity = await fetchWikidataEntity(wikidataTag).catch(() => null);
+    const enriched = await enrichFromWikidataEntity(
+      entity,
+      name,
+      latitude,
+      longitude,
+      true
+    ).catch(() => null);
+    if (enriched) return enriched;
+  }
+
+  const wikipediaTag = cleanText(osmTags.wikipedia);
+  if (wikipediaTag) {
+    const { lang, title } = parseWikipediaTag(wikipediaTag);
+    const summary = await fetchWikipediaSummaryByTitle(lang, title).catch(
+      () => null
+    );
+    if (summary && (summary.description || summary.imageUrl)) {
+      return {
+        description: summary.description,
+        imageUrl: summary.imageUrl,
+        imageAttribution: "Wikipedia · CC BY-SA",
+        wikipediaTitle: title,
+        wikipediaUrl: summary.wikipediaUrl,
+      };
+    }
+  }
+
+  const fromWikidata = await fetchWikidataSearchEnrichment(
+    name,
+    latitude,
+    longitude
+  ).catch(() => null);
+  if (fromWikidata) return fromWikidata;
+
+  return fetchWikipediaGeosearchEnrichment(name, latitude, longitude).catch(
+    () => null
+  );
 }
 
 export async function enrichPlaceWithOpenData(
@@ -569,6 +803,8 @@ export async function enrichPlaceWithOpenData(
     return enrichment;
   }
 
+  let osmTags: Record<string, string> = {};
+
   try {
     const overpassElements = await fetchOverpassElements(
       place.latitude as number,
@@ -578,6 +814,7 @@ export async function enrichPlaceWithOpenData(
     const bestOsmElement = findBestOsmElement(place, overpassElements);
 
     if (bestOsmElement) {
+      osmTags = bestOsmElement.tags || {};
       enrichment = mergeEnrichmentData(
         enrichment,
         enrichmentFromOsmElement(bestOsmElement)
@@ -591,10 +828,11 @@ export async function enrichPlaceWithOpenData(
   }
 
   try {
-    const wikipedia = await fetchWikipediaEnrichment(
+    const wikipedia = await fetchEncyclopediaEnrichment(
       place.name,
       place.latitude as number,
-      place.longitude as number
+      place.longitude as number,
+      osmTags
     );
 
     if (wikipedia) {
