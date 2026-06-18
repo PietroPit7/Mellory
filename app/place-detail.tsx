@@ -105,6 +105,36 @@ function composeOpeningHours(hoursByDay: string[]) {
     .join("; ");
 }
 
+// "Aperto ora" calcolato SOLO dagli orari per-giorno inseriti dall'utente
+// (formato affidabile HH:MM-HH:MM). null = oggi non specificato → non mostriamo.
+function getOpenNowState(hoursByDay: string[]): boolean | null {
+  if (!Array.isArray(hoursByDay) || hoursByDay.length < 7) return null;
+
+  const now = new Date();
+  const dayIndex = (now.getDay() + 6) % 7;
+  const entry = (hoursByDay[dayIndex] ?? "").trim();
+  if (!entry) return null;
+
+  const minutesNow = now.getHours() * 60 + now.getMinutes();
+  const ranges = entry.split(/[,;]/).map((part) => part.trim()).filter(Boolean);
+
+  let parsedAny = false;
+
+  for (const range of ranges) {
+    const match = range.match(/(\d{1,2})[:.](\d{2})\s*[-–]\s*(\d{1,2})[:.](\d{2})/);
+    if (!match) continue;
+
+    parsedAny = true;
+    const start = Number(match[1]) * 60 + Number(match[2]);
+    let end = Number(match[3]) * 60 + Number(match[4]);
+    if (end < start) end += 24 * 60; // oltre la mezzanotte
+
+    if (minutesNow >= start && minutesNow <= end) return true;
+  }
+
+  return parsedAny ? false : null;
+}
+
 type PlaceExperience = {
   note: string;
   coverImageUri: string;
@@ -960,6 +990,7 @@ export default function PlaceDetailScreen() {
   const hasPhone = effectivePhone.length > 0;
   const hasRealContacts = hasWebsite || hasPhone;
   const hasRealHours = effectiveOpeningHours.length > 0;
+  const openNowState = getOpenNowState(experience.personalDetails.hoursByDay);
   const hasDistance = distance.trim().length > 0 && distance !== "Distanza da te";
   const infoRows = useMemo(
     () =>
@@ -2629,7 +2660,35 @@ export default function PlaceDetailScreen() {
               <View style={styles.hoursCard}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.hoursTitle}>Orari</Text>
-                  <View style={styles.openDot} />
+                  {openNowState !== null ? (
+                    <View
+                      style={[
+                        styles.openNowChip,
+                        {
+                          backgroundColor: openNowState
+                            ? "rgba(111,147,75,0.18)"
+                            : "rgba(129,122,116,0.18)",
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.openNowDot,
+                          { backgroundColor: openNowState ? colors.green : colors.muted },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.openNowText,
+                          { color: openNowState ? colors.green : colors.muted },
+                        ]}
+                      >
+                        {openNowState ? "Aperto ora" : "Chiuso ora"}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.openDot} />
+                  )}
                 </View>
 
                 <View style={styles.hoursRows}>
@@ -3757,6 +3816,23 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 999,
     backgroundColor: colors.green,
+  },
+  openNowChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  openNowDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  openNowText: {
+    fontSize: 12,
+    fontWeight: "900",
   },
   hoursRows: {
     marginTop: 12,
