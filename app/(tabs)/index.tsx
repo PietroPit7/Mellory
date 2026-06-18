@@ -1,6 +1,7 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
-import { router } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -734,6 +735,76 @@ async function fetchDashboardData(context: SearchContext) {
   };
 }
 
+const HOME_SAVED_KEYS = [
+  "mellory:places-index",
+  "mellory:favorites",
+  "mellory:try",
+  "mellory:visited",
+  "mellory:retry",
+];
+
+async function readJsonArray(key: string): Promise<unknown[]> {
+  try {
+    const value = await AsyncStorage.getItem(key);
+    if (!value) return [];
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function savedToDashboardPlace(raw: unknown): DashboardPlace | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const id = typeof record.id === "string" ? record.id : "";
+  const name = typeof record.name === "string" ? record.name : "";
+  if (!id || !name) return null;
+
+  const categoryBase =
+    typeof record.categoryBase === "string"
+      ? record.categoryBase
+      : typeof record.category === "string"
+        ? record.category
+        : "Locale";
+
+  return {
+    id,
+    name,
+    category:
+      typeof record.category === "string" ? record.category : categoryBase,
+    categoryBase,
+    detail: typeof record.detail === "string" ? record.detail : "",
+    distance: typeof record.distance === "string" ? record.distance : "",
+    distanceMeters:
+      typeof record.distanceMeters === "number" ? record.distanceMeters : 0,
+    latitude: typeof record.latitude === "number" ? record.latitude : 0,
+    longitude: typeof record.longitude === "number" ? record.longitude : 0,
+    categoryId: getCategoryId(categoryBase),
+    isGuideMentioned: false,
+    website: typeof record.website === "string" ? record.website : "",
+    phone: typeof record.phone === "string" ? record.phone : "",
+    openingHours:
+      typeof record.openingHours === "string" ? record.openingHours : "",
+    editorialAwards:
+      typeof record.editorialAwards === "string" ? record.editorialAwards : "",
+  };
+}
+
+async function readHomeSavedPlaces(): Promise<DashboardPlace[]> {
+  const arrays = await Promise.all(HOME_SAVED_KEYS.map(readJsonArray));
+  const uniquePlaces = new Map<string, DashboardPlace>();
+
+  arrays.flat().forEach((raw) => {
+    const place = savedToDashboardPlace(raw);
+    if (place && !uniquePlaces.has(place.id)) {
+      uniquePlaces.set(place.id, place);
+    }
+  });
+
+  return Array.from(uniquePlaces.values());
+}
+
 function geoapifyPlaceToDashboardPlace(place: GeoapifyNearbyPlace): DashboardPlace {
   return {
     id: place.id,
@@ -799,6 +870,7 @@ export default function HomeScreen() {
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [places, setPlaces] = useState<DashboardPlace[]>([]);
   const [guidePlaces, setGuidePlaces] = useState<DashboardPlace[]>([]);
+  const [savedPlaces, setSavedPlaces] = useState<DashboardPlace[]>([]);
   const placesScrollRef = useRef<ScrollView>(null);
   const guideScrollRef = useRef<ScrollView>(null);
   const loadingPulse = useRef(new Animated.Value(0)).current;
@@ -808,6 +880,20 @@ export default function HomeScreen() {
     places: 0,
     guides: 0,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      readHomeSavedPlaces().then((nextSaved) => {
+        if (isActive) setSavedPlaces(nextSaved);
+      });
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
 
   const groupedSuggestions = useMemo(
     () => groupSuggestions(citySuggestions),
@@ -1374,6 +1460,29 @@ export default function HomeScreen() {
           </View>
         )}
       </View>
+
+      {savedPlaces.length > 0 && (
+        <View style={styles.placesPanel}>
+          <View style={styles.panelHeader}>
+            <Text style={styles.panelKicker}>DALLA TUA GUIDA</Text>
+            <Text style={styles.panelTitle}>I posti che hai scelto</Text>
+            <Text style={styles.panelText}>
+              La tua selezione personale, sempre a portata.
+            </Text>
+          </View>
+
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            directionalLockEnabled
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.placesRow}
+          >
+            {savedPlaces.map(renderPlaceCard)}
+          </ScrollView>
+        </View>
+      )}
 
       {isLoading && (
         <View style={styles.loadingCard}>
