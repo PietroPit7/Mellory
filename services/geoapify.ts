@@ -26,6 +26,8 @@ const OVERPASS_ENDPOINTS = [
 ];
 const OVERPASS_MAX_RESULTS = 220;
 
+// Mellory è una guida gastronomica: solo locali dove si mangia e si beve,
+// niente attrazioni/musei/luoghi turistici.
 const PLACE_CATEGORIES = [
   "catering.restaurant",
   "catering.restaurant.pizza",
@@ -34,9 +36,6 @@ const PLACE_CATEGORIES = [
   "catering.pub",
   "catering.fast_food",
   "catering.ice_cream",
-  "tourism.attraction",
-  "leisure",
-  "entertainment",
   "commercial.food_and_drink",
 ].join(",");
 
@@ -214,12 +213,9 @@ function getPlaceCategoryBase(categories: string[] | undefined) {
     return "Caffè";
   }
   if (safeCategories.includes("catering.bar")) return "Bar";
-  if (safeCategories.includes("tourism.attraction")) return "Attrazione";
-  if (safeCategories.some((category) => category.startsWith("entertainment"))) {
-    return "Intrattenimento";
-  }
-  if (safeCategories.some((category) => category.startsWith("leisure"))) {
-    return "Tempo libero";
+  if (safeCategories.includes("catering.fast_food")) return "Fast food";
+  if (safeCategories.some((category) => category.startsWith("commercial.food_and_drink"))) {
+    return "Food & drink";
   }
 
   return "Luogo";
@@ -393,7 +389,6 @@ function getOsmCategoryBase(tags: Record<string, string> | undefined) {
 
   const amenity = cleanText(tags.amenity).toLowerCase();
   const shop = cleanText(tags.shop).toLowerCase();
-  const tourism = cleanText(tags.tourism).toLowerCase();
   const cuisine = cleanText(tags.cuisine).toLowerCase();
 
   if (amenity === "restaurant") {
@@ -410,9 +405,6 @@ function getOsmCategoryBase(tags: Record<string, string> | undefined) {
   if (shop === "pastry" || shop === "confectionery") return "Pasticceria";
   if (shop === "ice_cream") return "Gelateria";
   if (shop === "coffee" || shop === "chocolate") return "Caffè";
-  if (tourism === "attraction" || tourism === "museum" || tourism === "gallery") {
-    return "Attrazione";
-  }
 
   return "Luogo";
 }
@@ -498,7 +490,6 @@ function buildNearbyOverpassQuery(
     (
       nwr(${around})["name"]["amenity"~"^(restaurant|bar|cafe|pub|fast_food|ice_cream|biergarten)$"];
       nwr(${around})["name"]["shop"~"^(bakery|pastry|confectionery|coffee|chocolate|ice_cream)$"];
-      nwr(${around})["name"]["tourism"~"^(attraction|museum|gallery)$"];
     );
     out center tags ${OVERPASS_MAX_RESULTS};
   `;

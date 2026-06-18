@@ -93,7 +93,7 @@ const categories = [
   "Caffè",
   "Pizzerie",
   "Gelaterie",
-  "Attrazioni",
+  "Pub",
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -318,8 +318,8 @@ function matchesCategory(place: MapPlace, selectedCategory: string) {
     return place.categoryBase === "Gelateria";
   }
 
-  if (selectedCategory === "Attrazioni") {
-    return place.categoryBase === "Attrazione";
+  if (selectedCategory === "Pub") {
+    return place.categoryBase === "Pub";
   }
 
   return true;
@@ -850,16 +850,21 @@ export default function MapScreen() {
     isLocatingUser || isSearchingPlaces || (mode === "saved" && isLoadingSaved);
 
   const shouldShowAreaSearch = useMemo(() => {
-    if (mode !== "search" || !mapRegion || !lastSearchCenter) return false;
+    if (mode !== "search" || !mapRegion) return false;
     if (isMapLoading) return false;
 
+    // Nessuna ricerca ancora fatta: appena la mappa si muove, permetti di
+    // cercare la zona inquadrata.
+    if (!lastSearchCenter) return true;
+
+    // Basta un piccolo spostamento perché compaia "Cerca in questa zona".
     return (
       getDistanceMeters(
         mapRegion.latitude,
         mapRegion.longitude,
         lastSearchCenter.latitude,
         lastSearchCenter.longitude
-      ) > 300
+      ) > 40
     );
   }, [isMapLoading, lastSearchCenter, mapRegion, mode]);
 

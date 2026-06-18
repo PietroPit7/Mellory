@@ -231,13 +231,6 @@ const ZONE_THEMES: ZoneTheme[] = [
     match: (place) =>
       place.categoryId === "ice_cream" || place.categoryId === "pastry",
   },
-  {
-    id: "see",
-    title: "Da vedere",
-    hint: "Attrazioni e cultura",
-    icon: "\u2727",
-    match: (place) => place.categoryId === "attrazione",
-  },
 ];
 
 type ZoneList = ZoneTheme & {

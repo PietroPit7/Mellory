@@ -29,6 +29,67 @@ type MelloryMapProps = {
 
 const colors = melloryThemeVars;
 
+const MELLORY_SOURCE_ID = "mellory-places";
+
+function createPointElement(color: string, initial: string, title: string) {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.title = title;
+  element.style.width = "42px";
+  element.style.height = "42px";
+  element.style.borderRadius = "999px";
+  element.style.border = `3px solid ${colors.paper}`;
+  element.style.background = color;
+  element.style.display = "flex";
+  element.style.alignItems = "center";
+  element.style.justifyContent = "center";
+  element.style.padding = "0";
+  element.style.cursor = "pointer";
+  element.style.boxShadow = "0 14px 28px rgba(7, 6, 4, 0.28)";
+
+  const inner = document.createElement("span");
+  inner.textContent = initial;
+  inner.style.width = "24px";
+  inner.style.height = "24px";
+  inner.style.borderRadius = "999px";
+  inner.style.background = colors.paper;
+  inner.style.color = colors.paperText;
+  inner.style.display = "flex";
+  inner.style.alignItems = "center";
+  inner.style.justifyContent = "center";
+  inner.style.fontSize = "12px";
+  inner.style.fontWeight = "900";
+  inner.style.fontFamily =
+    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+  element.appendChild(inner);
+  return element;
+}
+
+function createClusterElement(count: string) {
+  const size = count.length > 2 ? 56 : 48;
+  const element = document.createElement("button");
+  element.type = "button";
+  element.title = `${count} locali`;
+  element.style.width = `${size}px`;
+  element.style.height = `${size}px`;
+  element.style.borderRadius = "999px";
+  element.style.border = `2px solid ${colors.paper}`;
+  element.style.background = colors.pink;
+  element.style.color = colors.paper;
+  element.style.display = "flex";
+  element.style.alignItems = "center";
+  element.style.justifyContent = "center";
+  element.style.cursor = "pointer";
+  element.style.fontSize = "16px";
+  element.style.fontWeight = "900";
+  element.style.fontFamily =
+    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+  element.style.boxShadow = "0 16px 30px rgba(7, 6, 4, 0.34)";
+  element.textContent = count;
+  return element;
+}
+
 const MELLORY_MAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
@@ -178,52 +239,139 @@ export default function MelloryMap({
     const map = mapRef.current;
     if (!map) return;
 
-    markerRefs.current.forEach((marker) => marker.remove());
-    markerRefs.current = markers.map((marker) => {
-      const markerElement = document.createElement("button");
-      markerElement.type = "button";
-      markerElement.setAttribute("aria-label", marker.name);
-      markerElement.title = `${marker.name} - ${marker.category}`;
-      markerElement.style.width = "42px";
-      markerElement.style.height = "42px";
-      markerElement.style.borderRadius = "999px";
-      markerElement.style.border = `3px solid ${colors.paper}`;
-      markerElement.style.background = marker.color || colors.pink;
-      markerElement.style.display = "flex";
-      markerElement.style.alignItems = "center";
-      markerElement.style.justifyContent = "center";
-      markerElement.style.padding = "0";
-      markerElement.style.cursor = "pointer";
-      markerElement.style.boxShadow = "0 14px 28px rgba(7, 6, 4, 0.28)";
+    let cancelled = false;
 
-      const markerInitial = document.createElement("span");
-      markerInitial.textContent =
-        marker.name.trim().charAt(0).toUpperCase() || "M";
-      markerInitial.style.width = "24px";
-      markerInitial.style.height = "24px";
-      markerInitial.style.borderRadius = "999px";
-      markerInitial.style.background = colors.paper;
-      markerInitial.style.color = colors.paperText;
-      markerInitial.style.display = "flex";
-      markerInitial.style.alignItems = "center";
-      markerInitial.style.justifyContent = "center";
-      markerInitial.style.fontSize = "12px";
-      markerInitial.style.fontWeight = "900";
-      markerInitial.style.fontFamily =
-        "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    const featureCollection = {
+      type: "FeatureCollection" as const,
+      features: markers.map((marker) => ({
+        type: "Feature" as const,
+        geometry: {
+          type: "Point" as const,
+          coordinates: [marker.longitude, marker.latitude],
+        },
+        properties: {
+          id: marker.id,
+          color: marker.color || colors.pink,
+          initial: marker.name.trim().charAt(0).toUpperCase() || "M",
+          title: `${marker.name} · ${marker.category}`,
+        },
+      })),
+    };
 
-      markerElement.appendChild(markerInitial);
-      markerElement.addEventListener("click", () => onMarkerPress(marker.id));
+    function renderMarkers() {
+      const activeMap = mapRef.current;
+      if (cancelled || !activeMap || !activeMap.getSource(MELLORY_SOURCE_ID)) {
+        return;
+      }
 
-      return new maplibregl.Marker({
-        element: markerElement,
-        anchor: "center",
-      })
-        .setLngLat([marker.longitude, marker.latitude])
-        .addTo(map);
-    });
+      markerRefs.current.forEach((marker) => marker.remove());
+      markerRefs.current = [];
+
+      const features = activeMap.querySourceFeatures(MELLORY_SOURCE_ID);
+      const seenClusters = new Set<number>();
+      const seenPoints = new Set<string>();
+
+      features.forEach((feature) => {
+        const properties = feature.properties || {};
+        const geometry = feature.geometry;
+        if (!geometry || geometry.type !== "Point") return;
+        const coordinates = geometry.coordinates as [number, number];
+
+        if (properties.cluster) {
+          const clusterId = properties.cluster_id as number;
+          if (seenClusters.has(clusterId)) return;
+          seenClusters.add(clusterId);
+
+          const count =
+            properties.point_count_abbreviated ?? properties.point_count ?? "";
+          const element = createClusterElement(String(count));
+          element.addEventListener("click", () => {
+            const source = activeMap.getSource(
+              MELLORY_SOURCE_ID
+            ) as maplibregl.GeoJSONSource;
+            source.getClusterExpansionZoom(clusterId).then((zoom) => {
+              activeMap.easeTo({ center: coordinates, zoom, duration: 500 });
+            });
+          });
+
+          markerRefs.current.push(
+            new maplibregl.Marker({ element, anchor: "center" })
+              .setLngLat(coordinates)
+              .addTo(activeMap)
+          );
+        } else {
+          const id = String(properties.id ?? "");
+          if (!id || seenPoints.has(id)) return;
+          seenPoints.add(id);
+
+          const element = createPointElement(
+            String(properties.color || colors.pink),
+            String(properties.initial || "M"),
+            String(properties.title || "")
+          );
+          element.addEventListener("click", () => onMarkerPress(id));
+
+          markerRefs.current.push(
+            new maplibregl.Marker({ element, anchor: "center" })
+              .setLngLat(coordinates)
+              .addTo(activeMap)
+          );
+        }
+      });
+    }
+
+    function setupSource() {
+      const activeMap = mapRef.current;
+      if (cancelled || !activeMap) return;
+
+      const existing = activeMap.getSource(MELLORY_SOURCE_ID) as
+        | maplibregl.GeoJSONSource
+        | undefined;
+
+      if (existing) {
+        existing.setData(featureCollection);
+      } else {
+        activeMap.addSource(MELLORY_SOURCE_ID, {
+          type: "geojson",
+          data: featureCollection,
+          cluster: true,
+          clusterRadius: 55,
+          clusterMaxZoom: 15,
+        });
+        // Layer invisibile: serve solo perché querySourceFeatures abbia i tile.
+        activeMap.addLayer({
+          id: `${MELLORY_SOURCE_ID}-hidden`,
+          type: "circle",
+          source: MELLORY_SOURCE_ID,
+          paint: { "circle-radius": 0, "circle-opacity": 0 },
+        });
+      }
+
+      renderMarkers();
+    }
+
+    const handleSourceData = (event: maplibregl.MapSourceDataEvent) => {
+      if (
+        event.sourceId === MELLORY_SOURCE_ID &&
+        mapRef.current?.isSourceLoaded(MELLORY_SOURCE_ID)
+      ) {
+        renderMarkers();
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      setupSource();
+    } else {
+      map.once("load", setupSource);
+    }
+
+    map.on("sourcedata", handleSourceData);
+    map.on("moveend", renderMarkers);
 
     return () => {
+      cancelled = true;
+      map.off("sourcedata", handleSourceData);
+      map.off("moveend", renderMarkers);
       markerRefs.current.forEach((marker) => marker.remove());
       markerRefs.current = [];
     };
