@@ -131,6 +131,12 @@ export default function MelloryMap({
       "top-right"
     );
 
+    // Attribuzione OSM/CARTO/Esri: richiesta dalle licenze delle tile.
+    mapRef.current.addControl(
+      new maplibregl.AttributionControl({ compact: true }),
+      "bottom-right"
+    );
+
     return () => {
       markerRefs.current.forEach((marker) => marker.remove());
       markerRefs.current = [];
