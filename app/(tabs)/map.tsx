@@ -429,6 +429,8 @@ export default function MapScreen() {
   const [lastSearchCenter, setLastSearchCenter] =
     useState<MapRegionCenter | null>(null);
 
+  const [previewPlace, setPreviewPlace] = useState<MapPlace | null>(null);
+
   const params = useLocalSearchParams();
   const consumedParamsRef = useRef(false);
 
@@ -480,6 +482,16 @@ export default function MapScreen() {
       } as never);
     },
     []
+  );
+
+  // Clic sul marker: mostra una preview rapida, non apre subito la scheda.
+  const handleMarkerPress = useCallback(
+    (placeId: string) => {
+      const place = visiblePlaces.find((item) => item.id === placeId);
+      if (!place) return;
+      setPreviewPlace(place);
+    },
+    [visiblePlaces]
   );
 
   const openPlaceDetail = useCallback(
@@ -1134,9 +1146,61 @@ export default function MapScreen() {
           <MelloryMap
             markers={mapMarkers}
             center={mapCenter}
-            onMarkerPress={openPlaceDetail}
+            onMarkerPress={handleMarkerPress}
             onRegionChange={handleMapRegionChange}
           />
+
+          {previewPlace ? (
+            <View pointerEvents="box-none" style={styles.previewWrap}>
+              <PressableScale
+                style={styles.previewCard}
+                onPress={() => {
+                  const place = previewPlace;
+                  setPreviewPlace(null);
+                  pushPlaceDetail(place);
+                }}
+              >
+                <View
+                  style={[
+                    styles.previewMark,
+                    {
+                      backgroundColor: `${getCategoryColor(
+                        previewPlace.categoryBase
+                      )}26`,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.previewMarkText,
+                      { color: getCategoryColor(previewPlace.categoryBase) },
+                    ]}
+                  >
+                    {previewPlace.name.trim().charAt(0).toUpperCase() || "M"}
+                  </Text>
+                </View>
+
+                <View style={styles.previewBody}>
+                  <Text numberOfLines={1} style={styles.previewName}>
+                    {previewPlace.name}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.previewMeta}>
+                    {previewPlace.detail
+                      ? `${previewPlace.category} · ${previewPlace.detail}`
+                      : previewPlace.category}
+                  </Text>
+                  <Text style={styles.previewCta}>Apri scheda ›</Text>
+                </View>
+
+                <PressableScale
+                  style={styles.previewClose}
+                  onPress={() => setPreviewPlace(null)}
+                >
+                  <Text style={styles.previewCloseText}>×</Text>
+                </PressableScale>
+              </PressableScale>
+            </View>
+          ) : null}
 
           <Animated.View
             pointerEvents={shouldShowAreaSearch ? "box-none" : "none"}
@@ -1582,6 +1646,74 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
+  },
+  previewWrap: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 14,
+  },
+  previewCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.paper,
+    borderRadius: 22,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+  },
+  previewMark: {
+    width: 48,
+    height: 48,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewMarkText: {
+    fontSize: 19,
+    fontFamily: "serif",
+    fontWeight: "900",
+  },
+  previewBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  previewName: {
+    color: colors.paperText,
+    fontSize: 17,
+    lineHeight: 21,
+    fontFamily: "serif",
+    fontWeight: "900",
+    marginBottom: 2,
+  },
+  previewMeta: {
+    color: "#6F665C",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  previewCta: {
+    color: colors.pink,
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  previewClose: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: "rgba(7,6,4,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewCloseText: {
+    color: colors.paperText,
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: "800",
   },
   searchAreaButtonWrap: {
     position: "absolute",
