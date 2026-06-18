@@ -71,6 +71,8 @@ type EditorialRecognition = {
 };
 
 type PersonalDetails = {
+  name: string;
+  category: string;
   address: string;
   phone: string;
   website: string;
@@ -193,6 +195,8 @@ const defaultScores: Record<ScoreKey, number> = {
 };
 
 const emptyPersonalDetails: PersonalDetails = {
+  name: "",
+  category: "",
   address: "",
   phone: "",
   website: "",
@@ -685,6 +689,8 @@ function getPersonalDetails(value: unknown): PersonalDetails {
   );
 
   return {
+    name: getStringValue(value.name),
+    category: getStringValue(value.category),
     address: getStringValue(value.address),
     phone: getStringValue(value.phone),
     website: getStringValue(value.website),
@@ -881,6 +887,8 @@ export default function PlaceDetailScreen() {
   const [draftListTitle, setDraftListTitle] = useState("");
   const [draftListDescription, setDraftListDescription] = useState("");
   const [draftListColor, setDraftListColor] = useState(colors.pink);
+  const [draftDetailName, setDraftDetailName] = useState("");
+  const [draftDetailCategory, setDraftDetailCategory] = useState("");
   const [draftDetailAddress, setDraftDetailAddress] = useState("");
   const [draftDetailPhone, setDraftDetailPhone] = useState("");
   const [draftDetailWebsite, setDraftDetailWebsite] = useState("");
@@ -893,6 +901,9 @@ export default function PlaceDetailScreen() {
   const scoreLabel = getScoreLabel(score);
   const scoreColor = getScoreColor(score);
 
+  const effectiveName = experience.personalDetails.name.trim() || name;
+  const effectiveCategory =
+    experience.personalDetails.category.trim() || category;
   const enrichedWebsite = openDataEnrichment?.website || "";
   const enrichedPhone = openDataEnrichment?.phone || "";
   const enrichedOpeningHours = openDataEnrichment?.openingHours || "";
@@ -1125,8 +1136,8 @@ export default function PlaceDetailScreen() {
         if (statuses.includes(status)) {
           const savedPlace = getCurrentPlaceSummary({
             placeId,
-            name,
-            category,
+            name: effectiveName,
+            category: effectiveCategory,
             detail: effectiveDetail,
             distance,
             distanceMeters,
@@ -1165,8 +1176,8 @@ export default function PlaceDetailScreen() {
       const indexedPlace: PlacesIndexItem = {
         ...getCurrentPlaceSummary({
           placeId,
-          name,
-          category,
+          name: effectiveName,
+          category: effectiveCategory,
           detail: effectiveDetail,
           distance,
           distanceMeters,
@@ -1191,17 +1202,17 @@ export default function PlaceDetailScreen() {
       await writePlacesIndex([indexedPlace, ...withoutCurrentPlace]);
     },
     [
-      category,
       distance,
       distanceMeters,
       editorialAwards,
+      effectiveCategory,
       effectiveDetail,
+      effectiveName,
       effectiveOpeningHours,
       effectivePhone,
       effectiveWebsite,
       latitude,
       longitude,
-      name,
       placeId,
     ]
   );
@@ -1296,6 +1307,8 @@ export default function PlaceDetailScreen() {
     }
 
     if (sheet === "details") {
+      setDraftDetailName(effectiveName);
+      setDraftDetailCategory(effectiveCategory);
       setDraftDetailAddress(displayDetails.address);
       setDraftDetailPhone(displayDetails.phone);
       setDraftDetailWebsite(displayDetails.website);
@@ -1404,6 +1417,8 @@ export default function PlaceDetailScreen() {
       ...experience,
       personalDetails: {
         ...experience.personalDetails,
+        name: draftDetailName.trim(),
+        category: draftDetailCategory.trim(),
         address: draftDetailAddress.trim(),
         phone: draftDetailPhone.trim(),
         website: draftDetailWebsite.trim(),
@@ -1865,6 +1880,24 @@ export default function PlaceDetailScreen() {
         <>
           <SheetHeader title="Info del posto" onClose={closeSheet} />
 
+          <InputLabel label="Nome" />
+          <TextInput
+            value={draftDetailName}
+            onChangeText={setDraftDetailName}
+            placeholder="Nome del locale"
+            placeholderTextColor={colors.muted}
+            style={styles.sheetInput}
+          />
+
+          <InputLabel label="Categoria" />
+          <TextInput
+            value={draftDetailCategory}
+            onChangeText={setDraftDetailCategory}
+            placeholder="Ristorante, Bar, Caffè..."
+            placeholderTextColor={colors.muted}
+            style={styles.sheetInput}
+          />
+
           <InputLabel label="Indirizzo" />
           <TextInput
             value={draftDetailAddress}
@@ -2163,7 +2196,7 @@ export default function PlaceDetailScreen() {
                   <View>
                     <Text style={styles.coverManagerKicker}>COPERTINA ATTUALE</Text>
                     <Text numberOfLines={1} style={styles.coverManagerTitle}>
-                      {name}
+                      {effectiveName}
                     </Text>
                   </View>
                 </View>
@@ -2313,10 +2346,12 @@ export default function PlaceDetailScreen() {
           </View>
 
           <View style={styles.coverBottom}>
-            <Text style={styles.placeArea}>{category.toUpperCase()}</Text>
+            <Text style={styles.placeArea}>
+              {effectiveCategory.toUpperCase()}
+            </Text>
 
             <Text numberOfLines={2} style={styles.placeTitle}>
-              {name}
+              {effectiveName}
             </Text>
 
             <Text numberOfLines={1} style={styles.placeAddress}>
