@@ -940,11 +940,7 @@ export default function PlaceDetailScreen() {
   const enrichedAddress = openDataEnrichment?.address || "";
   const wikiDescription = openDataEnrichment?.description || "";
   const wikiImageUrl = openDataEnrichment?.imageUrl || "";
-  const wikiUrl = openDataEnrichment?.wikipediaUrl || "";
-  const wikiAttribution = openDataEnrichment?.imageAttribution || "Wikipedia";
   const guideAwards = openDataEnrichment?.guideAwards ?? [];
-  const hasWikipedia =
-    wikiDescription.length > 0 || wikiImageUrl.length > 0 || guideAwards.length > 0;
   const routeAddress = hasUsablePlaceDetail(detail) ? detail.trim() : "";
   const automaticDetails = useMemo(
     () => ({
@@ -985,7 +981,11 @@ export default function PlaceDetailScreen() {
   const effectiveOpeningHours = displayDetails.openingHours;
   const effectiveDetail = displayDetails.address || routeAddress;
 
-  const coverDisplayUri = experience.coverImageUri;
+  // Se l'utente non ha una copertina, usiamo la foto verificata (Wikimedia, con
+  // attribuzione) come copertina.
+  const usingVerifiedCover =
+    experience.coverImageUri.length === 0 && wikiImageUrl.length > 0;
+  const coverDisplayUri = experience.coverImageUri || wikiImageUrl;
   const hasCover = coverDisplayUri.length > 0;
   const hasGallery = experience.galleryImageUris.length > 0;
   const hasWebsite = effectiveWebsite.length > 0;
@@ -1640,11 +1640,6 @@ export default function PlaceDetailScreen() {
     if (!cleanPhone) return;
 
     Linking.openURL(`tel:${cleanPhone}`);
-  }
-
-  function openWikipedia() {
-    if (!wikiUrl) return;
-    Linking.openURL(wikiUrl);
   }
 
   function openEditorialRecognition(recognition: EditorialRecognition) {
@@ -2378,7 +2373,22 @@ export default function PlaceDetailScreen() {
             </PressableScale>
           </View>
 
+          {usingVerifiedCover ? (
+            <Text style={styles.coverPhotoCredit}>Foto · Wikipedia</Text>
+          ) : null}
+
           <View style={styles.coverBottom}>
+            {guideAwards.length > 0 ? (
+              <View style={styles.coverGuideRow}>
+                {guideAwards.map((award) => (
+                  <View key={award} style={styles.coverGuideBadge}>
+                    <Text style={styles.coverGuideStar}>★</Text>
+                    <Text style={styles.coverGuideText}>{award}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
             <Text style={styles.placeArea}>
               {effectiveCategory.toUpperCase()}
             </Text>
@@ -2751,43 +2761,11 @@ export default function PlaceDetailScreen() {
             )}
           </Section>
 
-          {hasWikipedia ? (
-            <Section title="SCHEDA VERIFICATA">
-              <View style={styles.wikiCard}>
-                {wikiImageUrl ? (
-                  <Image
-                    source={{ uri: wikiImageUrl }}
-                    style={styles.wikiImage}
-                    resizeMode="cover"
-                  />
-                ) : null}
-
-                {guideAwards.length > 0 ? (
-                  <View style={styles.guideAwardRow}>
-                    {guideAwards.map((award) => (
-                      <View key={award} style={styles.guideAwardChip}>
-                        <Text style={styles.guideAwardText}>{award}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-
-                {wikiDescription ? (
-                  <Text style={styles.wikiDescription}>{wikiDescription}</Text>
-                ) : null}
-
-                <View style={styles.wikiFooter}>
-                  <Text style={styles.wikiAttribution}>{wikiAttribution}</Text>
-
-                  {wikiUrl ? (
-                    <PressableScale
-                      style={styles.wikiButton}
-                      onPress={openWikipedia}
-                    >
-                      <Text style={styles.wikiButtonText}>Apri su Wikipedia</Text>
-                    </PressableScale>
-                  ) : null}
-                </View>
+          {wikiDescription ? (
+            <Section title="DESCRIZIONE">
+              <View style={styles.descriptionCard}>
+                <Text style={styles.descriptionText}>{wikiDescription}</Text>
+                <Text style={styles.descriptionCredit}>da Wikipedia</Text>
               </View>
             </Section>
           ) : null}
@@ -3358,6 +3336,63 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     bottom: 30,
+  },
+  coverPhotoCredit: {
+    position: "absolute",
+    top: 18,
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    color: "rgba(255,248,239,0.6)",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  coverGuideRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  coverGuideBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: "rgba(199,168,91,0.92)",
+  },
+  coverGuideStar: {
+    color: "#1A1206",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  coverGuideText: {
+    color: "#1A1206",
+    fontSize: 12.5,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+  descriptionCard: {
+    backgroundColor: colors.card2,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 18,
+  },
+  descriptionText: {
+    color: colors.cream,
+    fontSize: 15,
+    lineHeight: 23,
+    fontWeight: "600",
+  },
+  descriptionCredit: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "800",
+    fontStyle: "italic",
+    marginTop: 12,
   },
   placeArea: {
     color: colors.textMuted,
