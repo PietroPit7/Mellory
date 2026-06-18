@@ -155,21 +155,25 @@ const collections = [
     icon: "✦",
     title: "Da provare",
     text: "I posti che vuoi ricordarti di visitare.",
+    focus: "try",
   },
   {
     icon: "♡",
     title: "Preferiti",
     text: "I locali in cui torneresti subito.",
+    focus: "favorite",
   },
   {
     icon: "✓",
     title: "Visti",
     text: "I posti dove sei già stato e vuoi ricordare.",
+    focus: "visited",
   },
   {
     icon: "↻",
     title: "Da rivalutare",
     text: "I locali da riprovare prima di decidere.",
+    focus: "retry",
   },
 ];
 
@@ -1709,7 +1713,16 @@ export default function HomeScreen() {
 
       <View style={styles.collectionGrid}>
         {collections.map((item) => (
-          <PressableScale key={item.title} style={styles.collectionCard}>
+          <PressableScale
+            key={item.title}
+            style={styles.collectionCard}
+            onPress={() =>
+              router.push({
+                pathname: "/lists",
+                params: { focus: item.focus },
+              } as never)
+            }
+          >
             <View style={styles.collectionIconWrap}>
               <Text style={styles.collectionIcon}>{getCollectionIcon(item)}</Text>
             </View>

@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -297,6 +298,17 @@ export default function ListsScreen() {
   const [draftDescription, setDraftDescription] = useState("");
   const [draftColor, setDraftColor] = useState(colors.pink);
 
+  const [renamingListId, setRenamingListId] = useState<string | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+
+  const params = useLocalSearchParams();
+
+  // Arrivo dalla Home su una raccolta specifica: la apro subito.
+  useEffect(() => {
+    const focus = typeof params.focus === "string" ? params.focus : "";
+    if (focus) setSelectedCollectionId(focus);
+  }, [params.focus]);
+
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -487,33 +499,94 @@ export default function ListsScreen() {
     await refreshCustomLists(nextLists);
   }
 
-  async function deleteSelectedCustomList() {
+  function startRenameSelectedList() {
+    if (selectedCollection?.kind !== "custom") return;
+
+    const customList = customLists.find(
+      (list) => list.id === selectedCollection.customListId
+    );
+
+    if (!customList) return;
+
+    setRenamingListId(customList.id);
+    setRenameTitle(customList.title);
+  }
+
+  function cancelRename() {
+    setRenamingListId(null);
+    setRenameTitle("");
+  }
+
+  async function saveRename() {
+    const title = renameTitle.trim();
+
+    if (!renamingListId || !title) {
+      cancelRename();
+      return;
+    }
+
+    const nextLists = customLists.map((list) =>
+      list.id === renamingListId ? { ...list, title } : list
+    );
+
+    await refreshCustomLists(nextLists);
+    cancelRename();
+  }
+
+  async function moveSelectedList(direction: -1 | 1) {
+    if (selectedCollection?.kind !== "custom") return;
+
+    const index = customLists.findIndex(
+      (list) => list.id === selectedCollection.customListId
+    );
+
+    if (index === -1) return;
+
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= customLists.length) return;
+
+    const nextLists = [...customLists];
+    [nextLists[index], nextLists[nextIndex]] = [
+      nextLists[nextIndex],
+      nextLists[index],
+    ];
+
+    await refreshCustomLists(nextLists);
+  }
+
+  async function performDeleteSelectedList() {
     if (selectedCollection?.kind !== "custom") return;
 
     const selectedListId = selectedCollection.customListId;
+    const nextLists = customLists.filter((list) => list.id !== selectedListId);
 
-    Alert.alert(
-      "Elimina lista",
-      "Vuoi eliminare questa raccolta personale?",
-      [
-        {
-          text: "Annulla",
-          style: "cancel",
-        },
-        {
-          text: "Elimina",
-          style: "destructive",
-          onPress: async () => {
-            const nextLists = customLists.filter(
-              (list) => list.id !== selectedListId
-            );
+    await refreshCustomLists(nextLists);
+    setSelectedCollectionId("favorite");
+  }
 
-            await refreshCustomLists(nextLists);
-            setSelectedCollectionId("favorite");
-          },
+  function deleteSelectedCustomList() {
+    if (selectedCollection?.kind !== "custom") return;
+
+    const title = "Elimina lista";
+    const message = "Vuoi eliminare questa raccolta personale?";
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        void performDeleteSelectedList();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: "Annulla", style: "cancel" },
+      {
+        text: "Elimina",
+        style: "destructive",
+        onPress: () => {
+          void performDeleteSelectedList();
         },
-      ]
-    );
+      },
+    ]);
   }
 
   function openPlaceDetail(place: SavedPlace) {
@@ -688,23 +761,79 @@ export default function ListsScreen() {
           <View style={styles.detailHeader}>
             <View style={styles.detailTitleBlock}>
               <Text style={styles.sectionKicker}>LISTA APERTA</Text>
-              <Text style={styles.detailTitle}>{selectedCollection.title}</Text>
+
+              {selectedCollection.kind === "custom" &&
+              renamingListId === selectedCollection.customListId ? (
+                <View style={styles.renameRow}>
+                  <TextInput
+                    value={renameTitle}
+                    onChangeText={setRenameTitle}
+                    placeholder="Nome lista"
+                    placeholderTextColor={colors.muted}
+                    style={styles.renameInput}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={saveRename}
+                  />
+                  <PressableScale
+                    style={styles.renameSaveButton}
+                    onPress={saveRename}
+                  >
+                    <Text style={styles.renameSaveText}>Salva</Text>
+                  </PressableScale>
+                  <PressableScale
+                    style={styles.renameCancelButton}
+                    onPress={cancelRename}
+                  >
+                    <Text style={styles.renameCancelText}>Annulla</Text>
+                  </PressableScale>
+                </View>
+              ) : (
+                <Text style={styles.detailTitle}>{selectedCollection.title}</Text>
+              )}
+
               <Text style={styles.detailSubtitle}>
                 {selectedCollection.count === 1
                   ? "1 locale salvato"
                   : `${selectedCollection.count} locali salvati`}
               </Text>
             </View>
+          </View>
 
-            {selectedCollection.kind === "custom" ? (
+          {selectedCollection.kind === "custom" &&
+          renamingListId !== selectedCollection.customListId ? (
+            <View style={styles.listActionsRow}>
               <PressableScale
-                style={styles.deleteListButton}
+                style={styles.listActionButton}
+                onPress={startRenameSelectedList}
+              >
+                <Text style={styles.listActionText}>Rinomina</Text>
+              </PressableScale>
+
+              <PressableScale
+                style={styles.listActionIcon}
+                onPress={() => moveSelectedList(-1)}
+                accessibilityLabel="Sposta su"
+              >
+                <Text style={styles.listActionIconText}>↑</Text>
+              </PressableScale>
+
+              <PressableScale
+                style={styles.listActionIcon}
+                onPress={() => moveSelectedList(1)}
+                accessibilityLabel="Sposta giù"
+              >
+                <Text style={styles.listActionIconText}>↓</Text>
+              </PressableScale>
+
+              <PressableScale
+                style={styles.listActionDanger}
                 onPress={deleteSelectedCustomList}
               >
-                <Text style={styles.deleteListText}>Elimina</Text>
+                <Text style={styles.listActionDangerText}>Elimina</Text>
               </PressableScale>
-            ) : null}
-          </View>
+            </View>
+          ) : null}
 
           {selectedPlaces.length > 0 ? (
             <View style={styles.placeList}>
@@ -1063,6 +1192,101 @@ const styles = StyleSheet.create({
   deleteListText: {
     color: colors.red,
     fontSize: 12,
+    fontWeight: "900",
+  },
+  listActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  listActionButton: {
+    minHeight: 40,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.12)",
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  listActionText: {
+    color: colors.cream,
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  listActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  listActionIconText: {
+    color: colors.cream,
+    fontSize: 18,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  listActionDanger: {
+    minHeight: 40,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(185,71,71,0.5)",
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: "auto",
+  },
+  listActionDangerText: {
+    color: colors.red,
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  renameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  renameInput: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: colors.black,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.14)",
+    color: colors.cream,
+    fontSize: 18,
+    fontWeight: "800",
+    paddingHorizontal: 12,
+  },
+  renameSaveButton: {
+    minHeight: 46,
+    borderRadius: 999,
+    backgroundColor: colors.pink,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  renameSaveText: {
+    color: colors.cream,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  renameCancelButton: {
+    minHeight: 46,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  renameCancelText: {
+    color: colors.muted,
+    fontSize: 13,
     fontWeight: "900",
   },
   placeList: {
