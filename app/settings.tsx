@@ -5,6 +5,7 @@ import {
   Alert,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -39,11 +40,105 @@ export default function SettingsScreen() {
     useMelloryTheme();
   const [isResetting, setIsResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
+  const [backupMessage, setBackupMessage] = useState("");
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   async function saveAppearanceMode(nextMode: MelloryThemePreference) {
     setResetMessage("");
     await setPreference(nextMode);
+  }
+
+  async function exportData() {
+    setBackupMessage("");
+
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const melloryKeys = keys.filter((key) => key.startsWith("mellory:"));
+      const entries = await AsyncStorage.multiGet(melloryKeys);
+      const data: Record<string, string> = {};
+
+      entries.forEach(([key, value]) => {
+        if (typeof value === "string") data[key] = value;
+      });
+
+      const payload = JSON.stringify(
+        {
+          app: "mellory",
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          data,
+        },
+        null,
+        2
+      );
+
+      if (Platform.OS === "web" && typeof document !== "undefined") {
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `mellory-backup-${new Date()
+          .toISOString()
+          .slice(0, 10)}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        setBackupMessage("Backup scaricato.");
+        return;
+      }
+
+      await Share.share({ message: payload });
+    } catch {
+      setBackupMessage("Non riesco a esportare i dati adesso.");
+    }
+  }
+
+  async function applyImport(text: string) {
+    try {
+      const parsed = JSON.parse(text) as { data?: Record<string, unknown> };
+      const data = parsed?.data;
+
+      if (!data || typeof data !== "object") {
+        setBackupMessage("File non valido.");
+        return;
+      }
+
+      const entries = Object.entries(data).filter(
+        (entry): entry is [string, string] =>
+          entry[0].startsWith("mellory:") && typeof entry[1] === "string"
+      );
+
+      if (entries.length === 0) {
+        setBackupMessage("Nessun dato Mellory nel file.");
+        return;
+      }
+
+      await AsyncStorage.multiSet(entries);
+      setBackupMessage("Dati importati. Riapri l'app per vederli tutti.");
+    } catch {
+      setBackupMessage("File non valido.");
+    }
+  }
+
+  function importData() {
+    setBackupMessage("");
+
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json,.json";
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const text = await file.text();
+        await applyImport(text);
+      };
+      input.click();
+      return;
+    }
+
+    setBackupMessage("L'importazione è disponibile dalla versione web.");
   }
 
   async function performReset() {
@@ -147,6 +242,24 @@ export default function SettingsScreen() {
             solo sul tuo dispositivo. Nulla viene caricato su server esterni.
           </Text>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>BACKUP</Text>
+
+        <View style={styles.backupRow}>
+          <PressableScale style={styles.backupButton} onPress={exportData}>
+            <Text style={styles.backupButtonText}>Esporta dati</Text>
+          </PressableScale>
+
+          <PressableScale style={styles.backupButton} onPress={importData}>
+            <Text style={styles.backupButtonText}>Importa dati</Text>
+          </PressableScale>
+        </View>
+
+        {backupMessage ? (
+          <Text style={styles.resetFeedback}>{backupMessage}</Text>
+        ) : null}
       </View>
 
       <View style={styles.section}>
@@ -294,6 +407,25 @@ function createStyles(colors: MelloryThemeColors) {
       fontSize: 22,
       lineHeight: 33,
       fontWeight: "700",
+    },
+    backupRow: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    backupButton: {
+      flex: 1,
+      minHeight: 60,
+      borderRadius: 999,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    backupButtonText: {
+      color: colors.cream,
+      fontSize: 17,
+      fontWeight: "900",
     },
     resetButton: {
       minHeight: 72,
