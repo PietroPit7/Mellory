@@ -44,6 +44,7 @@ export type OpenDataEnrichment = {
 
   wikidataId: string;
   wikipediaTitle: string;
+  wikipediaUrl: string;
   description: string;
 
   imageUrl: string;
@@ -97,6 +98,7 @@ const emptyOpenDataEnrichment: OpenDataEnrichment = {
 
   wikidataId: "",
   wikipediaTitle: "",
+  wikipediaUrl: "",
   description: "",
 
   imageUrl: "",
@@ -462,6 +464,93 @@ function mergeEnrichmentData(
   };
 }
 
+type WikipediaEnrichment = {
+  description: string;
+  imageUrl: string;
+  imageAttribution: string;
+  wikipediaTitle: string;
+  wikipediaUrl: string;
+};
+
+const WIKI_LANG = "it";
+// Soglia rigida: la voce deve essere praticamente sul posto.
+const WIKI_MAX_DISTANCE_METERS = 70;
+
+function stripParentheses(value: string) {
+  return value.replace(/\(.*?\)/g, "").trim();
+}
+
+// Arricchimento Wikipedia SOLO con corrispondenza certa: stesso nome (a meno di
+// accenti/parentesi) e coordinate quasi coincidenti. In ogni altro caso null,
+// così non mostriamo mai dati non verificati.
+async function fetchWikipediaEnrichment(
+  name: string,
+  latitude: number,
+  longitude: number
+): Promise<WikipediaEnrichment | null> {
+  const normalizedName = normalizeText(name);
+  if (normalizedName.length < 3) return null;
+
+  const geoUrl =
+    `https://${WIKI_LANG}.wikipedia.org/w/api.php?action=query&list=geosearch` +
+    `&gscoord=${latitude}%7C${longitude}&gsradius=200&gslimit=10&format=json&origin=*`;
+
+  const geoResponse = await fetch(geoUrl);
+  if (!geoResponse.ok) return null;
+
+  const geoData = (await geoResponse.json()) as {
+    query?: { geosearch?: { title: string; dist: number }[] };
+  };
+  const candidates = geoData.query?.geosearch ?? [];
+
+  const match = candidates.find((candidate) => {
+    if (
+      typeof candidate.dist !== "number" ||
+      candidate.dist > WIKI_MAX_DISTANCE_METERS
+    ) {
+      return false;
+    }
+    return normalizeText(stripParentheses(candidate.title)) === normalizedName;
+  });
+
+  if (!match) return null;
+
+  const summaryUrl = `https://${WIKI_LANG}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
+    match.title
+  )}`;
+  const summaryResponse = await fetch(summaryUrl);
+  if (!summaryResponse.ok) return null;
+
+  const summary = (await summaryResponse.json()) as {
+    type?: string;
+    extract?: string;
+    thumbnail?: { source?: string };
+    originalimage?: { source?: string };
+    content_urls?: { desktop?: { page?: string } };
+  };
+
+  // Solo voci enciclopediche standard (no disambigue/redirect).
+  if (summary.type && summary.type !== "standard") return null;
+
+  const description = cleanText(summary.extract);
+  const imageUrl =
+    cleanText(summary.thumbnail?.source) ||
+    cleanText(summary.originalimage?.source);
+  const wikipediaUrl =
+    cleanText(summary.content_urls?.desktop?.page) ||
+    `https://${WIKI_LANG}.wikipedia.org/wiki/${encodeURIComponent(match.title)}`;
+
+  if (!description && !imageUrl) return null;
+
+  return {
+    description,
+    imageUrl,
+    imageAttribution: "Wikipedia · CC BY-SA",
+    wikipediaTitle: match.title,
+    wikipediaUrl,
+  };
+}
+
 export async function enrichPlaceWithOpenData(
   place: BasePlaceForOpenData
 ): Promise<OpenDataEnrichment> {
@@ -499,6 +588,30 @@ export async function enrichPlaceWithOpenData(
       ...enrichment,
       lastEnrichedAt: new Date().toISOString(),
     };
+  }
+
+  try {
+    const wikipedia = await fetchWikipediaEnrichment(
+      place.name,
+      place.latitude as number,
+      place.longitude as number
+    );
+
+    if (wikipedia) {
+      enrichment = {
+        ...enrichment,
+        source: enrichment.source === "openstreetmap" ? "mixed" : enrichment.source,
+        description: wikipedia.description || enrichment.description,
+        imageUrl: wikipedia.imageUrl || enrichment.imageUrl,
+        imageAttribution:
+          wikipedia.imageAttribution || enrichment.imageAttribution,
+        wikipediaTitle: wikipedia.wikipediaTitle,
+        wikipediaUrl: wikipedia.wikipediaUrl,
+        lastEnrichedAt: new Date().toISOString(),
+      };
+    }
+  } catch {
+    // Wikipedia best-effort: in caso di errore non mostriamo nulla.
   }
 
   return enrichment;

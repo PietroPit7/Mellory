@@ -897,6 +897,11 @@ export default function PlaceDetailScreen() {
   const enrichedPhone = openDataEnrichment?.phone || "";
   const enrichedOpeningHours = openDataEnrichment?.openingHours || "";
   const enrichedAddress = openDataEnrichment?.address || "";
+  const wikiDescription = openDataEnrichment?.description || "";
+  const wikiImageUrl = openDataEnrichment?.imageUrl || "";
+  const wikiUrl = openDataEnrichment?.wikipediaUrl || "";
+  const wikiAttribution = openDataEnrichment?.imageAttribution || "Wikipedia";
+  const hasWikipedia = wikiDescription.length > 0 || wikiImageUrl.length > 0;
   const routeAddress = hasUsablePlaceDetail(detail) ? detail.trim() : "";
   const automaticDetails = useMemo(
     () => ({
@@ -1587,6 +1592,11 @@ export default function PlaceDetailScreen() {
     if (!cleanPhone) return;
 
     Linking.openURL(`tel:${cleanPhone}`);
+  }
+
+  function openWikipedia() {
+    if (!wikiUrl) return;
+    Linking.openURL(wikiUrl);
   }
 
   function openEditorialRecognition(recognition: EditorialRecognition) {
@@ -2644,6 +2654,37 @@ export default function PlaceDetailScreen() {
               </PressableScale>
             )}
           </Section>
+
+          {hasWikipedia ? (
+            <Section title="SCHEDA VERIFICATA">
+              <View style={styles.wikiCard}>
+                {wikiImageUrl ? (
+                  <Image
+                    source={{ uri: wikiImageUrl }}
+                    style={styles.wikiImage}
+                    resizeMode="cover"
+                  />
+                ) : null}
+
+                {wikiDescription ? (
+                  <Text style={styles.wikiDescription}>{wikiDescription}</Text>
+                ) : null}
+
+                <View style={styles.wikiFooter}>
+                  <Text style={styles.wikiAttribution}>{wikiAttribution}</Text>
+
+                  {wikiUrl ? (
+                    <PressableScale
+                      style={styles.wikiButton}
+                      onPress={openWikipedia}
+                    >
+                      <Text style={styles.wikiButtonText}>Apri su Wikipedia</Text>
+                    </PressableScale>
+                  ) : null}
+                </View>
+              </View>
+            </Section>
+          ) : null}
 
           <Section
             title="LA TUA GALLERIA"
@@ -4467,6 +4508,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginBottom: 16,
+  },
+  wikiCard: {
+    backgroundColor: colors.card,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.08)",
+    overflow: "hidden",
+  },
+  wikiImage: {
+    width: "100%",
+    height: 180,
+    backgroundColor: colors.card2,
+  },
+  wikiDescription: {
+    color: colors.textMuted,
+    fontSize: 15,
+    lineHeight: 23,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+  },
+  wikiFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  wikiAttribution: {
+    flex: 1,
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  wikiButton: {
+    minHeight: 38,
+    borderRadius: 999,
+    backgroundColor: colors.paper,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  wikiButtonText: {
+    color: colors.paperText,
+    fontSize: 12,
+    fontWeight: "900",
   },
   hoursEditRow: {
     flexDirection: "row",
