@@ -31,7 +31,8 @@ type SheetType =
   | "gallery"
   | "editorial"
   | "customLists"
-  | "details";
+  | "details"
+  | "hours";
 
 type ScoreKey =
   | "food"
@@ -74,8 +75,33 @@ type PersonalDetails = {
   phone: string;
   website: string;
   openingHours: string;
+  hoursByDay: string[];
   practicalNotes: string;
 };
+
+const WEEK_DAYS = [
+  "Lunedì",
+  "Martedì",
+  "Mercoledì",
+  "Giovedì",
+  "Venerdì",
+  "Sabato",
+  "Domenica",
+];
+
+function emptyHoursByDay() {
+  return ["", "", "", "", "", "", ""];
+}
+
+function composeOpeningHours(hoursByDay: string[]) {
+  return hoursByDay
+    .map((value, index) => {
+      const clean = value.trim();
+      return clean ? `${WEEK_DAYS[index]} ${clean}` : "";
+    })
+    .filter(Boolean)
+    .join("; ");
+}
 
 type PlaceExperience = {
   note: string;
@@ -171,6 +197,7 @@ const emptyPersonalDetails: PersonalDetails = {
   phone: "",
   website: "",
   openingHours: "",
+  hoursByDay: emptyHoursByDay(),
   practicalNotes: "",
 };
 
@@ -652,11 +679,17 @@ function getStatusArray(value: unknown) {
 function getPersonalDetails(value: unknown): PersonalDetails {
   if (!isRecord(value)) return emptyPersonalDetails;
 
+  const rawHoursByDay = Array.isArray(value.hoursByDay) ? value.hoursByDay : [];
+  const hoursByDay = emptyHoursByDay().map((fallback, index) =>
+    getStringValue(rawHoursByDay[index], fallback)
+  );
+
   return {
     address: getStringValue(value.address),
     phone: getStringValue(value.phone),
     website: getStringValue(value.website),
     openingHours: getStringValue(value.openingHours),
+    hoursByDay,
     practicalNotes: getStringValue(value.practicalNotes),
   };
 }
@@ -851,8 +884,10 @@ export default function PlaceDetailScreen() {
   const [draftDetailAddress, setDraftDetailAddress] = useState("");
   const [draftDetailPhone, setDraftDetailPhone] = useState("");
   const [draftDetailWebsite, setDraftDetailWebsite] = useState("");
-  const [draftDetailOpeningHours, setDraftDetailOpeningHours] = useState("");
   const [draftDetailPracticalNotes, setDraftDetailPracticalNotes] = useState("");
+  const [draftHoursByDay, setDraftHoursByDay] = useState<string[]>(
+    emptyHoursByDay()
+  );
 
   const score = getAverageScore(experience.scores);
   const scoreLabel = getScoreLabel(score);
@@ -1259,8 +1294,16 @@ export default function PlaceDetailScreen() {
       setDraftDetailAddress(displayDetails.address);
       setDraftDetailPhone(displayDetails.phone);
       setDraftDetailWebsite(displayDetails.website);
-      setDraftDetailOpeningHours(displayDetails.openingHours);
       setDraftDetailPracticalNotes(displayDetails.practicalNotes);
+    }
+
+    if (sheet === "hours") {
+      setDraftHoursByDay(
+        emptyHoursByDay().map(
+          (fallback, index) =>
+            experience.personalDetails.hoursByDay[index] ?? fallback
+        )
+      );
     }
 
     setActiveSheet(sheet);
@@ -1355,11 +1398,32 @@ export default function PlaceDetailScreen() {
     await saveExperience({
       ...experience,
       personalDetails: {
+        ...experience.personalDetails,
         address: draftDetailAddress.trim(),
         phone: draftDetailPhone.trim(),
         website: draftDetailWebsite.trim(),
-        openingHours: draftDetailOpeningHours.trim(),
         practicalNotes: draftDetailPracticalNotes.trim(),
+      },
+    });
+
+    closeSheet();
+  }
+
+  function updateDraftDay(index: number, value: string) {
+    setDraftHoursByDay((current) =>
+      current.map((day, dayIndex) => (dayIndex === index ? value : day))
+    );
+  }
+
+  async function saveHours() {
+    const trimmedDays = draftHoursByDay.map((day) => day.trim());
+
+    await saveExperience({
+      ...experience,
+      personalDetails: {
+        ...experience.personalDetails,
+        hoursByDay: trimmedDays,
+        openingHours: composeOpeningHours(trimmedDays),
       },
     });
 
@@ -1821,15 +1885,6 @@ export default function PlaceDetailScreen() {
             style={styles.sheetInput}
           />
 
-          <InputLabel label="Orari" />
-          <TextInput
-            value={draftDetailOpeningHours}
-            onChangeText={setDraftDetailOpeningHours}
-            placeholder="Lun-Ven 09:00-20:00"
-            placeholderTextColor={colors.muted}
-            style={styles.sheetInput}
-          />
-
           <InputLabel label="Note pratiche" />
           <TextInput
             value={draftDetailPracticalNotes}
@@ -1843,6 +1898,36 @@ export default function PlaceDetailScreen() {
 
           <PressableScale style={styles.sheetPrimaryButton} onPress={savePersonalDetails}>
             <Text style={styles.sheetPrimaryButtonText}>Salva info</Text>
+          </PressableScale>
+        </>
+      );
+    }
+
+    if (activeSheet === "hours") {
+      return (
+        <>
+          <SheetHeader title="Orari di apertura" onClose={closeSheet} />
+
+          <Text style={styles.sheetHint}>
+            Compila i giorni che vuoi. Lascia vuoto un giorno se è chiuso o se
+            non lo conosci.
+          </Text>
+
+          {WEEK_DAYS.map((day, index) => (
+            <View key={day} style={styles.hoursEditRow}>
+              <Text style={styles.hoursEditDay}>{day}</Text>
+              <TextInput
+                value={draftHoursByDay[index] ?? ""}
+                onChangeText={(value) => updateDraftDay(index, value)}
+                placeholder="09:00-18:00"
+                placeholderTextColor={colors.muted}
+                style={styles.hoursEditInput}
+              />
+            </View>
+          ))}
+
+          <PressableScale style={styles.sheetPrimaryButton} onPress={saveHours}>
+            <Text style={styles.sheetPrimaryButtonText}>Salva orari</Text>
           </PressableScale>
         </>
       );
@@ -2493,7 +2578,7 @@ export default function PlaceDetailScreen() {
           <Section
             title="ORARI"
             actionLabel={hasRealHours ? "Modifica" : undefined}
-            onAction={hasRealHours ? () => openSheet("details") : undefined}
+            onAction={hasRealHours ? () => openSheet("hours") : undefined}
           >
             {hasRealHours ? (
               <View style={styles.hoursCard}>
@@ -2524,7 +2609,7 @@ export default function PlaceDetailScreen() {
             ) : (
               <PressableScale
                 style={styles.addDetailsButton}
-                onPress={() => openSheet("details")}
+                onPress={() => openSheet("hours")}
               >
                 <Text style={styles.addDetailsButtonText}>Aggiungi orari</Text>
               </PressableScale>
@@ -4376,6 +4461,33 @@ const styles = StyleSheet.create({
     fontSize: 15,
     paddingHorizontal: 14,
     marginBottom: 12,
+  },
+  sheetHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 16,
+  },
+  hoursEditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 10,
+  },
+  hoursEditDay: {
+    width: 92,
+    color: colors.cream,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  hoursEditInput: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: colors.black,
+    color: colors.cream,
+    fontSize: 15,
+    paddingHorizontal: 14,
   },
   returnRow: {
     flexDirection: "row",
