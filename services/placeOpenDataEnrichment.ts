@@ -49,6 +49,8 @@ export type OpenDataEnrichment = {
 
   imageUrl: string;
   imageAttribution: string;
+
+  guideAwards: string[];
 };
 
 type OverpassElement = {
@@ -103,6 +105,8 @@ const emptyOpenDataEnrichment: OpenDataEnrichment = {
 
   imageUrl: "",
   imageAttribution: "",
+
+  guideAwards: [],
 };
 
 function cleanText(value: unknown) {
@@ -470,6 +474,7 @@ type WikipediaEnrichment = {
   imageAttribution: string;
   wikipediaTitle: string;
   wikipediaUrl: string;
+  awards: string[];
 };
 
 const WIKI_LANG = "it";
@@ -533,13 +538,83 @@ function parseWikipediaTag(tag: string) {
   return { lang: WIKI_LANG, title: tag };
 }
 
+type WikidataClaim = {
+  mainsnak?: { datavalue?: { value?: unknown } };
+  qualifiers?: Record<string, { datavalue?: { value?: unknown } }[]>;
+};
+
 type WikidataEntity = {
   id?: string;
   labels?: Record<string, { value?: string }>;
   descriptions?: Record<string, { value?: string }>;
   sitelinks?: Record<string, { title?: string }>;
-  claims?: Record<string, { mainsnak?: { datavalue?: { value?: unknown } } }[]>;
+  claims?: Record<string, WikidataClaim[]>;
 };
+
+const GUIDE_AWARD_REGEX =
+  /michelin|gambero rosso|50 best|fifty best|50 top pizza|bib gourmand|tre forchette/i;
+
+function formatGuideAward(label: string, starCount: number) {
+  const lower = label.toLowerCase();
+  if (lower.includes("michelin")) {
+    if (lower.includes("bib")) return "Michelin · Bib Gourmand";
+    if (starCount > 0) {
+      return `Michelin · ${starCount} ${starCount === 1 ? "stella" : "stelle"}`;
+    }
+    return "Michelin";
+  }
+  return label;
+}
+
+// Riconoscimenti di guida (Michelin, Gambero Rosso, 50 Best...) presi da
+// Wikidata (P166 "award received") con il numero di stelle dal qualificatore
+// P1114. Dati curati e verificati; restituisce solo le guide riconosciute.
+async function resolveGuideAwards(entity: WikidataEntity): Promise<string[]> {
+  const awardClaims = entity.claims?.P166 ?? [];
+  if (awardClaims.length === 0) return [];
+
+  const refs = awardClaims
+    .map((claim) => {
+      const value = claim.mainsnak?.datavalue?.value as
+        | { id?: string }
+        | undefined;
+      const amount = claim.qualifiers?.P1114?.[0]?.datavalue?.value as
+        | { amount?: string }
+        | undefined;
+      const quantity = amount?.amount
+        ? Math.abs(parseInt(amount.amount, 10)) || 0
+        : 0;
+      return value?.id ? { qid: value.id, quantity } : null;
+    })
+    .filter((ref): ref is { qid: string; quantity: number } => ref !== null);
+
+  if (refs.length === 0) return [];
+
+  const ids = Array.from(new Set(refs.map((ref) => ref.qid)));
+  const url =
+    `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids
+      .map(encodeURIComponent)
+      .join("%7C")}&props=labels&languages=it%7Cen&format=json&origin=*`;
+
+  const response = await fetch(url);
+  if (!response.ok) return [];
+
+  const data = (await response.json()) as {
+    entities?: Record<string, WikidataEntity>;
+  };
+
+  const awards: string[] = [];
+
+  refs.forEach((ref) => {
+    const labelEntity = data.entities?.[ref.qid];
+    const label = labelEntity ? getWikidataLabel(labelEntity) : "";
+    if (!label || !GUIDE_AWARD_REGEX.test(label)) return;
+    const formatted = formatGuideAward(label, ref.quantity);
+    if (!awards.includes(formatted)) awards.push(formatted);
+  });
+
+  return awards;
+}
 
 async function fetchWikidataEntity(qid: string): Promise<WikidataEntity | null> {
   const url =
@@ -638,7 +713,9 @@ async function enrichFromWikidataEntity(
     wikipediaUrl = `https://www.wikidata.org/wiki/${entity.id}`;
   }
 
-  if (!finalDescription && !imageUrl) return null;
+  const awards = await resolveGuideAwards(entity).catch(() => [] as string[]);
+
+  if (!finalDescription && !imageUrl && awards.length === 0) return null;
 
   return {
     description: finalDescription,
@@ -646,6 +723,7 @@ async function enrichFromWikidataEntity(
     imageAttribution: linkTitle ? "Wikipedia · CC BY-SA" : "Wikidata · CC0",
     wikipediaTitle: sourceTitle,
     wikipediaUrl,
+    awards,
   };
 }
 
@@ -731,6 +809,7 @@ async function fetchWikipediaGeosearchEnrichment(
     imageAttribution: "Wikipedia · CC BY-SA",
     wikipediaTitle: match.title,
     wikipediaUrl: summary.wikipediaUrl,
+    awards: [],
   };
 }
 
@@ -769,6 +848,7 @@ async function fetchEncyclopediaEnrichment(
         imageAttribution: "Wikipedia · CC BY-SA",
         wikipediaTitle: title,
         wikipediaUrl: summary.wikipediaUrl,
+        awards: [],
       };
     }
   }
@@ -845,6 +925,7 @@ export async function enrichPlaceWithOpenData(
           wikipedia.imageAttribution || enrichment.imageAttribution,
         wikipediaTitle: wikipedia.wikipediaTitle,
         wikipediaUrl: wikipedia.wikipediaUrl,
+        guideAwards: wikipedia.awards,
         lastEnrichedAt: new Date().toISOString(),
       };
     }

@@ -942,7 +942,9 @@ export default function PlaceDetailScreen() {
   const wikiImageUrl = openDataEnrichment?.imageUrl || "";
   const wikiUrl = openDataEnrichment?.wikipediaUrl || "";
   const wikiAttribution = openDataEnrichment?.imageAttribution || "Wikipedia";
-  const hasWikipedia = wikiDescription.length > 0 || wikiImageUrl.length > 0;
+  const guideAwards = openDataEnrichment?.guideAwards ?? [];
+  const hasWikipedia =
+    wikiDescription.length > 0 || wikiImageUrl.length > 0 || guideAwards.length > 0;
   const routeAddress = hasUsablePlaceDetail(detail) ? detail.trim() : "";
   const automaticDetails = useMemo(
     () => ({
@@ -2758,6 +2760,16 @@ export default function PlaceDetailScreen() {
                     style={styles.wikiImage}
                     resizeMode="cover"
                   />
+                ) : null}
+
+                {guideAwards.length > 0 ? (
+                  <View style={styles.guideAwardRow}>
+                    {guideAwards.map((award) => (
+                      <View key={award} style={styles.guideAwardChip}>
+                        <Text style={styles.guideAwardText}>{award}</Text>
+                      </View>
+                    ))}
+                  </View>
                 ) : null}
 
                 {wikiDescription ? (
@@ -4631,6 +4643,27 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 180,
     backgroundColor: colors.card2,
+  },
+  guideAwardRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+  },
+  guideAwardChip: {
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    backgroundColor: "rgba(199,168,91,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(199,168,91,0.4)",
+  },
+  guideAwardText: {
+    color: colors.gold,
+    fontSize: 12.5,
+    fontWeight: "900",
+    letterSpacing: 0.3,
   },
   wikiDescription: {
     color: colors.textMuted,
