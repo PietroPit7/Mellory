@@ -627,7 +627,13 @@ async function fetchDashboardData(context: SearchContext) {
   `;
 
   const [elements, geoapifyPlaces] = await Promise.all([
-    fetchOverpassElements(query).catch(() => []),
+    // Overpass limitato nel tempo: se è lento non blocca la dashboard.
+    Promise.race([
+      fetchOverpassElements(query).catch(() => [] as OverpassElement[]),
+      new Promise<OverpassElement[]>((resolve) =>
+        setTimeout(() => resolve([]), 6500)
+      ),
+    ]),
     fetchGeoapifyNearbyPlaces(context.latitude, context.longitude, {
       radiusMeters: radius,
       limit: HOME_DASHBOARD_LIMIT,
@@ -751,9 +757,9 @@ function geoapifyPlaceToDashboardPlace(place: GeoapifyNearbyPlace): DashboardPla
   };
 }
 
-function openExplore(params?: Record<string, string>) {
+function openMap(params?: Record<string, string>) {
   router.push({
-    pathname: "/explore",
+    pathname: "/map",
     params,
   } as never);
 }
@@ -1092,25 +1098,18 @@ export default function HomeScreen() {
     await handleSuggestionPress(firstSuggestion);
   }
 
-  function openContextSearch(categoryId?: string) {
-    const cleanCategory = categoryId === "all" ? "" : categoryId ?? "";
-
+  function openContextSearch() {
     if (activeContext) {
-      openExplore({
+      openMap({
         latitude: String(activeContext.latitude),
         longitude: String(activeContext.longitude),
         cityLabel: activeContext.cityLabel,
         detailLabel: activeContext.detailLabel,
-        mode: activeContext.mode,
-        category: cleanCategory,
       });
       return;
     }
 
-    openExplore({
-      query: searchQuery.trim(),
-      category: cleanCategory,
-    });
+    openMap();
   }
 
   function renderSuggestionGroup(title: string, items: CitySuggestion[]) {
@@ -1683,15 +1682,15 @@ export default function HomeScreen() {
           {hasDashboard ? "Vuoi filtrare meglio?" : "Trova posti veri, vicino a te."}
         </Text>
         <Text style={styles.realSearchText}>
-          Apri Cerca per esplorare in modo completo, salvare preferiti e costruire
-          la tua guida personale.
+          Apri la mappa per esplorare la zona, vedere i locali intorno a te e
+          costruire la tua guida personale.
         </Text>
 
         <PressableScale
           style={styles.realSearchButton}
-          onPress={() => openContextSearch(selectedCategoryId)}
+          onPress={openContextSearch}
         >
-          <Text style={styles.realSearchButtonText}>Apri Cerca</Text>
+          <Text style={styles.realSearchButtonText}>Apri la mappa</Text>
         </PressableScale>
       </View>
 

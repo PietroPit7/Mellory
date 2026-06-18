@@ -1240,9 +1240,9 @@ export default function PlaceDetailScreen() {
         return;
       }
 
-      router.replace("/(tabs)/explore" as never);
+      router.replace("/(tabs)" as never);
     } catch {
-      router.replace("/(tabs)/explore" as never);
+      router.replace("/(tabs)" as never);
     }
   }
 

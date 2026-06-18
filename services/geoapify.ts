@@ -604,6 +604,17 @@ function mergeNearbyPlaces(places: NearbyPlace[], limit: number) {
     .slice(0, limit);
 }
 
+// Limita l'attesa di una fonte lenta: se non risponde entro il timeout
+// restituisce il fallback, senza penalizzare i casi veloci.
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T) {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
+const OVERPASS_TIMEOUT_MS = 6500;
+
 export async function fetchNearbyPlaces(
   latitude: number,
   longitude: number,
@@ -617,13 +628,18 @@ export async function fetchNearbyPlaces(
   const cachedPlaces = nearbyPlacesCache.get(cacheKey);
   if (cachedPlaces) return cachedPlaces;
 
-  // Geoapify e Overpass in parallelo: se una fonte fallisce, usiamo l'altra.
+  // Geoapify e Overpass in parallelo: se una fonte fallisce o è lenta, usiamo
+  // l'altra (Overpass è limitato nel tempo per non bloccare la ricerca).
   const [geoapifyPlaces, overpassPlaces] = await Promise.all([
     fetchGeoapifyNearby(latitude, longitude, radiusMeters, limit).catch(
       () => [] as NearbyPlace[]
     ),
-    fetchOverpassNearby(latitude, longitude, radiusMeters).catch(
-      () => [] as NearbyPlace[]
+    withTimeout(
+      fetchOverpassNearby(latitude, longitude, radiusMeters).catch(
+        () => [] as NearbyPlace[]
+      ),
+      OVERPASS_TIMEOUT_MS,
+      [] as NearbyPlace[]
     ),
   ]);
 

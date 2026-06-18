@@ -773,14 +773,14 @@ export default function ListsScreen() {
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>Lista pronta.</Text>
               <Text style={styles.emptyText}>
-                Aggiungi locali da Cerca o dalla scheda dettaglio per ritrovarli
-                qui.
+                Aggiungi locali dalla mappa o dalla scheda dettaglio per
+                ritrovarli qui.
               </Text>
               <PressableScale
                 style={styles.emptyButton}
-                onPress={() => router.push("/explore" as never)}
+                onPress={() => router.push("/map" as never)}
               >
-                <Text style={styles.emptyButtonText}>Cerca locali</Text>
+                <Text style={styles.emptyButtonText}>Apri la mappa</Text>
               </PressableScale>
             </View>
           )}

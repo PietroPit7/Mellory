@@ -597,8 +597,8 @@ export default function MyMelloryScreen() {
     } as never);
   }
 
-  function openExplore() {
-    router.push("/explore" as never);
+  function openMap() {
+    router.push("/map" as never);
   }
 
   function openLists() {
@@ -725,12 +725,12 @@ export default function MyMelloryScreen() {
 
           <Text style={styles.emptyTitle}>Il tuo archivio è pronto.</Text>
           <Text style={styles.emptyText}>
-            Vai su Cerca, esplora una città o usa la tua posizione. Tocca ♡ per
-            salvare un preferito oppure ï¼‹ per aggiungere un posto da provare.
+            Apri la mappa, esplora una città o usa la tua posizione. Tocca ♡ per
+            salvare un preferito oppure + per aggiungere un posto da provare.
           </Text>
 
-          <PressableScale style={styles.emptyButton} onPress={openExplore}>
-            <Text style={styles.emptyButtonText}>Cerca locali</Text>
+          <PressableScale style={styles.emptyButton} onPress={openMap}>
+            <Text style={styles.emptyButtonText}>Apri la mappa</Text>
           </PressableScale>
         </View>
       )}

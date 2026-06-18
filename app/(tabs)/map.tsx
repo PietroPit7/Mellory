@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -428,6 +428,9 @@ export default function MapScreen() {
   const [mapRegion, setMapRegion] = useState<MapRegionCenter | null>(null);
   const [lastSearchCenter, setLastSearchCenter] =
     useState<MapRegionCenter | null>(null);
+
+  const params = useLocalSearchParams();
+  const consumedParamsRef = useRef(false);
 
   const sourcePlaces = mode === "saved" ? savedPlaces : searchedPlaces;
 
@@ -873,6 +876,41 @@ export default function MapScreen() {
       useNativeDriver: true,
     }).start();
   }, [areaSearchAnim, shouldShowAreaSearch]);
+
+  // Arrivo dalla Home con una zona già scelta: la mappa la apre e la cerca.
+  useEffect(() => {
+    if (consumedParamsRef.current) return;
+
+    const latitudeParam = Number(params.latitude);
+    const longitudeParam = Number(params.longitude);
+    const cityLabelParam =
+      typeof params.cityLabel === "string" ? params.cityLabel.trim() : "";
+
+    if (
+      !Number.isFinite(latitudeParam) ||
+      !Number.isFinite(longitudeParam) ||
+      !cityLabelParam
+    ) {
+      return;
+    }
+
+    consumedParamsRef.current = true;
+
+    const detailLabelParam =
+      typeof params.detailLabel === "string" ? params.detailLabel : "";
+
+    void searchPlacesAroundCity({
+      id: `home-${latitudeParam.toFixed(5)}-${longitudeParam.toFixed(5)}`,
+      label: cityLabelParam,
+      detail: detailLabelParam,
+      latitude: latitudeParam,
+      longitude: longitudeParam,
+      cityLabel: cityLabelParam,
+      detailLabel: detailLabelParam,
+    });
+    // searchPlacesAroundCity è stabile (function declaration); eseguiamo una volta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.latitude, params.longitude, params.cityLabel]);
 
   return (
     <View style={styles.root}>
