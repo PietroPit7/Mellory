@@ -17,16 +17,6 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { PressableScale } from "@/components/pressable-scale";
 import { melloryThemeVars } from "@/contexts/mellory-theme";
-import {
-  enrichPlaceWithOpenData,
-  fetchGooglePlacesReviewPreview,
-  hasGooglePlacesApiKey,
-} from "@/services/placeOpenDataEnrichment";
-import type {
-  OpenDataEnrichment,
-  OpenDataReviewLink,
-  OpenDataReviewRating,
-} from "@/services/placeOpenDataEnrichment";
 
 type PlaceStatus = "try" | "favorite" | "visited" | "retry";
 
@@ -78,36 +68,6 @@ type EditorialRecognition = {
   isUserAdded: boolean;
 };
 
-type ReviewSourceId =
-  | "google"
-  | "thefork"
-  | "tripadvisor"
-  | "yelp"
-  | "foursquare";
-
-type VerifiedReviewRating = {
-  id: string;
-  sourceId: ReviewSourceId;
-  name: string;
-  logo: string;
-  color: string;
-  borderColor: string;
-  rating: number;
-  scale: number;
-  reviewCount: number | null;
-  verifiedUrl: string;
-};
-
-type VerifiedExternalReviewLink = {
-  id: string;
-  sourceId: ReviewSourceId;
-  name: string;
-  logo: string;
-  color: string;
-  borderColor: string;
-  url: string;
-};
-
 type PersonalDetails = {
   name: string;
   category: string;
@@ -129,53 +89,8 @@ const WEEK_DAYS = [
   "Domenica",
 ];
 
-const EMPTY_GUIDE_AWARDS: string[] = [];
-const EMPTY_OPEN_DATA_REVIEW_LINKS: OpenDataReviewLink[] = [];
-const EMPTY_OPEN_DATA_REVIEW_RATINGS: OpenDataReviewRating[] = [];
-
-const REVIEW_SOURCE_CONFIGS: Record<
-  ReviewSourceId,
-  {
-    name: string;
-    logo: string;
-    color: string;
-    borderColor: string;
-  }
-> = {
-  google: {
-    name: "Google",
-    logo: "G",
-    color: "#4285F4",
-    borderColor: "rgba(66, 133, 244, 0.34)",
-  },
-  thefork: {
-    name: "TheFork",
-    logo: "TF",
-    color: "#1BA085",
-    borderColor: "rgba(27, 160, 133, 0.34)",
-  },
-  tripadvisor: {
-    name: "Tripadvisor",
-    logo: "TA",
-    color: "#34E0A1",
-    borderColor: "rgba(52, 224, 161, 0.34)",
-  },
-  yelp: {
-    name: "Yelp",
-    logo: "Y",
-    color: "#D32323",
-    borderColor: "rgba(211, 35, 35, 0.34)",
-  },
-  foursquare: {
-    name: "Foursquare",
-    logo: "FS",
-    color: "#7B5CFF",
-    borderColor: "rgba(123, 92, 255, 0.34)",
-  },
-};
-
-// Guide riconosciute: decide cosa diventa badge in copertina (verificate o
-// aggiunte dall'utente).
+// Guide riconosciute: decide cosa diventa badge in copertina (aggiunte
+// dall'utente).
 const GUIDE_RECOGNITION_REGEX =
   /michelin|gambero rosso|tre forchette|forchett|50 best|fifty best|50 top pizza|top pizza|bib gourmand|chiocciol|slow food|espresso|stella verde|green star/i;
 
@@ -793,270 +708,6 @@ function normalizeUrl(url: string) {
   return `https://${trimmed}`;
 }
 
-function normalizeReviewSourceId(value: string): ReviewSourceId | null {
-  const normalized = value.trim().toLowerCase();
-
-  if (normalized === "google" || normalized === "google maps") return "google";
-  if (normalized === "thefork" || normalized === "the fork") return "thefork";
-  if (normalized === "tripadvisor" || normalized === "trip advisor") {
-    return "tripadvisor";
-  }
-  if (normalized === "yelp") return "yelp";
-  if (normalized === "foursquare" || normalized === "four square") {
-    return "foursquare";
-  }
-
-  return null;
-}
-
-function parseRatingNumber(value: string) {
-  const parsed = Number(value.trim().replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function isDirectGooglePlaceUrl(url: URL) {
-  const host = url.hostname.toLowerCase();
-  const path = url.pathname.toLowerCase();
-
-  if (host === "maps.app.goo.gl") return path.length > 1;
-  if (
-    host !== "www.google.com" &&
-    host !== "google.com" &&
-    host !== "maps.google.com"
-  ) {
-    return false;
-  }
-  if (path.includes("/search")) return false;
-
-  return (
-    path.startsWith("/maps/place/") ||
-    (path === "/maps" && url.searchParams.has("cid")) ||
-    (path === "/" && url.searchParams.has("cid"))
-  );
-}
-
-function isVerifiedReviewUrlForSource(sourceId: ReviewSourceId, url: string) {
-  const normalizedUrl = normalizeUrl(url);
-  if (!normalizedUrl) return false;
-
-  try {
-    const parsedUrl = new URL(normalizedUrl);
-    const host = parsedUrl.hostname.toLowerCase();
-    const path = parsedUrl.pathname.toLowerCase();
-
-    if (sourceId === "google") return isDirectGooglePlaceUrl(parsedUrl);
-
-    if (sourceId === "thefork") {
-      const isTheFork =
-        host === "thefork.it" ||
-        host.endsWith(".thefork.it") ||
-        host === "thefork.com" ||
-        host.endsWith(".thefork.com");
-
-      return (
-        isTheFork &&
-        !path.includes("/search") &&
-        /\/(ristorante|restaurant)\//.test(path)
-      );
-    }
-
-    if (sourceId === "tripadvisor") {
-      const isTripadvisor =
-        host === "tripadvisor.it" ||
-        host.endsWith(".tripadvisor.it") ||
-        host === "tripadvisor.com" ||
-        host.endsWith(".tripadvisor.com");
-
-      return (
-        isTripadvisor &&
-        !path.includes("/search") &&
-        (path.includes("restaurant_review") || /^\/[1-9][0-9]{0,7}$/.test(path))
-      );
-    }
-
-    if (sourceId === "yelp") {
-      const isYelp =
-        host === "yelp.com" ||
-        host.endsWith(".yelp.com") ||
-        /^yelp\.[a-z]{2,}(?:\.[a-z]{2})?$/.test(host) ||
-        /^.+\.yelp\.[a-z]{2,}(?:\.[a-z]{2})?$/.test(host);
-
-      return isYelp && path.startsWith("/biz/") && !path.includes("/search");
-    }
-
-    const isFoursquare =
-      host === "foursquare.com" ||
-      host === "www.foursquare.com" ||
-      host === "app.foursquare.com";
-
-    return (
-      isFoursquare &&
-      !path.includes("/search") &&
-      (path.startsWith("/v/") ||
-        path.startsWith("/share/venue/") ||
-        path === "/mapaction")
-    );
-  } catch {
-    return false;
-  }
-}
-
-function getVerifiedReviewRatingsFromParams(rawValue: string) {
-  const items = parseDelimitedList(rawValue);
-
-  return items
-    .map((item, index): VerifiedReviewRating | null => {
-      const [rawSource, rawRating, rawScale, rawCount, ...urlParts] = item
-        .split("::")
-        .map((part) => part.trim());
-      const sourceId = normalizeReviewSourceId(rawSource || "");
-      const rating = parseRatingNumber(rawRating || "");
-      const scale = parseRatingNumber(rawScale || "");
-      const reviewCount = rawCount ? parseInt(rawCount, 10) : null;
-      const verifiedUrl = normalizeUrl(urlParts.join("::"));
-
-      if (!sourceId || rating === null || scale === null) return null;
-      if (rating <= 0 || scale <= 0 || rating > scale) return null;
-      if (reviewCount !== null && (!Number.isFinite(reviewCount) || reviewCount < 0)) {
-        return null;
-      }
-      if (!isVerifiedReviewUrlForSource(sourceId, verifiedUrl)) return null;
-
-      const config = REVIEW_SOURCE_CONFIGS[sourceId];
-
-      return {
-        id: `verified-review-${sourceId}-${index}`,
-        sourceId,
-        name: config.name,
-        logo: config.logo,
-        color: config.color,
-        borderColor: config.borderColor,
-        rating,
-        scale,
-        reviewCount,
-        verifiedUrl,
-      };
-    })
-    .filter((rating): rating is VerifiedReviewRating => Boolean(rating));
-}
-
-function getVerifiedReviewRatingsFromOpenData(
-  ratings: OpenDataReviewRating[]
-) {
-  return ratings
-    .map((rating, index): VerifiedReviewRating | null => {
-      const sourceId = normalizeReviewSourceId(rating.sourceId);
-      const verifiedUrl = normalizeUrl(rating.url);
-
-      if (!sourceId) return null;
-      if (!Number.isFinite(rating.rating) || !Number.isFinite(rating.scale)) {
-        return null;
-      }
-      if (rating.rating <= 0 || rating.scale <= 0 || rating.rating > rating.scale) {
-        return null;
-      }
-      if (
-        rating.reviewCount !== null &&
-        (!Number.isFinite(rating.reviewCount) || rating.reviewCount < 0)
-      ) {
-        return null;
-      }
-      if (!isVerifiedReviewUrlForSource(sourceId, verifiedUrl)) return null;
-
-      const config = REVIEW_SOURCE_CONFIGS[sourceId];
-
-      return {
-        id: `open-review-${sourceId}-${index}`,
-        sourceId,
-        name: config.name,
-        logo: config.logo,
-        color: config.color,
-        borderColor: config.borderColor,
-        rating: rating.rating,
-        scale: rating.scale,
-        reviewCount: rating.reviewCount,
-        verifiedUrl,
-      };
-    })
-    .filter((rating): rating is VerifiedReviewRating => Boolean(rating));
-}
-
-function dedupeVerifiedReviewRatings(ratings: VerifiedReviewRating[]) {
-  return ratings.filter(
-    (rating, index, allRatings) =>
-      allRatings.findIndex(
-        (candidate) =>
-          candidate.sourceId === rating.sourceId &&
-          candidate.verifiedUrl === rating.verifiedUrl
-      ) === index
-  );
-}
-
-function formatRatingNumber(value: number) {
-  return (Number.isInteger(value) ? String(value) : value.toFixed(1)).replace(
-    ".",
-    ","
-  );
-}
-
-function toVerifiedExternalReviewLink({
-  sourceId,
-  url,
-  idSuffix,
-}: {
-  sourceId: ReviewSourceId;
-  url: string;
-  idSuffix: string;
-}): VerifiedExternalReviewLink | null {
-  if (!isVerifiedReviewUrlForSource(sourceId, url)) return null;
-
-  const config = REVIEW_SOURCE_CONFIGS[sourceId];
-
-  return {
-    id: `external-${sourceId}-${idSuffix}`,
-    sourceId,
-    name: config.name,
-    logo: config.logo,
-    color: config.color,
-    borderColor: config.borderColor,
-    url: normalizeUrl(url),
-  };
-}
-
-function getVerifiedExternalReviewLinks({
-  openDataLinks,
-  reviewRatings,
-}: {
-  openDataLinks: OpenDataReviewLink[];
-  reviewRatings: VerifiedReviewRating[];
-}) {
-  const links = new Map<string, VerifiedExternalReviewLink>();
-
-  openDataLinks.forEach((link, index) => {
-    const externalLink = toVerifiedExternalReviewLink({
-      sourceId: link.sourceId,
-      url: link.url,
-      idSuffix: `open-${index}`,
-    });
-    if (!externalLink) return;
-
-    links.set(`${externalLink.sourceId}|${externalLink.url}`, externalLink);
-  });
-
-  reviewRatings.forEach((rating, index) => {
-    const externalLink = toVerifiedExternalReviewLink({
-      sourceId: rating.sourceId,
-      url: rating.verifiedUrl,
-      idSuffix: `rating-${index}`,
-    });
-    if (!externalLink) return;
-
-    links.set(`${externalLink.sourceId}|${externalLink.url}`, externalLink);
-  });
-
-  return Array.from(links.values());
-}
-
 function getStandardBadge(label: string) {
   return standardBadges.find((badge) => badge.label === label);
 }
@@ -1422,7 +1073,6 @@ export default function PlaceDetailScreen() {
   const phone = getParamValue(params.phone, "");
   const openingHours = getParamValue(params.openingHours, "");
   const editorialAwards = getParamValue(params.editorialAwards, "");
-  const reviewRatings = getParamValue(params.reviewRatings, "");
   const latitude = parseOptionalNumber(getParamValue(params.latitude, ""));
   const longitude = parseOptionalNumber(getParamValue(params.longitude, ""));
   const distanceMeters =
@@ -1431,19 +1081,8 @@ export default function PlaceDetailScreen() {
   const [experience, setExperience] = useState<PlaceExperience>(emptyExperience);
   const [customLists, setCustomLists] = useState<CustomList[]>([]);
   const [activeSheet, setActiveSheet] = useState<SheetType>("none");
-  const [activeReviewRating, setActiveReviewRating] =
-    useState<VerifiedReviewRating | null>(null);
-  const [isGoogleRatingLoading, setIsGoogleRatingLoading] = useState(false);
-  const [googlePreviewReviewLinks, setGooglePreviewReviewLinks] = useState<
-    OpenDataReviewLink[]
-  >([]);
-  const [googlePreviewReviewRatings, setGooglePreviewReviewRatings] = useState<
-    OpenDataReviewRating[]
-  >([]);
   const [isHoursExpanded, setIsHoursExpanded] = useState(false);
   const [hasLoadedExperience, setHasLoadedExperience] = useState(false);
-  const [openDataEnrichment, setOpenDataEnrichment] =
-    useState<OpenDataEnrichment | null>(null);
 
   const [draftNote, setDraftNote] = useState("");
   const [draftOccasion, setDraftOccasion] = useState("");
@@ -1476,35 +1115,16 @@ export default function PlaceDetailScreen() {
   const effectiveName = experience.personalDetails.name.trim() || name;
   const effectiveCategory =
     experience.personalDetails.category.trim() || category;
-  const enrichedWebsite = openDataEnrichment?.website || "";
-  const enrichedPhone = openDataEnrichment?.phone || "";
-  const enrichedOpeningHours = openDataEnrichment?.openingHours || "";
-  const enrichedAddress = openDataEnrichment?.address || "";
-  const wikiDescription = openDataEnrichment?.description || "";
-  // Mostriamo la descrizione solo se è sostanziosa: evitiamo righe scarne tipo
-  // "ristorante in Italia".
-  const hasRichDescription = wikiDescription.trim().length >= 60;
-  const wikiImageUrl = openDataEnrichment?.imageUrl || "";
-  const guideAwards = openDataEnrichment?.guideAwards ?? EMPTY_GUIDE_AWARDS;
   const routeAddress = hasUsablePlaceDetail(detail) ? detail.trim() : "";
   const automaticDetails = useMemo(
     () => ({
-      address: routeAddress || enrichedAddress.trim(),
-      phone: phone.trim() || enrichedPhone.trim(),
-      website: website.trim() || enrichedWebsite.trim(),
-      openingHours: openingHours.trim() || enrichedOpeningHours.trim(),
+      address: routeAddress,
+      phone: phone.trim(),
+      website: website.trim(),
+      openingHours: openingHours.trim(),
       practicalNotes: "",
     }),
-    [
-      enrichedAddress,
-      enrichedOpeningHours,
-      enrichedPhone,
-      enrichedWebsite,
-      openingHours,
-      phone,
-      routeAddress,
-      website,
-    ]
+    [openingHours, phone, routeAddress, website]
   );
   const displayDetails = useMemo(
     () => ({
@@ -1529,55 +1149,7 @@ export default function PlaceDetailScreen() {
     const query = `${effectiveName} ${effectiveDetail}`.trim() || effectiveName;
     return encodeURIComponent(query);
   }, [effectiveDetail, effectiveName]);
-  const routeVerifiedReviewRatings = useMemo(
-    () => getVerifiedReviewRatingsFromParams(reviewRatings),
-    [reviewRatings]
-  );
-  const openDataReviewLinks = useMemo(
-    () => [
-      ...(openDataEnrichment?.externalReviewLinks ??
-        EMPTY_OPEN_DATA_REVIEW_LINKS),
-      ...googlePreviewReviewLinks,
-    ],
-    [googlePreviewReviewLinks, openDataEnrichment?.externalReviewLinks]
-  );
-  const openDataReviewRatings = useMemo(
-    () => [
-      ...(openDataEnrichment?.reviewRatings ?? EMPTY_OPEN_DATA_REVIEW_RATINGS),
-      ...googlePreviewReviewRatings,
-    ],
-    [googlePreviewReviewRatings, openDataEnrichment?.reviewRatings]
-  );
-  const verifiedReviewRatings = useMemo(
-    () =>
-      dedupeVerifiedReviewRatings([
-        ...getVerifiedReviewRatingsFromOpenData(openDataReviewRatings),
-        ...routeVerifiedReviewRatings,
-      ]),
-    [openDataReviewRatings, routeVerifiedReviewRatings]
-  );
-  const verifiedExternalReviewLinks = useMemo(
-    () =>
-      getVerifiedExternalReviewLinks({
-        openDataLinks: openDataReviewLinks,
-        reviewRatings: verifiedReviewRatings,
-      }),
-    [openDataReviewLinks, verifiedReviewRatings]
-  );
-  const hasGoogleVerifiedRating = verifiedReviewRatings.some(
-    (rating) => rating.sourceId === "google"
-  );
-  const canRequestGoogleRating =
-    hasGooglePlacesApiKey() && latitude !== null && longitude !== null;
-  const shouldShowReviewsSection =
-    verifiedReviewRatings.length > 0 ||
-    (canRequestGoogleRating && !hasGoogleVerifiedRating);
-
-  // Se l'utente non ha una copertina, usiamo la foto verificata (Wikimedia, con
-  // attribuzione) come copertina.
-  const usingVerifiedCover =
-    experience.coverImageUri.length === 0 && wikiImageUrl.length > 0;
-  const coverDisplayUri = experience.coverImageUri || wikiImageUrl;
+  const coverDisplayUri = experience.coverImageUri;
   const hasCover = coverDisplayUri.length > 0;
   const hasGallery = experience.galleryImageUris.length > 0;
   const hasWebsite = effectiveWebsite.length > 0;
@@ -1585,74 +1157,15 @@ export default function PlaceDetailScreen() {
   const hasRealContacts = hasWebsite || hasPhone;
   const openNowState = getOpenNowState(experience.personalDetails.hoursByDay);
   const hasDistance = distance.trim().length > 0 && distance !== "Distanza da te";
-  const cuisine = openDataEnrichment?.cuisine?.trim() || "";
   const infoRows = useMemo(
     () =>
       [
-        { label: "Cucina", value: cuisine, symbol: "✦" },
         { label: "Indirizzo o zona", value: displayDetails.address, symbol: "●" },
         { label: "Distanza", value: hasDistance ? distance : "", symbol: "↗" },
         { label: "Note pratiche", value: displayDetails.practicalNotes },
       ].filter((row) => row.value.trim().length > 0),
-    [
-      cuisine,
-      displayDetails.address,
-      displayDetails.practicalNotes,
-      distance,
-      hasDistance,
-    ]
+    [displayDetails.address, displayDetails.practicalNotes, distance, hasDistance]
   );
-
-  useEffect(() => {
-    let isActive = true;
-
-    async function loadOpenDataEnrichment() {
-      try {
-        const enrichment = await enrichPlaceWithOpenData({
-          id: placeId,
-          name,
-          category,
-          categoryBase: category,
-          detail,
-          website,
-          phone,
-          openingHours,
-          latitude: latitude ?? null,
-          longitude: longitude ?? null,
-        });
-
-        if (isActive) {
-          setOpenDataEnrichment(enrichment);
-        }
-      } catch {
-        if (isActive) {
-          setOpenDataEnrichment(null);
-        }
-      }
-    }
-
-    loadOpenDataEnrichment();
-
-    return () => {
-      isActive = false;
-    };
-  }, [
-    category,
-    detail,
-    latitude,
-    longitude,
-    name,
-    openingHours,
-    phone,
-    placeId,
-    website,
-  ]);
-
-  useEffect(() => {
-    setGooglePreviewReviewLinks([]);
-    setGooglePreviewReviewRatings([]);
-    setIsGoogleRatingLoading(false);
-  }, [placeId]);
 
   const openingHoursRows = useMemo(
     () => getOpeningHoursRows(effectiveOpeningHours),
@@ -1681,30 +1194,12 @@ export default function PlaceDetailScreen() {
     [editorialAwards]
   );
 
-  const verifiedRecognitions = useMemo<EditorialRecognition[]>(
-    () =>
-      guideAwards.map((award, index) => ({
-        id: `verified-${index}-${award}`,
-        title: award,
-        source: "Riconoscimento verificato",
-        url: "",
-        createdAt: "",
-        isUserAdded: false,
-      })),
-    [guideAwards]
-  );
-
   const allEditorialRecognitions = useMemo(
     () => [
-      ...verifiedRecognitions,
       ...editorialRecognitionsFromParams,
       ...experience.editorialRecognitions,
     ],
-    [
-      editorialRecognitionsFromParams,
-      experience.editorialRecognitions,
-      verifiedRecognitions,
-    ]
+    [editorialRecognitionsFromParams, experience.editorialRecognitions]
   );
 
   // Badge in copertina: tutte le guide riconosciute (verificate o aggiunte da
@@ -2299,56 +1794,11 @@ export default function PlaceDetailScreen() {
     Linking.openURL(`tel:${cleanPhone}`);
   }
 
-  function openReviewRating(rating: VerifiedReviewRating) {
-    setActiveReviewRating(rating);
-  }
-
-  async function openGoogleRatingPreview() {
-    const existingGoogleRating = verifiedReviewRatings.find(
-      (rating) => rating.sourceId === "google"
+  // Unico link esterno: la pagina del locale su Google.
+  function openGoogle() {
+    Linking.openURL(
+      `https://www.google.com/maps/search/?api=1&query=${mapSearchQuery}`
     );
-
-    if (existingGoogleRating) {
-      setActiveReviewRating(existingGoogleRating);
-      return;
-    }
-
-    if (!canRequestGoogleRating || isGoogleRatingLoading) return;
-
-    setIsGoogleRatingLoading(true);
-
-    try {
-      const preview = await fetchGooglePlacesReviewPreview({
-        id: placeId,
-        name: effectiveName,
-        category: effectiveCategory,
-        categoryBase: effectiveCategory,
-        detail: effectiveDetail,
-        website: effectiveWebsite,
-        phone: effectivePhone,
-        openingHours: effectiveOpeningHours,
-        latitude,
-        longitude,
-      });
-
-      const nextLinks = preview?.externalReviewLinks ?? [];
-      const nextRatings = preview?.reviewRatings ?? [];
-      const verifiedPreviewRating =
-        getVerifiedReviewRatingsFromOpenData(nextRatings)[0] ?? null;
-
-      setGooglePreviewReviewLinks(nextLinks);
-      setGooglePreviewReviewRatings(nextRatings);
-
-      if (verifiedPreviewRating) {
-        setActiveReviewRating(verifiedPreviewRating);
-      }
-    } finally {
-      setIsGoogleRatingLoading(false);
-    }
-  }
-
-  function openExternalReviewLink(link: VerifiedExternalReviewLink) {
-    Linking.openURL(link.url);
   }
 
   function openEditorialRecognition(recognition: EditorialRecognition) {
@@ -3082,10 +2532,6 @@ export default function PlaceDetailScreen() {
             </PressableScale>
           </View>
 
-          {usingVerifiedCover ? (
-            <Text style={styles.coverPhotoCredit}>Foto · Wikipedia</Text>
-          ) : null}
-
           <View style={styles.coverBottom}>
             {coverGuideAwards.length > 0 ? (
               <View style={styles.coverGuideRow}>
@@ -3485,131 +2931,17 @@ export default function PlaceDetailScreen() {
             )}
           </Section>
 
-          {verifiedExternalReviewLinks.length > 0 ? (
-            <Section title="LINK ESTERNI">
-              <View style={styles.externalLinksGrid}>
-                {verifiedExternalReviewLinks.map((link) => (
-                  <PressableScale
-                    key={link.id}
-                    style={[
-                      styles.externalLinkCard,
-                      { borderColor: link.borderColor },
-                    ]}
-                    onPress={() => openExternalReviewLink(link)}
-                    pressedScale={0.985}
-                  >
-                    <View
-                      style={[
-                        styles.externalLinkLogo,
-                        { backgroundColor: link.color },
-                      ]}
-                    >
-                      <Text style={styles.externalLinkLogoText}>{link.logo}</Text>
-                    </View>
-
-                    <View style={styles.externalLinkBody}>
-                      <Text style={styles.externalLinkTitle}>{link.name}</Text>
-                      <Text style={styles.externalLinkMeta}>Scheda verificata</Text>
-                    </View>
-
-                    <Text style={styles.externalLinkArrow}>-&gt;</Text>
-                  </PressableScale>
-                ))}
-              </View>
-            </Section>
-          ) : null}
-
-          {shouldShowReviewsSection ? (
-            <Section title="RECENSIONI">
-              <View style={styles.reviewsPanel}>
-                <View style={styles.reviewCardGrid}>
-                  {canRequestGoogleRating && !hasGoogleVerifiedRating ? (
-                    <PressableScale
-                      style={[
-                        styles.reviewSourceCard,
-                        {
-                          borderColor: REVIEW_SOURCE_CONFIGS.google.borderColor,
-                        },
-                      ]}
-                      onPress={openGoogleRatingPreview}
-                      pressedScale={0.985}
-                    >
-                      <View style={styles.reviewSourceTop}>
-                        <View
-                          style={[
-                            styles.reviewSourceLogo,
-                            {
-                              backgroundColor:
-                                REVIEW_SOURCE_CONFIGS.google.color,
-                            },
-                          ]}
-                        >
-                          <Text style={styles.reviewSourceLogoText}>
-                            {REVIEW_SOURCE_CONFIGS.google.logo}
-                          </Text>
-                        </View>
-
-                        <View style={styles.reviewSourceBody}>
-                          <Text style={styles.reviewSourceName}>Google</Text>
-                          <Text style={styles.reviewSourceCaption}>Rating</Text>
-                        </View>
-
-                        <Text style={styles.reviewCardAction}>
-                          {isGoogleRatingLoading ? "..." : ">"}
-                        </Text>
-                      </View>
-                    </PressableScale>
-                  ) : null}
-
-                  {verifiedReviewRatings.map((rating) => (
-                    <PressableScale
-                      key={rating.id}
-                      style={[
-                        styles.reviewSourceCard,
-                        { borderColor: rating.borderColor },
-                      ]}
-                      onPress={() => openReviewRating(rating)}
-                      pressedScale={0.985}
-                    >
-                      <View style={styles.reviewSourceTop}>
-                        <View
-                          style={[
-                            styles.reviewSourceLogo,
-                            { backgroundColor: rating.color },
-                          ]}
-                        >
-                          <Text style={styles.reviewSourceLogoText}>
-                            {rating.logo}
-                          </Text>
-                        </View>
-
-                        <View style={styles.reviewSourceBody}>
-                          <Text style={styles.reviewSourceName}>{rating.name}</Text>
-                          <Text style={styles.reviewSourceCaption}>Rating</Text>
-                        </View>
-
-                        <Text style={styles.reviewCardRating}>
-                          {formatRatingNumber(rating.rating)}
-                          <Text style={styles.reviewCardScale}>
-                            /{formatRatingNumber(rating.scale)}
-                          </Text>
-                        </Text>
-                      </View>
-                    </PressableScale>
-                  ))}
-                </View>
-              </View>
-            </Section>
-          ) : null}
-
-          {hasRichDescription ? (
-            <Section title="DESCRIZIONE">
-              <View style={styles.descriptionCard}>
-                <Text style={styles.descriptionText}>{wikiDescription}</Text>
-                <Text style={styles.descriptionCredit}>da Wikipedia</Text>
-              </View>
-            </Section>
-          ) : null}
+          <Section title="LINK">
+            <PressableScale
+              style={styles.googleLinkButton}
+              onPress={openGoogle}
+              pressedScale={0.985}
+            >
+              <View style={styles.googleLinkDot} />
+              <Text style={styles.googleLinkText}>Apri su Google</Text>
+              <Text style={styles.googleLinkArrow}>↗</Text>
+            </PressableScale>
+          </Section>
 
           <Section
             title="LA TUA GALLERIA"
@@ -3840,37 +3172,6 @@ export default function PlaceDetailScreen() {
               {renderSheetContent()}
             </ScrollView>
           </View>
-        </View>
-      </Modal>
-
-      <Modal
-        transparent
-        visible={activeReviewRating !== null}
-        animationType="fade"
-        onRequestClose={() => setActiveReviewRating(null)}
-      >
-        <View style={styles.ratingModalBackdrop}>
-          <PressableScale
-            style={styles.ratingModalBackdropPressable}
-            onPress={() => setActiveReviewRating(null)}
-            pressedScale={1}
-          />
-
-          {activeReviewRating ? (
-            <View
-              style={[
-                styles.ratingModalCard,
-                { borderColor: activeReviewRating.borderColor },
-              ]}
-            >
-              <Text style={styles.ratingModalValue}>
-                {formatRatingNumber(activeReviewRating.rating)}
-                <Text style={styles.ratingModalScale}>
-                  /{formatRatingNumber(activeReviewRating.scale)}
-                </Text>
-              </Text>
-            </View>
-          ) : null}
         </View>
       </Modal>
     </View>
@@ -4209,17 +3510,6 @@ const styles = StyleSheet.create({
     right: 20,
     bottom: 30,
   },
-  coverPhotoCredit: {
-    position: "absolute",
-    top: 18,
-    left: 0,
-    right: 0,
-    textAlign: "center",
-    color: "rgba(255,248,239,0.6)",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
   coverGuideRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -4245,144 +3535,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: "900",
     letterSpacing: 0.3,
-  },
-  externalLinksGrid: {
-    gap: 10,
-  },
-  externalLinkCard: {
-    minHeight: 72,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    padding: 13,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  externalLinkLogo: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  externalLinkLogoText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  externalLinkBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  externalLinkTitle: {
-    color: colors.cream,
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "900",
-  },
-  externalLinkMeta: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "700",
-    marginTop: 2,
-  },
-  externalLinkArrow: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  reviewsPanel: {
-    backgroundColor: colors.card,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    overflow: "hidden",
-  },
-  reviewCardGrid: {
-    gap: 10,
-  },
-  reviewSourceCard: {
-    minHeight: 84,
-    borderRadius: 22,
-    backgroundColor: colors.card2,
-    borderWidth: 1,
-    padding: 14,
-    justifyContent: "center",
-  },
-  reviewSourceTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  reviewSourceLogo: {
-    width: 46,
-    height: 46,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reviewSourceLogoText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  reviewSourceBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  reviewSourceName: {
-    color: colors.cream,
-    fontSize: 19,
-    lineHeight: 24,
-    fontWeight: "900",
-    marginBottom: 2,
-  },
-  reviewSourceCaption: {
-    color: colors.textMuted,
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontWeight: "700",
-  },
-  reviewCardRating: {
-    color: colors.cream,
-    fontSize: 30,
-    lineHeight: 34,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  reviewCardScale: {
-    color: colors.muted,
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  reviewCardAction: {
-    color: colors.cream,
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: "900",
-  },
-  descriptionCard: {
-    backgroundColor: colors.card2,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 18,
-  },
-  descriptionText: {
-    color: colors.cream,
-    fontSize: 15,
-    lineHeight: 23,
-    fontWeight: "600",
-  },
-  descriptionCredit: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "800",
-    fontStyle: "italic",
-    marginTop: 12,
   },
   placeArea: {
     color: colors.textMuted,
@@ -4833,6 +3985,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
+  googleLinkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    minHeight: 54,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    backgroundColor: colors.card2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  googleLinkDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: "#4285F4",
+  },
+  googleLinkText: {
+    flex: 1,
+    color: colors.cream,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  googleLinkArrow: {
+    color: colors.muted,
+    fontSize: 18,
+    fontWeight: "900",
+  },
   hoursCard: {
     backgroundColor: colors.card,
     borderRadius: 24,
@@ -4943,18 +4123,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     fontWeight: "900",
-  },
-  contactHint: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 11,
-  },
-  emptyText: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 21,
-    fontStyle: "italic",
   },
   emptyActionCard: {
     backgroundColor: colors.card,
@@ -5238,91 +4406,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900",
   },
-  openDataCard: {
-    backgroundColor: colors.card,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    padding: 18,
-  },
-  openDataHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 14,
-    marginBottom: 14,
-  },
-  openDataTitle: {
-    color: colors.cream,
-    fontSize: 22,
-    lineHeight: 26,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  openDataSubtitle: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 4,
-  },
-  openDataBadge: {
-    minHeight: 34,
-    borderRadius: 999,
-    backgroundColor: "rgba(226, 189, 53, 0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(226, 189, 53, 0.35)",
-    paddingHorizontal: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  openDataBadgeText: {
-    color: colors.yellow,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-  },
-  openDataDescription: {
-    color: colors.cream,
-    fontSize: 15,
-    lineHeight: 23,
-    marginBottom: 14,
-  },
-  openDataRows: {
-    gap: 10,
-  },
-  openDataRow: {
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 248, 239, 0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.07)",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  openDataRowLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  openDataRowValue: {
-    color: colors.cream,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "800",
-  },
-  openDataEmptyText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  openDataAttribution: {
-    color: colors.muted,
-    fontSize: 11,
-    lineHeight: 17,
-    marginTop: 14,
-  },
   bottomSpace: {
     height: 112,
   },
@@ -5374,39 +4457,6 @@ const styles = StyleSheet.create({
   },
   modalBackdropPressable: {
     flex: 1,
-  },
-  ratingModalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.64)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  ratingModalBackdropPressable: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  ratingModalCard: {
-    width: "100%",
-    maxWidth: 320,
-    minHeight: 174,
-    borderRadius: 30,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 26,
-  },
-  ratingModalValue: {
-    color: colors.cream,
-    fontSize: 64,
-    lineHeight: 72,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  ratingModalScale: {
-    color: colors.muted,
-    fontSize: 24,
-    fontWeight: "900",
   },
   sheet: {
     maxHeight: "84%",
@@ -5710,74 +4760,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginBottom: 16,
-  },
-  wikiCard: {
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.08)",
-    overflow: "hidden",
-  },
-  wikiImage: {
-    width: "100%",
-    height: 180,
-    backgroundColor: colors.card2,
-  },
-  guideAwardRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingTop: 16,
-  },
-  guideAwardChip: {
-    borderRadius: 999,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    backgroundColor: "rgba(199,168,91,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(199,168,91,0.4)",
-  },
-  guideAwardText: {
-    color: colors.gold,
-    fontSize: 12.5,
-    fontWeight: "900",
-    letterSpacing: 0.3,
-  },
-  wikiDescription: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 23,
-    paddingHorizontal: 18,
-    paddingTop: 16,
-  },
-  wikiFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-  },
-  wikiAttribution: {
-    flex: 1,
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.4,
-  },
-  wikiButton: {
-    minHeight: 38,
-    borderRadius: 999,
-    backgroundColor: colors.paper,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  wikiButtonText: {
-    color: colors.paperText,
-    fontSize: 12,
-    fontWeight: "900",
   },
   hoursEditRow: {
     flexDirection: "row",

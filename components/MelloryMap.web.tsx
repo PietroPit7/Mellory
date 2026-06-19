@@ -33,10 +33,6 @@ const colors = melloryThemeVars;
 
 const MELLORY_SOURCE_ID = "mellory-places";
 const USER_ATTRIBUTION_TOGGLE_WINDOW_MS = 500;
-const MAP_LAYER_OPTIONS: { id: MelloryMapLayer; label: string }[] = [
-  { id: "streets", label: "Strade" },
-  { id: "satellite", label: "Satellite" },
-];
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 18;
 
@@ -519,47 +515,43 @@ export default function MelloryMap({
     <div style={styles.frame}>
       <div ref={containerRef} style={styles.mapCanvas} />
 
-      <div style={styles.controlDeck}>
-        <div style={styles.layerControl}>
-          {MAP_LAYER_OPTIONS.map((option) => {
-            const isActive = mapLayer === option.id;
+      <div style={styles.controlColumn}>
+        <button
+          type="button"
+          title={mapLayer === "satellite" ? "Mostra strade" : "Mostra satellite"}
+          aria-label={
+            mapLayer === "satellite" ? "Mostra strade" : "Mostra satellite"
+          }
+          style={{
+            ...styles.controlCard,
+            ...styles.iconButton,
+            ...(mapLayer === "satellite" ? styles.iconButtonActive : {}),
+          }}
+          onClick={() =>
+            setMapLayer(mapLayer === "streets" ? "satellite" : "streets")
+          }
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 3 2 8l10 5 10-5-10-5Z" />
+            <path d="m2 13 10 5 10-5" />
+            <path d="m2 18 10 5 10-5" />
+          </svg>
+        </button>
 
-            return (
-              <button
-                key={option.id}
-                type="button"
-                title={`Mostra ${option.label}`}
-                style={{
-                  ...styles.layerButton,
-                  ...(isActive ? styles.layerButtonActive : {}),
-                }}
-                onClick={() => setMapLayer(option.id)}
-              >
-                <span
-                  style={{
-                    ...styles.layerSwatch,
-                    ...(option.id === "satellite"
-                      ? styles.layerSwatchSatellite
-                      : {}),
-                  }}
-                />
-                <span
-                  style={{
-                    ...styles.layerButtonText,
-                    ...(isActive ? styles.layerButtonTextActive : {}),
-                  }}
-                >
-                  {option.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={styles.zoomControl} aria-label="Controlli zoom">
+        <div style={{ ...styles.controlCard, ...styles.zoomGroup }}>
           <button
             type="button"
             title="Avvicina"
+            aria-label="Avvicina"
             style={styles.zoomButton}
             onClick={() => handleZoom(1)}
           >
@@ -569,10 +561,11 @@ export default function MelloryMap({
           <button
             type="button"
             title="Allontana"
+            aria-label="Allontana"
             style={styles.zoomButton}
             onClick={() => handleZoom(-1)}
           >
-            -
+            −
           </button>
         </div>
       </div>
@@ -602,79 +595,44 @@ const styles = {
     position: "absolute",
     inset: 0,
   },
-  controlDeck: {
+  controlColumn: {
     position: "absolute",
     top: 14,
-    left: 14,
     right: 14,
     display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "center",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: 10,
     pointerEvents: "none",
     zIndex: 2,
   },
-  layerControl: {
-    display: "flex",
-    gap: 4,
-    padding: 4,
-    borderRadius: 999,
+  controlCard: {
     border: "1px solid rgba(255,248,239,0.16)",
-    background: "rgba(7,6,4,0.74)",
+    background: "rgba(7,6,4,0.72)",
     boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
     backdropFilter: "blur(10px)",
     pointerEvents: "auto",
   },
-  layerButton: {
-    minHeight: 38,
-    border: "0",
-    borderRadius: 999,
-    padding: "0 12px",
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
-    background: "transparent",
     color: colors.cream,
     cursor: "pointer",
-    fontFamily:
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   },
-  layerButtonActive: {
+  iconButtonActive: {
     background: colors.paper,
+    color: colors.paperText,
   },
-  layerSwatch: {
-    width: 13,
-    height: 13,
-    borderRadius: 999,
-    border: "1px solid rgba(7,6,4,0.18)",
-    background: colors.pink,
-    boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.42)",
-  },
-  layerSwatchSatellite: {
-    background:
-      "linear-gradient(135deg, #10261E 0%, #6C8D72 52%, #D9B66A 100%)",
-  },
-  layerButtonText: {
-    color: colors.cream,
-    fontSize: 12,
-    lineHeight: "16px",
-    fontWeight: 900,
-  },
-  layerButtonTextActive: {
-    color: colors.black,
-  },
-  zoomControl: {
-    position: "absolute",
-    top: 0,
-    right: 0,
+  zoomGroup: {
     width: 42,
     overflow: "hidden",
-    borderRadius: 18,
-    border: "1px solid rgba(255,248,239,0.16)",
-    background: "rgba(7,6,4,0.74)",
-    boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
-    backdropFilter: "blur(10px)",
-    pointerEvents: "auto",
+    borderRadius: 16,
+    display: "flex",
+    flexDirection: "column",
   },
   zoomButton: {
     width: 42,
