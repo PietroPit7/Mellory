@@ -3,6 +3,28 @@ export type OpenDataSource =
   | "openstreetmap"
   | "mixed";
 
+export type OpenDataReviewSource =
+  | "google"
+  | "thefork"
+  | "tripadvisor"
+  | "yelp"
+  | "foursquare";
+
+export type OpenDataReviewLink = {
+  sourceId: OpenDataReviewSource;
+  url: string;
+  verifiedBy: "openstreetmap" | "wikidata" | "google-places";
+};
+
+export type OpenDataReviewRating = {
+  sourceId: OpenDataReviewSource;
+  rating: number;
+  scale: number;
+  reviewCount: number | null;
+  url: string;
+  verifiedBy: "google-places";
+};
+
 export type BasePlaceForOpenData = {
   id: string;
   name: string;
@@ -34,6 +56,8 @@ export type OpenDataEnrichment = {
 
   instagramUrl: string;
   facebookUrl: string;
+  externalReviewLinks: OpenDataReviewLink[];
+  reviewRatings: OpenDataReviewRating[];
 
   outdoorSeating: string;
   wheelchair: string;
@@ -69,8 +93,27 @@ type OverpassResponse = {
   elements?: OverpassElement[];
 };
 
+type GooglePlacesTextSearchPlace = {
+  id?: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  location?: { latitude?: number; longitude?: number };
+  rating?: number;
+  userRatingCount?: number;
+  googleMapsUri?: string;
+};
+
+type GooglePlacesTextSearchResponse = {
+  places?: GooglePlacesTextSearchPlace[];
+};
+
 const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
+const GOOGLE_PLACES_TEXT_SEARCH_ENDPOINT =
+  "https://places.googleapis.com/v1/places:searchText";
+const GOOGLE_PLACES_API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY?.trim() ?? "";
 const SEARCH_RADIUS_METERS = 140;
+const GOOGLE_PLACES_MAX_DISTANCE_METERS = 320;
 
 const emptyOpenDataEnrichment: OpenDataEnrichment = {
   source: "none",
@@ -90,6 +133,8 @@ const emptyOpenDataEnrichment: OpenDataEnrichment = {
 
   instagramUrl: "",
   facebookUrl: "",
+  externalReviewLinks: [],
+  reviewRatings: [],
 
   outdoorSeating: "",
   wheelchair: "",
@@ -263,6 +308,348 @@ function getSocialUrl(tags: Record<string, string>, keys: string[]) {
   return value;
 }
 
+function normalizeUrl(url: string) {
+  const trimmed = cleanText(url);
+
+  if (!trimmed) return "";
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("www.") || trimmed.includes(".com/") || trimmed.includes(".it/")) {
+    return `https://${trimmed}`;
+  }
+  if (trimmed.startsWith("/")) return trimmed;
+
+  return "";
+}
+
+function isDirectGoogleReviewUrl(url: URL) {
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase();
+
+  if (host === "maps.app.goo.gl") return path.length > 1;
+  if (host !== "www.google.com" && host !== "google.com" && host !== "maps.google.com") {
+    return false;
+  }
+  if (path.includes("/search")) return false;
+
+  return (
+    path.startsWith("/maps/place/") ||
+    (path === "/maps" && url.searchParams.has("cid")) ||
+    (path === "/" && url.searchParams.has("cid"))
+  );
+}
+
+function getReviewSourceFromUrl(url: URL): OpenDataReviewSource | null {
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.toLowerCase();
+
+  if (isDirectGoogleReviewUrl(url)) return "google";
+
+  const isTheFork =
+    host === "thefork.it" ||
+    host.endsWith(".thefork.it") ||
+    host === "thefork.com" ||
+    host.endsWith(".thefork.com");
+  if (isTheFork && !path.includes("/search") && /\/(ristorante|restaurant)\//.test(path)) {
+    return "thefork";
+  }
+
+  const isTripadvisor =
+    host === "tripadvisor.it" ||
+    host.endsWith(".tripadvisor.it") ||
+    host === "tripadvisor.com" ||
+    host.endsWith(".tripadvisor.com");
+  if (
+    isTripadvisor &&
+    !path.includes("/search") &&
+    (path.includes("restaurant_review") || /^\/[1-9][0-9]{0,7}$/.test(path))
+  ) {
+    return "tripadvisor";
+  }
+
+  const isYelp =
+    host === "yelp.com" ||
+    host.endsWith(".yelp.com") ||
+    /^yelp\.[a-z]{2,}(?:\.[a-z]{2})?$/.test(host) ||
+    /^.+\.yelp\.[a-z]{2,}(?:\.[a-z]{2})?$/.test(host);
+  if (isYelp && path.startsWith("/biz/") && !path.includes("/search")) {
+    return "yelp";
+  }
+
+  const isFoursquare =
+    host === "foursquare.com" ||
+    host === "www.foursquare.com" ||
+    host === "app.foursquare.com";
+  if (
+    isFoursquare &&
+    !path.includes("/search") &&
+    (path.startsWith("/v/") || path.startsWith("/share/venue/") || path === "/mapaction")
+  ) {
+    return "foursquare";
+  }
+
+  return null;
+}
+
+function getVerifiedReviewLinkFromUrl(
+  url: string,
+  verifiedBy: OpenDataReviewLink["verifiedBy"]
+): OpenDataReviewLink | null {
+  const normalizedUrl = normalizeUrl(url);
+  if (!normalizedUrl || normalizedUrl.startsWith("/")) return null;
+
+  try {
+    const parsedUrl = new URL(normalizedUrl);
+    const sourceId = getReviewSourceFromUrl(parsedUrl);
+
+    return sourceId
+      ? {
+          sourceId,
+          url: normalizedUrl,
+          verifiedBy,
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function dedupeReviewLinks(links: OpenDataReviewLink[]) {
+  return links.filter(
+    (link, index, allLinks) =>
+      allLinks.findIndex(
+        (candidate) =>
+          candidate.sourceId === link.sourceId && candidate.url === link.url
+      ) === index
+  );
+}
+
+function dedupeReviewRatings(ratings: OpenDataReviewRating[]) {
+  return ratings.filter(
+    (rating, index, allRatings) =>
+      allRatings.findIndex(
+        (candidate) =>
+          candidate.sourceId === rating.sourceId && candidate.url === rating.url
+      ) === index
+  );
+}
+
+function getReviewUrlCandidatesFromTag(key: string, value: string) {
+  const normalizedKey = key.toLowerCase();
+  const cleanValue = cleanText(value);
+  const candidates = [cleanValue];
+
+  if (!cleanValue) return candidates;
+
+  if (
+    normalizedKey.includes("google") &&
+    normalizedKey.includes("cid") &&
+    /^\d+$/.test(cleanValue)
+  ) {
+    candidates.push(`https://www.google.com/maps?cid=${cleanValue}`);
+  }
+
+  if (normalizedKey.includes("tripadvisor") && cleanValue.startsWith("Restaurant_Review")) {
+    candidates.push(`https://www.tripadvisor.it/${cleanValue}`);
+  }
+
+  if (normalizedKey.includes("tripadvisor") && /^[1-9][0-9]{0,7}$/.test(cleanValue)) {
+    candidates.push(`https://www.tripadvisor.com/${cleanValue}`);
+  }
+
+  if (
+    normalizedKey.includes("thefork") &&
+    (cleanValue.startsWith("/ristorante/") || cleanValue.startsWith("/restaurant/"))
+  ) {
+    candidates.push(`https://www.thefork.it${cleanValue}`);
+  }
+
+  if (
+    normalizedKey.includes("yelp") &&
+    /^[A-Za-z0-9][A-Za-z0-9_-]{1,120}$/.test(cleanValue)
+  ) {
+    candidates.push(`https://www.yelp.com/biz/${encodeURIComponent(cleanValue)}`);
+  }
+
+  if (
+    normalizedKey.includes("foursquare") &&
+    /^[0-9a-f]{24}$/i.test(cleanValue)
+  ) {
+    candidates.push(`https://www.foursquare.com/v/${cleanValue}`);
+  }
+
+  return candidates;
+}
+
+function getVerifiedReviewLinksFromOsmTags(tags: Record<string, string>) {
+  const links = new Map<string, OpenDataReviewLink>();
+
+  Object.entries(tags).forEach(([key, value]) => {
+    getReviewUrlCandidatesFromTag(key, value).forEach((candidate) => {
+      const link = getVerifiedReviewLinkFromUrl(candidate, "openstreetmap");
+      if (!link) return;
+
+      links.set(`${link.sourceId}|${link.url}`, link);
+    });
+  });
+
+  return dedupeReviewLinks(Array.from(links.values()));
+}
+
+export function hasGooglePlacesApiKey() {
+  return GOOGLE_PLACES_API_KEY.length > 0;
+}
+
+function buildGooglePlacesTextQuery(place: BasePlaceForOpenData) {
+  return [place.name, place.detail, place.category]
+    .map((part) => cleanText(part))
+    .filter(Boolean)
+    .join(", ");
+}
+
+function getGooglePlaceDistanceMeters(
+  place: BasePlaceForOpenData,
+  googlePlace: GooglePlacesTextSearchPlace
+) {
+  const latitude = googlePlace.location?.latitude;
+  const longitude = googlePlace.location?.longitude;
+
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    !hasCoordinates(place)
+  ) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return getDistanceMeters({
+    firstLatitude: place.latitude as number,
+    firstLongitude: place.longitude as number,
+    secondLatitude: latitude,
+    secondLongitude: longitude,
+  });
+}
+
+function getBestGooglePlaceMatch(
+  place: BasePlaceForOpenData,
+  places: GooglePlacesTextSearchPlace[]
+) {
+  return places
+    .map((googlePlace) => {
+      const displayName = cleanText(googlePlace.displayName?.text);
+      const similarity = getNameSimilarity(place.name, displayName);
+      const distance = getGooglePlaceDistanceMeters(place, googlePlace);
+      const distanceScore = Number.isFinite(distance)
+        ? Math.max(0, GOOGLE_PLACES_MAX_DISTANCE_METERS - distance) / 6
+        : 0;
+
+      return {
+        googlePlace,
+        similarity,
+        distance,
+        score: similarity + distanceScore,
+      };
+    })
+    .filter(
+      (candidate) =>
+        candidate.similarity >= 70 &&
+        candidate.distance <= GOOGLE_PLACES_MAX_DISTANCE_METERS &&
+        cleanText(candidate.googlePlace.googleMapsUri).length > 0
+    )
+    .sort((firstCandidate, secondCandidate) => {
+      return secondCandidate.score - firstCandidate.score;
+    })[0]?.googlePlace;
+}
+
+async function fetchGooglePlacesEnrichment(
+  place: BasePlaceForOpenData
+): Promise<Partial<OpenDataEnrichment> | null> {
+  if (!hasGooglePlacesApiKey() || !hasCoordinates(place)) return null;
+
+  const textQuery = buildGooglePlacesTextQuery(place);
+  if (textQuery.length < 3) return null;
+
+  const response = await fetch(GOOGLE_PLACES_TEXT_SEARCH_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri",
+    },
+    body: JSON.stringify({
+      textQuery,
+      languageCode: "it",
+      regionCode: "IT",
+      pageSize: 5,
+      locationBias: {
+        circle: {
+          center: {
+            latitude: place.latitude,
+            longitude: place.longitude,
+          },
+          radius: 500,
+        },
+      },
+    }),
+  });
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as GooglePlacesTextSearchResponse;
+  const googlePlace = getBestGooglePlaceMatch(place, data.places ?? []);
+  const googleMapsUri = cleanText(googlePlace?.googleMapsUri);
+
+  if (!googlePlace || !googleMapsUri) return null;
+
+  const googleReviewLink: OpenDataReviewLink = {
+    sourceId: "google",
+    url: googleMapsUri,
+    verifiedBy: "google-places",
+  };
+  const externalReviewLinks = getVerifiedReviewLinkFromUrl(
+    googleReviewLink.url,
+    googleReviewLink.verifiedBy
+  )
+    ? [googleReviewLink]
+    : [];
+
+  const rating =
+    typeof googlePlace.rating === "number" && Number.isFinite(googlePlace.rating)
+      ? googlePlace.rating
+      : null;
+  const reviewCount =
+    typeof googlePlace.userRatingCount === "number" &&
+    Number.isFinite(googlePlace.userRatingCount)
+      ? Math.max(0, Math.round(googlePlace.userRatingCount))
+      : null;
+
+  return {
+    address: cleanText(googlePlace.formattedAddress),
+    externalReviewLinks,
+    reviewRatings:
+      rating !== null && rating > 0 && rating <= 5
+        ? [
+            {
+              sourceId: "google",
+              rating,
+              scale: 5,
+              reviewCount,
+              url: googleMapsUri,
+              verifiedBy: "google-places",
+            },
+          ]
+        : [],
+  };
+}
+
+export async function fetchGooglePlacesReviewPreview(
+  place: BasePlaceForOpenData
+) {
+  return fetchGooglePlacesEnrichment(place);
+}
+
 function buildOverpassQuery(latitude: number, longitude: number) {
   return `
     [out:json][timeout:18];
@@ -409,6 +796,7 @@ function enrichmentFromOsmElement(element: OverpassElement): OpenDataEnrichment 
       "facebook",
       "social:facebook",
     ]),
+    externalReviewLinks: getVerifiedReviewLinksFromOsmTags(tags),
 
     outdoorSeating: getBestTag(tags, ["outdoor_seating"]),
     wheelchair: getBestTag(tags, ["wheelchair"]),
@@ -452,6 +840,14 @@ function mergeEnrichmentData(
 
     instagramUrl: next.instagramUrl || base.instagramUrl,
     facebookUrl: next.facebookUrl || base.facebookUrl,
+    externalReviewLinks: dedupeReviewLinks([
+      ...base.externalReviewLinks,
+      ...(next.externalReviewLinks || []),
+    ]),
+    reviewRatings: dedupeReviewRatings([
+      ...base.reviewRatings,
+      ...(next.reviewRatings || []),
+    ]),
 
     outdoorSeating: next.outdoorSeating || base.outdoorSeating,
     wheelchair: next.wheelchair || base.wheelchair,
@@ -478,6 +874,7 @@ type WikipediaEnrichment = {
   phone: string;
   address: string;
   awards: string[];
+  reviewLinks: OpenDataReviewLink[];
 };
 
 const WIKI_LANG = "it";
@@ -977,8 +1374,8 @@ function getWikidataLabel(entity: WikidataEntity) {
   );
 }
 
-function getWikidataStringClaim(entity: WikidataEntity, property: string) {
-  const value = entity.claims?.[property]?.[0]?.mainsnak?.datavalue?.value;
+function getWikidataClaimStringValue(claim: WikidataClaim | undefined) {
+  const value = claim?.mainsnak?.datavalue?.value;
 
   if (typeof value === "string") return cleanText(value);
   if (
@@ -993,12 +1390,56 @@ function getWikidataStringClaim(entity: WikidataEntity, property: string) {
   return "";
 }
 
+function getWikidataStringClaims(entity: WikidataEntity, property: string) {
+  return (entity.claims?.[property] ?? [])
+    .map((claim) => getWikidataClaimStringValue(claim))
+    .filter(Boolean);
+}
+
+function getWikidataStringClaim(entity: WikidataEntity, property: string) {
+  return getWikidataStringClaims(entity, property)[0] ?? "";
+}
+
 function getWikidataVerifiedContactData(entity: WikidataEntity) {
   return {
     website: getWikidataStringClaim(entity, "P856"),
     phone: getWikidataStringClaim(entity, "P1329"),
     address: getWikidataStringClaim(entity, "P6375"),
   };
+}
+
+function getWikidataVerifiedReviewLinks(entity: WikidataEntity) {
+  const candidates: string[] = [];
+
+  getWikidataStringClaims(entity, "P3749").forEach((cid) => {
+    if (/^\d{14,20}$/.test(cid)) {
+      candidates.push(`https://www.google.com/maps?cid=${cid}`);
+    }
+  });
+
+  getWikidataStringClaims(entity, "P3134").forEach((id) => {
+    if (/^[1-9][0-9]{0,7}$/.test(id)) {
+      candidates.push(`https://www.tripadvisor.com/${id}`);
+    }
+  });
+
+  getWikidataStringClaims(entity, "P3108").forEach((id) => {
+    if (/^[A-Za-z0-9][A-Za-z0-9_-]{1,120}$/.test(id)) {
+      candidates.push(`https://www.yelp.com/biz/${encodeURIComponent(id)}`);
+    }
+  });
+
+  getWikidataStringClaims(entity, "P1968").forEach((id) => {
+    if (/^[0-9a-f]{24}$/i.test(id)) {
+      candidates.push(`https://www.foursquare.com/v/${id}`);
+    }
+  });
+
+  return dedupeReviewLinks(
+    candidates
+      .map((candidate) => getVerifiedReviewLinkFromUrl(candidate, "wikidata"))
+      .filter((link): link is OpenDataReviewLink => Boolean(link))
+  );
 }
 
 function getWikidataImageUrl(entity: WikidataEntity) {
@@ -1031,6 +1472,7 @@ async function enrichFromWikidataEntity(
   const label = getWikidataLabel(entity);
   const description = getWikidataDescription(entity);
   const contactData = getWikidataVerifiedContactData(entity);
+  const reviewLinks = getWikidataVerifiedReviewLinks(entity);
 
   if (!trusted) {
     if (normalizeText(label) !== normalizeText(name)) return null;
@@ -1079,7 +1521,13 @@ async function enrichFromWikidataEntity(
   const hasContactData =
     contactData.website || contactData.phone || contactData.address;
 
-  if (!finalDescription && !imageUrl && awards.length === 0 && !hasContactData) {
+  if (
+    !finalDescription &&
+    !imageUrl &&
+    awards.length === 0 &&
+    !hasContactData &&
+    reviewLinks.length === 0
+  ) {
     return null;
   }
 
@@ -1093,6 +1541,7 @@ async function enrichFromWikidataEntity(
     phone: contactData.phone,
     address: contactData.address,
     awards,
+    reviewLinks,
   };
 }
 
@@ -1194,6 +1643,7 @@ async function fetchWikipediaGeosearchEnrichment(
     phone: linkedEnrichment?.phone || "",
     address: linkedEnrichment?.address || "",
     awards: linkedEnrichment?.awards ?? [],
+    reviewLinks: linkedEnrichment?.reviewLinks ?? [],
   };
 }
 
@@ -1248,6 +1698,7 @@ async function fetchEncyclopediaEnrichment(
         phone: linkedEnrichment?.phone || "",
         address: linkedEnrichment?.address || "",
         awards: linkedEnrichment?.awards ?? [],
+        reviewLinks: linkedEnrichment?.reviewLinks ?? [],
       };
     }
   }
@@ -1327,6 +1778,10 @@ export async function enrichPlaceWithOpenData(
         website: wikipedia.website || enrichment.website,
         phone: wikipedia.phone || enrichment.phone,
         address: wikipedia.address || enrichment.address,
+        externalReviewLinks: dedupeReviewLinks([
+          ...enrichment.externalReviewLinks,
+          ...wikipedia.reviewLinks,
+        ]),
         wikipediaTitle: wikipedia.wikipediaTitle,
         wikipediaUrl: wikipedia.wikipediaUrl,
         guideAwards: wikipedia.awards,
@@ -1349,6 +1804,11 @@ export function hasUsefulOpenData(enrichment: OpenDataEnrichment) {
     enrichment.address.length > 0 ||
     enrichment.instagramUrl.length > 0 ||
     enrichment.facebookUrl.length > 0 ||
+    enrichment.externalReviewLinks.length > 0 ||
+    enrichment.reviewRatings.length > 0 ||
+    enrichment.guideAwards.length > 0 ||
+    enrichment.description.length > 0 ||
+    enrichment.imageUrl.length > 0 ||
     enrichment.outdoorSeating.length > 0 ||
     enrichment.wheelchair.length > 0 ||
     enrichment.takeaway.length > 0 ||
