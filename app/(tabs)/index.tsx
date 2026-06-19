@@ -37,11 +37,10 @@ const OVERPASS_ENDPOINTS = [
 ];
 
 type SearchMode = "nearby" | "city";
-type CarouselKey = "places" | "guides";
+type CarouselKey = "places";
 
 const CAROUSEL_STEP: Record<CarouselKey, number> = {
   places: 254,
-  guides: 232,
 };
 const HOME_DASHBOARD_LIMIT = 100;
 
@@ -403,35 +402,6 @@ function formatDistance(distanceMeters: number) {
   return `${(distanceMeters / 1000).toFixed(1)} km`;
 }
 
-function hasRealGuideSignal(tags: Record<string, string | undefined> | undefined) {
-  if (!tags) return false;
-
-  const meaningfulValues = [
-    tags.award,
-    tags.awards,
-    tags.guide,
-    tags["guide:michelin"],
-    tags.michelin,
-    tags["michelin:stars"],
-    tags["restaurant:guide"],
-    tags["source:guide"],
-    tags.source,
-    tags.description,
-    tags.note,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" ")
-    .toLowerCase();
-
-  return (
-    meaningfulValues.includes("michelin") ||
-    meaningfulValues.includes("gambero rosso") ||
-    meaningfulValues.includes("espresso") ||
-    meaningfulValues.includes("slow food") ||
-    meaningfulValues.includes("osterie d'italia") ||
-    meaningfulValues.includes("osterie d’italia")
-  );
-}
 
 function groupSuggestions(suggestions: CitySuggestion[]) {
   return {
@@ -614,7 +584,7 @@ async function fetchDashboardData(context: SearchContext) {
       latitude,
       longitude,
       categoryId: getCategoryId(categoryBase),
-      isGuideMentioned: hasRealGuideSignal(tags),
+      isGuideMentioned: false,
     });
   });
 
@@ -667,7 +637,6 @@ async function fetchDashboardData(context: SearchContext) {
   return {
     categories,
     places: sortedPlaces,
-    guidePlaces: sortedPlaces.filter((place) => place.isGuideMentioned),
   };
 }
 
@@ -805,16 +774,13 @@ export default function HomeScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [places, setPlaces] = useState<DashboardPlace[]>([]);
-  const [guidePlaces, setGuidePlaces] = useState<DashboardPlace[]>([]);
   const [savedPlaces, setSavedPlaces] = useState<DashboardPlace[]>([]);
   const placesScrollRef = useRef<ScrollView>(null);
-  const guideScrollRef = useRef<ScrollView>(null);
   const loadingPulse = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
   const styles = useMemo(() => createStyles(colors), [colors]);
   const carouselOffsets = useRef<Record<CarouselKey, number>>({
     places: 0,
-    guides: 0,
   });
 
   useFocusEffect(
@@ -959,7 +925,6 @@ export default function HomeScreen() {
     setSelectedCategoryId("all");
     setActiveThemeId(null);
     setPlaces([]);
-    setGuidePlaces([]);
 
     try {
       const dashboard = await fetchDashboardData(context);
@@ -968,7 +933,6 @@ export default function HomeScreen() {
         dashboard.categories.length > 1 ? dashboard.categories : defaultCategories
       );
       setPlaces(dashboard.places);
-      setGuidePlaces(dashboard.guidePlaces);
 
       if (dashboard.places.length === 0) {
         setMessage("Ho trovato pochi dati qui. Prova una zona più centrale.");
@@ -1069,7 +1033,6 @@ export default function HomeScreen() {
     setSelectedCategoryId("all");
     setCategories(categoriesForPlace);
     setPlaces([place]);
-    setGuidePlaces([]);
     Keyboard.dismiss();
     openPlaceDetail(place);
   }
@@ -1237,9 +1200,8 @@ export default function HomeScreen() {
     );
   }
 
-  function getCarouselRef(key: CarouselKey) {
-    if (key === "places") return placesScrollRef;
-    return guideScrollRef;
+  function getCarouselRef(_key: CarouselKey) {
+    return placesScrollRef;
   }
 
   function scrollCarousel(key: CarouselKey, direction: "left" | "right") {
@@ -1687,46 +1649,6 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {guidePlaces.length > 0 && (
-            <View style={styles.guidePanel}>
-              {renderCarouselControls("guides")}
-
-              <Text style={styles.guideKicker}>GUIDE E RICONOSCIMENTI</Text>
-              <Text style={styles.guideTitle}>Indirizzi da guardare meglio</Text>
-              <Text style={styles.guideText}>
-                Appaiono solo quando i tag reali contengono riferimenti a guide o
-                riconoscimenti.
-              </Text>
-
-              <ScrollView
-                ref={guideScrollRef}
-                horizontal
-                nestedScrollEnabled
-                directionalLockEnabled
-                showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                onScroll={handleCarouselScroll("guides")}
-                scrollEventThrottle={16}
-                contentContainerStyle={styles.guideRow}
-              >
-                {guidePlaces.map((place) => (
-                  <PressableScale
-                    key={place.id}
-                    style={styles.guidePlace}
-                    onPress={() => openPlaceDetail(place)}
-                  >
-                    <Text numberOfLines={2} style={styles.guidePlaceName}>
-                      {place.name}
-                    </Text>
-                    <Text numberOfLines={1} style={styles.guidePlaceMeta}>
-                      {place.category}
-                    </Text>
-                    <Text style={styles.guidePlaceDistance}>{place.distance}</Text>
-                  </PressableScale>
-                ))}
-              </ScrollView>
-            </View>
-          )}
         </Animated.View>
       )}
 
@@ -2294,69 +2216,6 @@ function createStyles(colors: MelloryThemeColors) {
     color: colors.cream,
     fontSize: 12,
     fontWeight: "900",
-  },
-  guidePanel: {
-    backgroundColor: colors.paper,
-    borderRadius: 30,
-    paddingVertical: 24,
-    paddingLeft: 24,
-    marginBottom: 14,
-    position: "relative",
-  },
-  guideKicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 12,
-    paddingRight: 24,
-  },
-  guideTitle: {
-    color: colors.paperText,
-    fontSize: 30,
-    lineHeight: 35,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 8,
-    paddingRight: 24,
-  },
-  guideText: {
-    color: colors.paperText,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 16,
-    paddingRight: 24,
-  },
-  guideRow: {
-    gap: 12,
-    paddingRight: 24,
-    paddingLeft: 0,
-  },
-  guidePlace: {
-    width: 220,
-    minHeight: 156,
-    borderRadius: 24,
-    backgroundColor: colors.paperText,
-    padding: 18,
-  },
-  guidePlaceName: {
-    color: colors.paper,
-    fontSize: 21,
-    lineHeight: 25,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 8,
-  },
-  guidePlaceMeta: {
-    color: colors.pink,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  guidePlaceDistance: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: "900",
-    marginTop: "auto",
   },
   zoneSection: {
     marginBottom: 18,
