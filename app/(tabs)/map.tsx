@@ -20,6 +20,7 @@ import {
   fetchCitySuggestions,
   fetchNearbyPlaces,
   fetchPlaceSuggestions,
+  hasPreciseCitySuggestion,
   hasGeoapifyApiKey,
 } from "@/services/geoapify";
 
@@ -407,6 +408,7 @@ function getUserLocationSuggestion(
     longitude,
     cityLabel: "La tua posizione",
     detailLabel: "Locali vicini a te",
+    kind: "area",
   };
 }
 
@@ -433,6 +435,7 @@ export default function MapScreen() {
 
   const params = useLocalSearchParams();
   const consumedParamsRef = useRef(false);
+  const previewAnim = useRef(new Animated.Value(0)).current;
 
   const sourcePlaces = mode === "saved" ? savedPlaces : searchedPlaces;
 
@@ -510,6 +513,7 @@ export default function MapScreen() {
       let isActive = true;
 
       async function loadSavedPlaces() {
+        setPreviewPlace(null);
         setIsLoadingSaved(true);
 
         const nextSavedPlaces = await readSavedMapPlaces();
@@ -560,12 +564,15 @@ export default function MapScreen() {
           fetchCitySuggestions(query),
           fetchPlaceSuggestions(query, origin),
         ]);
+        const visiblePlaceResults = hasPreciseCitySuggestion(query, cityResults)
+          ? []
+          : placeResults;
 
         if (!isActive) return;
 
         setCitySuggestions(cityResults);
         setPlaceSuggestions(
-          placeResults
+          visiblePlaceResults
             .map(nearbyPlaceToMapPlace)
             .filter((place): place is MapPlace => Boolean(place))
         );
@@ -597,6 +604,7 @@ export default function MapScreen() {
       return;
     }
 
+    setPreviewPlace(null);
     setMode("search");
     setSelectedCity(city);
     setSearchQuery(city.cityLabel);
@@ -643,6 +651,7 @@ export default function MapScreen() {
       return;
     }
 
+    setPreviewPlace(null);
     setMode("search");
     setSelectedCategory("Tutti");
     setCitySuggestions([]);
@@ -719,8 +728,10 @@ export default function MapScreen() {
       longitude: mapRegion.longitude,
       cityLabel: "Questa zona",
       detailLabel: "Locali intorno alla mappa",
+      kind: "area",
     };
 
+    setPreviewPlace(null);
     setMode("search");
     setSelectedCity(areaSuggestion);
     setSearchQuery(areaSuggestion.cityLabel);
@@ -764,8 +775,10 @@ export default function MapScreen() {
       longitude: place.longitude,
       cityLabel: place.name,
       detailLabel: place.detail,
+      kind: "area",
     };
 
+    setPreviewPlace(null);
     setMode("search");
     setSelectedCategory("Tutti");
     setSelectedCity(placeCenter);
@@ -789,19 +802,28 @@ export default function MapScreen() {
 
   async function handleSearchPress() {
     const query = searchQuery.trim();
+    setPreviewPlace(null);
 
     if (query.length < 3) {
       setErrorMessage("Scrivi almeno tre lettere per cercare una città.");
       return;
     }
 
-    if (citySuggestions.length > 0) {
+    if (
+      citySuggestions.length > 0 &&
+      hasPreciseCitySuggestion(query, citySuggestions)
+    ) {
       await searchPlacesAroundCity(citySuggestions[0]);
       return;
     }
 
     if (placeSuggestions.length > 0) {
       handlePlaceSuggestionPress(placeSuggestions[0]);
+      return;
+    }
+
+    if (citySuggestions.length > 0) {
+      await searchPlacesAroundCity(citySuggestions[0]);
       return;
     }
 
@@ -825,7 +847,9 @@ export default function MapScreen() {
         fetchCitySuggestions(query),
         fetchPlaceSuggestions(query, origin),
       ]);
-      const nextPlaces = placeResults
+      const hasExactCity = hasPreciseCitySuggestion(query, cityResults);
+      const visiblePlaceResults = hasExactCity ? [] : placeResults;
+      const nextPlaces = visiblePlaceResults
         .map(nearbyPlaceToMapPlace)
         .filter((place): place is MapPlace => Boolean(place));
 
@@ -834,12 +858,17 @@ export default function MapScreen() {
         return;
       }
 
-      if (cityResults[0]) {
+      if (hasExactCity && cityResults[0]) {
         await searchPlacesAroundCity(cityResults[0]);
         return;
       }
 
-      handlePlaceSuggestionPress(nextPlaces[0]);
+      if (nextPlaces[0]) {
+        handlePlaceSuggestionPress(nextPlaces[0]);
+        return;
+      }
+
+      await searchPlacesAroundCity(cityResults[0]);
     } catch {
       setErrorMessage("Non riesco a cercare questa città adesso.");
     } finally {
@@ -848,6 +877,7 @@ export default function MapScreen() {
   }
 
   async function refreshSavedPlaces() {
+    setPreviewPlace(null);
     setMode("saved");
     setErrorMessage("");
     setIsLoadingSaved(true);
@@ -864,6 +894,7 @@ export default function MapScreen() {
   const shouldShowAreaSearch = useMemo(() => {
     if (mode !== "search" || !mapRegion) return false;
     if (isMapLoading) return false;
+    if (previewPlace) return false;
 
     // Nessuna ricerca ancora fatta: appena la mappa si muove, permetti di
     // cercare la zona inquadrata.
@@ -878,9 +909,10 @@ export default function MapScreen() {
         lastSearchCenter.longitude
       ) > 40
     );
-  }, [isMapLoading, lastSearchCenter, mapRegion, mode]);
+  }, [isMapLoading, lastSearchCenter, mapRegion, mode, previewPlace]);
 
   const handleMapRegionChange = useCallback((region: MapRegionCenter) => {
+    setPreviewPlace(null);
     setMapRegion(region);
   }, []);
 
@@ -893,6 +925,19 @@ export default function MapScreen() {
       useNativeDriver: true,
     }).start();
   }, [areaSearchAnim, shouldShowAreaSearch]);
+
+  useEffect(() => {
+    if (!previewPlace) return;
+
+    previewAnim.setValue(0);
+    Animated.spring(previewAnim, {
+      toValue: 1,
+      damping: 18,
+      mass: 0.9,
+      stiffness: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [previewAnim, previewPlace]);
 
   // Arrivo dalla Home con una zona già scelta: la mappa la apre e la cerca.
   useEffect(() => {
@@ -924,6 +969,7 @@ export default function MapScreen() {
       longitude: longitudeParam,
       cityLabel: cityLabelParam,
       detailLabel: detailLabelParam,
+      kind: "city",
     });
     // searchPlacesAroundCity è stabile (function declaration); eseguiamo una volta.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -953,6 +999,7 @@ export default function MapScreen() {
             <TextInput
               value={searchQuery}
               onChangeText={(value) => {
+                setPreviewPlace(null);
                 setSearchQuery(value);
                 setMode("search");
                 setErrorMessage("");
@@ -961,7 +1008,7 @@ export default function MapScreen() {
                   setSelectedSearchLabel("");
                 }
               }}
-              placeholder="Cerca città o locale"
+              placeholder="Cerca località o locale"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="words"
               autoCorrect={false}
@@ -1007,7 +1054,7 @@ export default function MapScreen() {
                 <View>
                   <Text style={styles.suggestionGroupTitle}>Locali</Text>
 
-                  {placeSuggestions.slice(0, 6).map((place) => (
+                  {placeSuggestions.slice(0, 8).map((place) => (
                     <PressableScale
                       key={place.id}
                       style={styles.suggestionRow}
@@ -1031,7 +1078,7 @@ export default function MapScreen() {
               ) : null}
 
               {citySuggestions.length > 0 ? (
-                <Text style={styles.suggestionGroupTitle}>Citta e zone</Text>
+                <Text style={styles.suggestionGroupTitle}>Località</Text>
               ) : null}
 
               {citySuggestions.slice(0, 5).map((city) => (
@@ -1063,7 +1110,10 @@ export default function MapScreen() {
                 styles.modeButton,
                 mode === "search" && styles.modeButtonActive,
               ]}
-              onPress={() => setMode("search")}
+              onPress={() => {
+                setPreviewPlace(null);
+                setMode("search");
+              }}
             >
               <Text
                 style={[
@@ -1110,7 +1160,10 @@ export default function MapScreen() {
                     styles.categoryChip,
                     isActive && styles.categoryChipActive,
                   ]}
-                  onPress={() => setSelectedCategory(category)}
+                  onPress={() => {
+                    setPreviewPlace(null);
+                    setSelectedCategory(category);
+                  }}
                 >
                   <Text
                     style={[
@@ -1151,7 +1204,29 @@ export default function MapScreen() {
           />
 
           {previewPlace ? (
-            <View pointerEvents="box-none" style={styles.previewWrap}>
+            <Animated.View
+              pointerEvents="box-none"
+              style={[
+                styles.previewWrap,
+                {
+                  opacity: previewAnim,
+                  transform: [
+                    {
+                      translateY: previewAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [18, 0],
+                      }),
+                    },
+                    {
+                      scale: previewAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.96, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
               <PressableScale
                 style={styles.previewCard}
                 onPress={() => {
@@ -1199,7 +1274,7 @@ export default function MapScreen() {
                   <Text style={styles.previewCloseText}>×</Text>
                 </PressableScale>
               </PressableScale>
-            </View>
+            </Animated.View>
           ) : null}
 
           <Animated.View
@@ -1717,7 +1792,7 @@ const styles = StyleSheet.create({
   },
   searchAreaButtonWrap: {
     position: "absolute",
-    top: 14,
+    top: 76,
     left: 0,
     right: 0,
     alignItems: "center",

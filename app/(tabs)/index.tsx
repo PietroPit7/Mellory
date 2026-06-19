@@ -21,8 +21,10 @@ import {
   useMelloryTheme,
 } from "@/contexts/mellory-theme";
 import {
+  fetchCitySuggestions as fetchGeoapifyCitySuggestions,
   fetchNearbyPlaces as fetchGeoapifyNearbyPlaces,
   fetchPlaceSuggestions as fetchGeoapifyPlaceSuggestions,
+  hasPreciseCitySuggestion,
 } from "@/services/geoapify";
 import type { NearbyPlace as GeoapifyNearbyPlace } from "@/types/geoapify";
 
@@ -510,73 +512,7 @@ async function fetchCitySuggestions(query: string): Promise<CitySuggestion[]> {
   if (cleanedQuery.length < 3 || !hasGeoapifyApiKey()) return [];
 
   try {
-    const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(
-      cleanedQuery
-    )}&limit=7&lang=it&apiKey=${GEOAPIFY_API_KEY}`;
-
-    const response = await fetch(url);
-
-    if (!response.ok) return [];
-
-    const data = await response.json();
-
-    const features = Array.isArray(data.features)
-      ? (data.features as GeoapifyFeature[])
-      : [];
-
-    const suggestions = features
-      .map((feature: GeoapifyFeature, index: number): CitySuggestion | null => {
-        const properties = feature.properties;
-        const coordinates = feature.geometry?.coordinates;
-
-        const longitude = properties?.lon ?? coordinates?.[0];
-        const latitude = properties?.lat ?? coordinates?.[1];
-
-        if (latitude == null || longitude == null) return null;
-
-        const label =
-          properties?.city ||
-          properties?.municipality ||
-          properties?.suburb ||
-          properties?.county ||
-          properties?.formatted ||
-          cleanedQuery;
-
-        const detail =
-          properties?.formatted ||
-          [properties?.state, properties?.country]
-            .filter((part): part is string => Boolean(part))
-            .join(", ");
-
-        const resultType = properties?.result_type?.toLowerCase() ?? "";
-        const isArea =
-          Boolean(properties?.suburb || properties?.district) ||
-          resultType.includes("suburb") ||
-          resultType.includes("district");
-
-        return {
-          id: properties?.place_id || `${label}-${index}`,
-          label,
-          detail,
-          latitude,
-          longitude,
-          cityLabel: label,
-          detailLabel: detail || `Locali selezionati a ${label}`,
-          kind: isArea ? "area" : "city",
-        };
-      })
-      .filter(
-        (item: CitySuggestion | null): item is CitySuggestion => item !== null
-      );
-
-    const unique = new Map<string, CitySuggestion>();
-
-    suggestions.forEach((suggestion) => {
-      const key = `${suggestion.cityLabel.toLowerCase()}-${suggestion.detail.toLowerCase()}`;
-      if (!unique.has(key)) unique.set(key, suggestion);
-    });
-
-    return Array.from(unique.values());
+    return await fetchGeoapifyCitySuggestions(cleanedQuery);
   } catch {
     return [];
   }
@@ -952,11 +888,18 @@ export default function HomeScreen() {
         fetchCitySuggestions(query),
         fetchGeoapifyPlaceSuggestions(query, origin).catch(() => []),
       ]);
+      const visiblePlaceResults = hasPreciseCitySuggestion(query, suggestions)
+        ? []
+        : placeResults;
 
       if (isActive) {
         setCitySuggestions(suggestions);
-        setPlaceSuggestions(placeResults.map(geoapifyPlaceToDashboardPlace));
-        setShowSuggestions(suggestions.length > 0 || placeResults.length > 0);
+        setPlaceSuggestions(
+          visiblePlaceResults.map(geoapifyPlaceToDashboardPlace)
+        );
+        setShowSuggestions(
+          suggestions.length > 0 || visiblePlaceResults.length > 0
+        );
         setIsSuggesting(false);
       }
     }, 350);
@@ -1149,36 +1092,41 @@ export default function HomeScreen() {
         ? citySuggestions
         : await fetchCitySuggestions(query);
 
-    const firstSuggestion = suggestions[0];
+    const hasExactCity = hasPreciseCitySuggestion(query, suggestions);
+    const directPlaces = hasExactCity
+      ? []
+      : placeSuggestions.length > 0
+        ? placeSuggestions
+        : (
+            await fetchGeoapifyPlaceSuggestions(
+              query,
+              activeContext
+                ? {
+                    latitude: activeContext.latitude,
+                    longitude: activeContext.longitude,
+                  }
+                : undefined
+            ).catch(() => [])
+          ).map(geoapifyPlaceToDashboardPlace);
 
-    if (!firstSuggestion) {
-      const directPlaces =
-        placeSuggestions.length > 0
-          ? placeSuggestions
-          : (
-              await fetchGeoapifyPlaceSuggestions(
-                query,
-                activeContext
-                  ? {
-                      latitude: activeContext.latitude,
-                      longitude: activeContext.longitude,
-                    }
-                  : undefined
-              ).catch(() => [])
-            ).map(geoapifyPlaceToDashboardPlace);
-      const firstPlace = directPlaces[0];
-
-      setIsLoading(false);
-      if (firstPlace) {
-        handlePlaceSuggestionPress(firstPlace);
-        return;
-      }
-
-      setMessage("Non ho trovato una zona precisa. Prova con un nome più specifico.");
+    if (hasExactCity && suggestions[0]) {
+      await handleSuggestionPress(suggestions[0]);
       return;
     }
 
-    await handleSuggestionPress(firstSuggestion);
+    setIsLoading(false);
+
+    if (directPlaces[0]) {
+      handlePlaceSuggestionPress(directPlaces[0]);
+      return;
+    }
+
+    if (suggestions[0]) {
+      await handleSuggestionPress(suggestions[0]);
+      return;
+    }
+
+    setMessage("Non ho trovato una zona precisa. Prova con un nome più specifico.");
   }
 
   function openContextSearch() {
@@ -1229,7 +1177,7 @@ export default function HomeScreen() {
       <View style={styles.suggestionGroup}>
         <Text style={styles.suggestionGroupTitle}>Locali</Text>
 
-        {items.slice(0, 6).map((item) => (
+        {items.slice(0, 8).map((item) => (
           <PressableScale
             key={item.id}
             style={styles.suggestionItem}
@@ -1400,7 +1348,7 @@ export default function HomeScreen() {
                 setSelectedCityLabel("");
               }
             }}
-            placeholder="Cerca una città"
+            placeholder="Cerca località o locale"
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
             autoCorrect={false}
@@ -1449,8 +1397,8 @@ export default function HomeScreen() {
         {showSuggestions && (
           <View style={styles.suggestionsBox}>
             {renderPlaceSuggestionGroup(placeSuggestions)}
-            {renderSuggestionGroup("Città", groupedSuggestions.cities)}
-            {renderSuggestionGroup("Zone e dintorni", groupedSuggestions.areas)}
+            {renderSuggestionGroup("Località", groupedSuggestions.cities)}
+            {renderSuggestionGroup("Zone", groupedSuggestions.areas)}
           </View>
         )}
 
@@ -2651,4 +2599,3 @@ function createStyles(colors: MelloryThemeColors) {
   },
   });
 }
-

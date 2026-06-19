@@ -12,7 +12,8 @@ const GEOAPIFY_API_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY?.trim() ?? "";
 const AUTOCOMPLETE_ENDPOINT =
   "https://api.geoapify.com/v1/geocode/autocomplete";
 const PLACES_ENDPOINT = "https://api.geoapify.com/v2/places";
-const CITY_SUGGESTION_LIMIT = 8;
+const CITY_QUERY_RESULT_LIMIT = 12;
+const CITY_SUGGESTION_LIMIT = 4;
 const PLACE_SUGGESTION_LIMIT = 10;
 const PLACE_LIMIT = 120;
 const PLACE_RADIUS_METERS = 6500;
@@ -62,6 +63,15 @@ function cleanText(value: string | undefined) {
   return value.replace(/_/g, " ").replace(/;/g, ", ").trim();
 }
 
+function normalizeSearchText(value: string) {
+  return value
+    .toLocaleLowerCase("it")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function getNonEmptyParts(parts: (string | undefined)[]) {
   return parts.map(cleanText).filter((city): city is string => city.length > 0);
 }
@@ -109,6 +119,23 @@ function getCityDetail(properties: GeoapifyCityProperties | undefined) {
   return detailParts.join(", ") || cleanText(properties?.formatted);
 }
 
+function getCityKind(
+  properties: GeoapifyCityProperties | undefined
+): CitySuggestion["kind"] {
+  const resultType = cleanText(properties?.result_type).toLowerCase();
+
+  if (
+    resultType.includes("suburb") ||
+    resultType.includes("district") ||
+    resultType.includes("neighbourhood") ||
+    resultType.includes("county")
+  ) {
+    return "area";
+  }
+
+  return "city";
+}
+
 function toCitySuggestion(
   feature: GeoapifyFeature<GeoapifyCityProperties>,
   index: number,
@@ -124,6 +151,7 @@ function toCitySuggestion(
 
   const cityLabel = getCityLabel(properties) || fallbackLabel;
   const detailLabel = getCityDetail(properties) || "Citta selezionata";
+  const kind = getCityKind(properties);
 
   return {
     id:
@@ -135,28 +163,51 @@ function toCitySuggestion(
     longitude,
     cityLabel,
     detailLabel,
+    kind,
   };
 }
 
-function dedupeCitySuggestions(suggestions: CitySuggestion[]) {
+function getCitySuggestionScore(query: string, suggestion: CitySuggestion) {
+  const normalizedQuery = normalizeSearchText(query);
+  const normalizedLabel = normalizeSearchText(suggestion.cityLabel);
+  let score = 0;
+
+  if (normalizedLabel === normalizedQuery) score += 1000;
+  if (normalizedLabel.startsWith(normalizedQuery)) score += 240;
+  if (suggestion.kind === "city") score += 80;
+  if (normalizeSearchText(suggestion.detailLabel).includes("italia")) score += 16;
+
+  return score;
+}
+
+function dedupeCitySuggestions(query: string, suggestions: CitySuggestion[]) {
   const uniqueSuggestions = new Map<string, CitySuggestion>();
 
   suggestions.forEach((suggestion) => {
-    const key = [
-      suggestion.cityLabel,
-      suggestion.detailLabel,
-      suggestion.latitude.toFixed(4),
-      suggestion.longitude.toFixed(4),
-    ]
-      .join("|")
-      .toLowerCase();
+    const key = normalizeSearchText(suggestion.cityLabel);
+    const current = uniqueSuggestions.get(key);
 
-    if (!uniqueSuggestions.has(key)) {
+    if (
+      !current ||
+      getCitySuggestionScore(query, suggestion) > getCitySuggestionScore(query, current)
+    ) {
       uniqueSuggestions.set(key, suggestion);
     }
   });
 
-  return Array.from(uniqueSuggestions.values()).slice(0, CITY_SUGGESTION_LIMIT);
+  const sortedSuggestions = Array.from(uniqueSuggestions.values()).sort(
+    (firstSuggestion, secondSuggestion) =>
+      getCitySuggestionScore(query, secondSuggestion) -
+      getCitySuggestionScore(query, firstSuggestion)
+  );
+  const exactSuggestion = sortedSuggestions.find(
+    (suggestion) =>
+      normalizeSearchText(suggestion.cityLabel) === normalizeSearchText(query)
+  );
+
+  return exactSuggestion
+    ? [exactSuggestion]
+    : sortedSuggestions.slice(0, CITY_SUGGESTION_LIMIT);
 }
 
 function dedupePlaces(places: NearbyPlace[], limit: number) {
@@ -278,10 +329,13 @@ function toNearbyPlace(
 
   if (!name) return null;
 
-  const categories = Array.isArray(properties?.categories)
-    ? properties.categories
-    : [];
+  const categories = [
+    ...(Array.isArray(properties?.categories) ? properties.categories : []),
+    cleanText(properties?.category),
+  ].filter(Boolean);
   const categoryBase = getPlaceCategoryBase(categories);
+  if (categoryBase === "Luogo") return null;
+
   const category = getPlaceCategory(categories, categoryBase);
   const distanceMeters =
     typeof properties?.distance === "number"
@@ -324,7 +378,7 @@ export async function fetchCitySuggestions(query: string) {
   const apiKey = getGeoapifyApiKey();
   const url = `${AUTOCOMPLETE_ENDPOINT}?text=${encodeURIComponent(
     trimmedQuery
-  )}&type=city&limit=${CITY_SUGGESTION_LIMIT}&lang=it&format=geojson&apiKey=${encodeURIComponent(
+  )}&type=city&limit=${CITY_QUERY_RESULT_LIMIT}&lang=it&format=geojson&apiKey=${encodeURIComponent(
     apiKey
   )}`;
 
@@ -343,10 +397,23 @@ export async function fetchCitySuggestions(query: string) {
     .map((feature, index) => toCitySuggestion(feature, index, trimmedQuery))
     .filter((city): city is CitySuggestion => city !== null);
 
-  const uniqueSuggestions = dedupeCitySuggestions(suggestions);
+  const uniqueSuggestions = dedupeCitySuggestions(trimmedQuery, suggestions);
   citySuggestionsCache.set(cacheKey, uniqueSuggestions);
 
   return uniqueSuggestions;
+}
+
+export function hasPreciseCitySuggestion(
+  query: string,
+  suggestions: CitySuggestion[]
+) {
+  const normalizedQuery = normalizeSearchText(query);
+
+  return suggestions.some(
+    (suggestion) =>
+      suggestion.kind === "city" &&
+      normalizeSearchText(suggestion.cityLabel) === normalizedQuery
+  );
 }
 
 type NearbyPlacesOptions = {
@@ -376,12 +443,7 @@ function getBestTag(
 }
 
 function normalizePlaceName(name: string) {
-  return name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return normalizeSearchText(name);
 }
 
 function getOsmCategoryBase(tags: Record<string, string> | undefined) {

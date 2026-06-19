@@ -20,6 +20,8 @@ type MelloryMapCenter = {
   zoom: number;
 };
 
+type MelloryMapLayer = "streets" | "satellite";
+
 type MelloryMapProps = {
   markers: MelloryMapMarker[];
   center: MelloryMapCenter;
@@ -30,6 +32,87 @@ type MelloryMapProps = {
 const colors = melloryThemeVars;
 
 const MELLORY_SOURCE_ID = "mellory-places";
+const USER_ATTRIBUTION_TOGGLE_WINDOW_MS = 500;
+const MAP_LAYER_OPTIONS: { id: MelloryMapLayer; label: string }[] = [
+  { id: "streets", label: "Strade" },
+  { id: "satellite", label: "Satellite" },
+];
+const MIN_ZOOM = 3;
+const MAX_ZOOM = 18;
+
+function collapseAttributionControl(container: HTMLDivElement | null) {
+  container
+    ?.querySelector(".maplibregl-ctrl-attrib.maplibregl-compact-show")
+    ?.classList.remove("maplibregl-compact-show");
+}
+
+function setupAttributionControlGuard(container: HTMLDivElement | null) {
+  if (!container) return () => {};
+
+  let isUserToggling = false;
+  let resetUserToggleTimer: number | null = null;
+
+  const markUserToggle = () => {
+    isUserToggling = true;
+
+    if (resetUserToggleTimer !== null) {
+      window.clearTimeout(resetUserToggleTimer);
+    }
+
+    resetUserToggleTimer = window.setTimeout(() => {
+      isUserToggling = false;
+      resetUserToggleTimer = null;
+    }, USER_ATTRIBUTION_TOGGLE_WINDOW_MS);
+  };
+
+  const collapseIfAutomatic = () => {
+    if (!isUserToggling) {
+      collapseAttributionControl(container);
+    }
+  };
+
+  const handlePointerDown = (event: PointerEvent) => {
+    if (
+      event.target instanceof Element &&
+      event.target.closest(".maplibregl-ctrl-attrib-button")
+    ) {
+      markUserToggle();
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (
+      (event.key === "Enter" || event.key === " ") &&
+      event.target instanceof Element &&
+      event.target.closest(".maplibregl-ctrl-attrib-button")
+    ) {
+      markUserToggle();
+    }
+  };
+
+  const observer = new MutationObserver(collapseIfAutomatic);
+
+  observer.observe(container, {
+    attributes: true,
+    attributeFilter: ["class"],
+    childList: true,
+    subtree: true,
+  });
+
+  container.addEventListener("pointerdown", handlePointerDown, true);
+  container.addEventListener("keydown", handleKeyDown, true);
+  collapseIfAutomatic();
+
+  return () => {
+    if (resetUserToggleTimer !== null) {
+      window.clearTimeout(resetUserToggleTimer);
+    }
+
+    observer.disconnect();
+    container.removeEventListener("pointerdown", handlePointerDown, true);
+    container.removeEventListener("keydown", handleKeyDown, true);
+  };
+}
 
 function createPointElement(color: string, initial: string, title: string) {
   const element = document.createElement("button");
@@ -90,7 +173,10 @@ function createClusterElement(count: string) {
   return element;
 }
 
-const MELLORY_MAP_STYLE: StyleSpecification = {
+function createMelloryMapStyle(mapLayer: MelloryMapLayer): StyleSpecification {
+  const isSatellite = mapLayer === "satellite";
+
+  return {
   version: 8,
   sources: {
     streets: {
@@ -130,6 +216,9 @@ const MELLORY_MAP_STYLE: StyleSpecification = {
       id: "streets",
       type: "raster",
       source: "streets",
+      layout: {
+        visibility: isSatellite ? "none" : "visible",
+      },
       paint: {
         "raster-opacity": 0.78,
       },
@@ -138,6 +227,9 @@ const MELLORY_MAP_STYLE: StyleSpecification = {
       id: "satellite",
       type: "raster",
       source: "satellite",
+      layout: {
+        visibility: isSatellite ? "visible" : "none",
+      },
       paint: {
         "raster-opacity": 0.86,
         "raster-saturation": -0.18,
@@ -152,7 +244,23 @@ const MELLORY_MAP_STYLE: StyleSpecification = {
       },
     },
   ],
-};
+  };
+}
+
+function applyMapLayer(map: maplibregl.Map, mapLayer: MelloryMapLayer) {
+  if (!map.getLayer("streets") || !map.getLayer("satellite")) return;
+
+  map.setLayoutProperty(
+    "streets",
+    "visibility",
+    mapLayer === "satellite" ? "none" : "visible"
+  );
+  map.setLayoutProperty(
+    "satellite",
+    "visibility",
+    mapLayer === "satellite" ? "visible" : "none"
+  );
+}
 
 export default function MelloryMap({
   markers,
@@ -164,6 +272,7 @@ export default function MelloryMap({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRefs = useRef<maplibregl.Marker[]>([]);
   const initialCenterRef = useRef(center);
+  const [mapLayer, setMapLayer] = useState<MelloryMapLayer>("streets");
   const [hasMapError, setHasMapError] = useState(false);
 
   // La mappa viene creata una sola volta: ricrearla a ogni cambio di centro
@@ -177,7 +286,7 @@ export default function MelloryMap({
     try {
       mapRef.current = new maplibregl.Map({
         container: containerRef.current,
-        style: MELLORY_MAP_STYLE,
+        style: createMelloryMapStyle("streets"),
         center: [initialCenter.longitude, initialCenter.latitude],
         zoom: initialCenter.zoom,
         attributionControl: false,
@@ -187,24 +296,41 @@ export default function MelloryMap({
       return;
     }
 
-    mapRef.current.addControl(
-      new maplibregl.NavigationControl({ showCompass: false }),
-      "top-right"
-    );
-
     // Attribuzione OSM/CARTO/Esri: richiesta dalle licenze delle tile.
+    // In alto a sinistra così non finisce sotto la preview del locale.
     mapRef.current.addControl(
       new maplibregl.AttributionControl({ compact: true }),
-      "bottom-right"
+      "top-left"
+    );
+    const cleanupAttributionControlGuard = setupAttributionControlGuard(
+      containerRef.current
     );
 
     return () => {
+      cleanupAttributionControlGuard();
       markerRefs.current.forEach((marker) => marker.remove());
       markerRefs.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const updateLayer = () => applyMapLayer(map, mapLayer);
+
+    if (map.isStyleLoaded()) {
+      updateLayer();
+    } else {
+      map.once("load", updateLayer);
+    }
+
+    return () => {
+      map.off("load", updateLayer);
+    };
+  }, [mapLayer]);
 
   useEffect(() => {
     mapRef.current?.easeTo({
@@ -377,8 +503,80 @@ export default function MelloryMap({
     };
   }, [markers, onMarkerPress]);
 
+  function handleZoom(delta: number) {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const nextZoom = Math.max(
+      MIN_ZOOM,
+      Math.min(MAX_ZOOM, map.getZoom() + delta)
+    );
+
+    map.easeTo({ zoom: nextZoom, duration: 260 });
+  }
+
   return (
-    <div ref={containerRef} style={styles.frame}>
+    <div style={styles.frame}>
+      <div ref={containerRef} style={styles.mapCanvas} />
+
+      <div style={styles.controlDeck}>
+        <div style={styles.layerControl}>
+          {MAP_LAYER_OPTIONS.map((option) => {
+            const isActive = mapLayer === option.id;
+
+            return (
+              <button
+                key={option.id}
+                type="button"
+                title={`Mostra ${option.label}`}
+                style={{
+                  ...styles.layerButton,
+                  ...(isActive ? styles.layerButtonActive : {}),
+                }}
+                onClick={() => setMapLayer(option.id)}
+              >
+                <span
+                  style={{
+                    ...styles.layerSwatch,
+                    ...(option.id === "satellite"
+                      ? styles.layerSwatchSatellite
+                      : {}),
+                  }}
+                />
+                <span
+                  style={{
+                    ...styles.layerButtonText,
+                    ...(isActive ? styles.layerButtonTextActive : {}),
+                  }}
+                >
+                  {option.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={styles.zoomControl} aria-label="Controlli zoom">
+          <button
+            type="button"
+            title="Avvicina"
+            style={styles.zoomButton}
+            onClick={() => handleZoom(1)}
+          >
+            +
+          </button>
+          <div style={styles.zoomDivider} />
+          <button
+            type="button"
+            title="Allontana"
+            style={styles.zoomButton}
+            onClick={() => handleZoom(-1)}
+          >
+            -
+          </button>
+        </div>
+      </div>
+
       {hasMapError ? (
         <div style={styles.fallback}>
           <div style={styles.fallbackTitle}>Mappa non disponibile</div>
@@ -399,6 +597,102 @@ const styles = {
     borderRadius: 28,
     overflow: "hidden",
     backgroundColor: colors.black,
+  },
+  mapCanvas: {
+    position: "absolute",
+    inset: 0,
+  },
+  controlDeck: {
+    position: "absolute",
+    top: 14,
+    left: 14,
+    right: 14,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    pointerEvents: "none",
+    zIndex: 2,
+  },
+  layerControl: {
+    display: "flex",
+    gap: 4,
+    padding: 4,
+    borderRadius: 999,
+    border: "1px solid rgba(255,248,239,0.16)",
+    background: "rgba(7,6,4,0.74)",
+    boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
+    backdropFilter: "blur(10px)",
+    pointerEvents: "auto",
+  },
+  layerButton: {
+    minHeight: 38,
+    border: "0",
+    borderRadius: 999,
+    padding: "0 12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    background: "transparent",
+    color: colors.cream,
+    cursor: "pointer",
+    fontFamily:
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+  layerButtonActive: {
+    background: colors.paper,
+  },
+  layerSwatch: {
+    width: 13,
+    height: 13,
+    borderRadius: 999,
+    border: "1px solid rgba(7,6,4,0.18)",
+    background: colors.pink,
+    boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.42)",
+  },
+  layerSwatchSatellite: {
+    background:
+      "linear-gradient(135deg, #10261E 0%, #6C8D72 52%, #D9B66A 100%)",
+  },
+  layerButtonText: {
+    color: colors.cream,
+    fontSize: 12,
+    lineHeight: "16px",
+    fontWeight: 900,
+  },
+  layerButtonTextActive: {
+    color: colors.black,
+  },
+  zoomControl: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 42,
+    overflow: "hidden",
+    borderRadius: 18,
+    border: "1px solid rgba(255,248,239,0.16)",
+    background: "rgba(7,6,4,0.74)",
+    boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
+    backdropFilter: "blur(10px)",
+    pointerEvents: "auto",
+  },
+  zoomButton: {
+    width: 42,
+    height: 40,
+    border: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "transparent",
+    color: colors.cream,
+    cursor: "pointer",
+    fontSize: 22,
+    lineHeight: "22px",
+    fontWeight: 800,
+  },
+  zoomDivider: {
+    height: 1,
+    background: "rgba(255,248,239,0.14)",
   },
   fallback: {
     position: "absolute",

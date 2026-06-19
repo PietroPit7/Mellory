@@ -9,6 +9,7 @@ export type CitySuggestion = Coordinates & {
   detail: string;
   cityLabel: string;
   detailLabel: string;
+  kind: "city" | "area";
 };
 
 export type NearbyPlace = Coordinates & {

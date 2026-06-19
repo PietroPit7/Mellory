@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Camera,
   Map,
   Marker,
   type StyleSpecification,
 } from "@maplibre/maplibre-react-native";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { melloryThemeVars } from "@/contexts/mellory-theme";
 
@@ -25,6 +25,8 @@ type MelloryMapCenter = {
   zoom: number;
 };
 
+type MelloryMapLayer = "streets" | "satellite";
+
 type MelloryMapProps = {
   markers: MelloryMapMarker[];
   center: MelloryMapCenter;
@@ -33,8 +35,17 @@ type MelloryMapProps = {
 };
 
 const colors = melloryThemeVars;
+const MAP_LAYER_OPTIONS: { id: MelloryMapLayer; label: string }[] = [
+  { id: "streets", label: "Strade" },
+  { id: "satellite", label: "Satellite" },
+];
+const MIN_ZOOM = 3;
+const MAX_ZOOM = 18;
 
-const MELLORY_MAP_STYLE: StyleSpecification = {
+function createMelloryMapStyle(mapLayer: MelloryMapLayer): StyleSpecification {
+  const isSatellite = mapLayer === "satellite";
+
+  return {
   version: 8,
   sources: {
     streets: {
@@ -74,6 +85,9 @@ const MELLORY_MAP_STYLE: StyleSpecification = {
       id: "streets",
       type: "raster",
       source: "streets",
+      layout: {
+        visibility: isSatellite ? "none" : "visible",
+      },
       paint: {
         "raster-opacity": 0.78,
       },
@@ -82,6 +96,9 @@ const MELLORY_MAP_STYLE: StyleSpecification = {
       id: "satellite",
       type: "raster",
       source: "satellite",
+      layout: {
+        visibility: isSatellite ? "visible" : "none",
+      },
       paint: {
         "raster-opacity": 0.86,
         "raster-saturation": -0.18,
@@ -96,7 +113,8 @@ const MELLORY_MAP_STYLE: StyleSpecification = {
       },
     },
   ],
-};
+  };
+}
 
 export default function MelloryMap({
   markers,
@@ -105,14 +123,32 @@ export default function MelloryMap({
   onRegionChange,
 }: MelloryMapProps) {
   const [hasMapError, setHasMapError] = useState(false);
+  const [mapLayer, setMapLayer] = useState<MelloryMapLayer>("streets");
+  const [viewCenter, setViewCenter] = useState(center);
+  const mapStyle = useMemo(() => createMelloryMapStyle(mapLayer), [mapLayer]);
+
+  useEffect(() => {
+    setViewCenter({
+      latitude: center.latitude,
+      longitude: center.longitude,
+      zoom: center.zoom,
+    });
+  }, [center.latitude, center.longitude, center.zoom]);
+
+  function handleZoom(delta: number) {
+    setViewCenter((currentCenter) => ({
+      ...currentCenter,
+      zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentCenter.zoom + delta)),
+    }));
+  }
 
   return (
     <View style={styles.frame}>
       <Map
         style={styles.map}
-        mapStyle={MELLORY_MAP_STYLE}
+        mapStyle={mapStyle}
         logo={false}
-        compass
+        compass={false}
         attribution
         onDidFailLoadingMap={() => setHasMapError(true)}
         onRegionDidChange={(event) => {
@@ -125,16 +161,23 @@ export default function MelloryMap({
             return;
           }
 
-          onRegionChange?.({
+          const nextCenter = {
             latitude,
             longitude,
             zoom: event.nativeEvent.zoom,
+          };
+
+          setViewCenter(nextCenter);
+          onRegionChange?.({
+            latitude: nextCenter.latitude,
+            longitude: nextCenter.longitude,
+            zoom: nextCenter.zoom,
           });
         }}
       >
         <Camera
-          center={[center.longitude, center.latitude]}
-          zoom={center.zoom}
+          center={[viewCenter.longitude, viewCenter.latitude]}
+          zoom={viewCenter.zoom}
           duration={650}
         />
 
@@ -163,6 +206,62 @@ export default function MelloryMap({
         ))}
       </Map>
 
+      <View pointerEvents="box-none" style={styles.controlDeck}>
+        <View style={styles.layerControl}>
+          {MAP_LAYER_OPTIONS.map((option) => {
+            const isActive = mapLayer === option.id;
+
+            return (
+              <Pressable
+                key={option.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Mostra ${option.label}`}
+                style={[
+                  styles.layerButton,
+                  isActive && styles.layerButtonActive,
+                ]}
+                onPress={() => setMapLayer(option.id)}
+              >
+                <View
+                  style={[
+                    styles.layerSwatch,
+                    option.id === "satellite" && styles.layerSwatchSatellite,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.layerButtonText,
+                    isActive && styles.layerButtonTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.zoomControl}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Avvicina"
+            style={styles.zoomButton}
+            onPress={() => handleZoom(1)}
+          >
+            <Text style={styles.zoomButtonText}>+</Text>
+          </Pressable>
+          <View style={styles.zoomDivider} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Allontana"
+            style={styles.zoomButton}
+            onPress={() => handleZoom(-1)}
+          >
+            <Text style={styles.zoomButtonText}>-</Text>
+          </Pressable>
+        </View>
+      </View>
+
       {hasMapError ? (
         <View style={styles.fallback}>
           <Text style={styles.fallbackTitle}>Mappa non disponibile</Text>
@@ -185,6 +284,85 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  controlDeck: {
+    position: "absolute",
+    top: 14,
+    left: 14,
+    right: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  layerControl: {
+    flexDirection: "row",
+    gap: 4,
+    padding: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.16)",
+    backgroundColor: "rgba(7,6,4,0.74)",
+    boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
+  },
+  layerButton: {
+    minHeight: 38,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  layerButtonActive: {
+    backgroundColor: colors.paper,
+  },
+  layerSwatch: {
+    width: 13,
+    height: 13,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(7,6,4,0.18)",
+    backgroundColor: colors.pink,
+  },
+  layerSwatchSatellite: {
+    backgroundColor: "#6C8D72",
+  },
+  layerButtonText: {
+    color: colors.cream,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  layerButtonTextActive: {
+    color: colors.black,
+  },
+  zoomControl: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 42,
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.16)",
+    backgroundColor: "rgba(7,6,4,0.74)",
+    boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
+  },
+  zoomButton: {
+    width: 42,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  zoomButtonText: {
+    color: colors.cream,
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: "800",
+  },
+  zoomDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,248,239,0.14)",
   },
   marker: {
     width: 42,

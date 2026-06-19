@@ -474,6 +474,9 @@ type WikipediaEnrichment = {
   imageAttribution: string;
   wikipediaTitle: string;
   wikipediaUrl: string;
+  website: string;
+  phone: string;
+  address: string;
   awards: string[];
 };
 
@@ -499,6 +502,11 @@ type WikipediaSummary = {
   description: string;
   imageUrl: string;
   wikipediaUrl: string;
+  wikidataId: string;
+};
+
+type WikidataReference = {
+  snaks?: Record<string, unknown>;
 };
 
 async function fetchWikipediaSummaryByTitle(
@@ -529,6 +537,9 @@ async function fetchWikipediaSummaryByTitle(
     wikipediaUrl:
       cleanText(summary.content_urls?.desktop?.page) ||
       `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+    wikidataId: await fetchWikidataIdForWikipediaTitle(lang, title).catch(
+      () => ""
+    ),
   };
 }
 
@@ -538,37 +549,301 @@ function parseWikipediaTag(tag: string) {
   return { lang: WIKI_LANG, title: tag };
 }
 
+async function fetchWikidataIdForWikipediaTitle(lang: string, title: string) {
+  const url =
+    `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}` +
+    `&prop=pageprops&format=json&origin=*`;
+  const response = await fetch(url);
+  if (!response.ok) return "";
+
+  const data = (await response.json()) as {
+    query?: {
+      pages?: Record<string, { pageprops?: { wikibase_item?: string } }>;
+    };
+  };
+  const page = Object.values(data.query?.pages ?? {})[0];
+  const wikidataId = cleanText(page?.pageprops?.wikibase_item);
+
+  return /^Q\d+$/.test(wikidataId) ? wikidataId : "";
+}
+
 type WikidataClaim = {
   mainsnak?: { datavalue?: { value?: unknown } };
   qualifiers?: Record<string, { datavalue?: { value?: unknown } }[]>;
+  references?: WikidataReference[];
+  rank?: string;
 };
 
 type WikidataEntity = {
   id?: string;
   labels?: Record<string, { value?: string }>;
+  aliases?: Record<string, { value?: string }[]>;
   descriptions?: Record<string, { value?: string }>;
   sitelinks?: Record<string, { title?: string }>;
   claims?: Record<string, WikidataClaim[]>;
 };
 
-const GUIDE_AWARD_REGEX =
-  /michelin|gambero rosso|50 best|fifty best|50 top pizza|bib gourmand|tre forchette/i;
+type GuideAwardFamily = {
+  key: string;
+  label: string;
+  patterns: RegExp[];
+};
 
-function formatGuideAward(label: string, starCount: number) {
+const GUIDE_AWARD_FAMILIES: GuideAwardFamily[] = [
+  {
+    key: "michelin",
+    label: "Michelin",
+    patterns: [/\bmichelin\b/, /\bbib gourmand\b/],
+  },
+  {
+    key: "gambero-rosso",
+    label: "Gambero Rosso",
+    patterns: [
+      /\bgambero rosso\b/,
+      /\btre forchette\b/,
+      /\bthree forks\b/,
+      /\btre gamberi\b/,
+      /\bthree prawns\b/,
+      /\btre bicchieri\b/,
+    ],
+  },
+  {
+    key: "worlds-50-best",
+    label: "The World's 50 Best Restaurants",
+    patterns: [
+      /\bworlds 50 best\b/,
+      /\bworld s 50 best\b/,
+      /\b50 best restaurants\b/,
+      /\bfifty best restaurants\b/,
+      /\basia s 50 best\b/,
+      /\basias 50 best\b/,
+      /\blatin america s 50 best\b/,
+      /\blatin americas 50 best\b/,
+      /\bmiddle east north africa s 50 best\b/,
+      /\bmena 50 best\b/,
+    ],
+  },
+  {
+    key: "50-top-pizza",
+    label: "50 Top Pizza",
+    patterns: [/\b50 top pizza\b/, /\bfifty top pizza\b/],
+  },
+  {
+    key: "espresso",
+    label: "L'Espresso",
+    patterns: [
+      /\bl espresso\b/,
+      /\blespresso\b/,
+      /\bespresso guide\b/,
+      /\bristoranti d italia\b/,
+      /\bcappelli dell espresso\b/,
+    ],
+  },
+  {
+    key: "slow-food",
+    label: "Slow Food",
+    patterns: [/\bslow food\b/, /\bosterie d italia\b/, /\bchiocciola\b/],
+  },
+  {
+    key: "gault-millau",
+    label: "Gault&Millau",
+    patterns: [/\bgault millau\b/, /\bgault et millau\b/, /\bgaultmillau\b/],
+  },
+  {
+    key: "la-liste",
+    label: "La Liste",
+    patterns: [/\bla liste\b/],
+  },
+  {
+    key: "best-chef",
+    label: "The Best Chef Awards",
+    patterns: [/\bthe best chef\b/, /\bbest chef awards\b/],
+  },
+  {
+    key: "james-beard",
+    label: "James Beard Foundation",
+    patterns: [/\bjames beard\b/],
+  },
+  {
+    key: "forbes-travel-guide",
+    label: "Forbes Travel Guide",
+    patterns: [/\bforbes travel guide\b/],
+  },
+  {
+    key: "good-food-guide",
+    label: "Good Food Guide",
+    patterns: [/\bgood food guide\b/],
+  },
+  {
+    key: "aa-rosettes",
+    label: "AA Rosettes",
+    patterns: [/\baa rosette\b/, /\baa rosettes\b/],
+  },
+  {
+    key: "le-fooding",
+    label: "Le Fooding",
+    patterns: [/\ble fooding\b/],
+  },
+  {
+    key: "oad",
+    label: "OAD",
+    patterns: [/\bopinionated about dining\b/, /\boad\b/],
+  },
+  {
+    key: "falstaff",
+    label: "Falstaff",
+    patterns: [/\bfalstaff\b/],
+  },
+  {
+    key: "identita-golose",
+    label: "Identita Golose",
+    patterns: [/\bidentita golose\b/],
+  },
+  {
+    key: "zagat",
+    label: "Zagat",
+    patterns: [/\bzagat\b/],
+  },
+];
+
+function getGuideAwardFamily(label: string) {
+  const normalizedLabel = normalizeText(label);
+  if (!normalizedLabel) return null;
+
+  return (
+    GUIDE_AWARD_FAMILIES.find((family) =>
+      family.patterns.some((pattern) => pattern.test(normalizedLabel))
+    ) ?? null
+  );
+}
+
+function getWikidataAliases(entity: WikidataEntity) {
+  return Object.values(entity.aliases ?? {})
+    .flat()
+    .map((alias) => cleanText(alias.value))
+    .filter(Boolean);
+}
+
+function getWikidataAwardMatchText(entity: WikidataEntity) {
+  return [
+    getWikidataLabel(entity),
+    getWikidataDescription(entity),
+    ...getWikidataAliases(entity),
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function formatGuideAward(
+  label: string,
+  starCount: number,
+  familyKey?: string,
+  familyLabel?: string
+) {
   const lower = label.toLowerCase();
-  if (lower.includes("michelin")) {
+  const normalized = normalizeText(label);
+
+  if (familyKey === "michelin" || lower.includes("michelin")) {
     if (lower.includes("bib")) return "Michelin · Bib Gourmand";
+    if (lower.includes("green") || lower.includes("verde")) {
+      return "Michelin · Stella verde";
+    }
     if (starCount > 0) {
       return `Michelin · ${starCount} ${starCount === 1 ? "stella" : "stelle"}`;
     }
-    return "Michelin";
+    return "";
   }
-  return label;
+
+  if (familyKey === "gambero-rosso" && starCount > 0) {
+    if (normalized.includes("forchett") || normalized.includes("fork")) {
+      return `Gambero Rosso · ${starCount} ${
+        starCount === 1 ? "forchetta" : "forchette"
+      }`;
+    }
+    if (normalized.includes("gamber") || normalized.includes("prawn")) {
+      return `Gambero Rosso · ${starCount} ${
+        starCount === 1 ? "gambero" : "gamberi"
+      }`;
+    }
+    if (normalized.includes("bicchier") || normalized.includes("glass")) {
+      return `Gambero Rosso · ${starCount} ${
+        starCount === 1 ? "bicchiere" : "bicchieri"
+      }`;
+    }
+  }
+
+  return label || familyLabel || "";
+}
+
+type AwardRef = {
+  qid: string;
+  quantity: number;
+  year: number;
+  hasEnd: boolean;
+  hasReference: boolean;
+  rank: string;
+  label: string;
+};
+
+type GuideAwardRef = AwardRef & {
+  familyKey: string;
+  familyLabel: string;
+};
+
+function getQualifierYear(claim: WikidataClaim, property: string) {
+  const value = claim.qualifiers?.[property]?.[0]?.datavalue?.value as
+    | { time?: string }
+    | undefined;
+  if (!value?.time) return 0;
+  const year = parseInt(value.time.replace(/^[+-]/, "").slice(0, 4), 10);
+  return Number.isFinite(year) ? year : 0;
+}
+
+function getAwardYear(claim: WikidataClaim) {
+  return Math.max(
+    getQualifierYear(claim, "P585"),
+    getQualifierYear(claim, "P580")
+  );
+}
+
+function hasReliableClaimReference(claim: WikidataClaim) {
+  return (claim.references ?? []).some(
+    (reference) => Object.keys(reference.snaks ?? {}).length > 0
+  );
+}
+
+function formatAwardRef(ref: AwardRef) {
+  const guideRef = ref as Partial<GuideAwardRef>;
+
+  return formatGuideAward(
+    ref.label,
+    ref.quantity,
+    guideRef.familyKey,
+    guideRef.familyLabel
+  );
+}
+
+function getLatestCertainAwardRef(refs: AwardRef[]) {
+  const datedRefs = refs.filter(
+    (ref) => ref.year > 0 && ref.hasReference && ref.rank !== "deprecated"
+  );
+  if (datedRefs.length === 0) return null;
+
+  const latestYear = Math.max(...datedRefs.map((ref) => ref.year));
+  const latestRefs = datedRefs.filter((ref) => ref.year === latestYear);
+  const formattedAwards = new Set(
+    latestRefs.map(formatAwardRef).filter(Boolean)
+  );
+
+  if (formattedAwards.size !== 1) return null;
+
+  return latestRefs.find((ref) => ref.rank === "preferred") ?? latestRefs[0];
 }
 
 // Riconoscimenti di guida (Michelin, Gambero Rosso, 50 Best...) presi da
-// Wikidata (P166 "award received") con il numero di stelle dal qualificatore
-// P1114. Dati curati e verificati; restituisce solo le guide riconosciute.
+// Wikidata (P166 "award received") con il numero di stelle (P1114) e le date
+// (P585 data del riconoscimento / P580 inizio / P582 fine). Mostriamo solo
+// claim datati e con reference: senza fonte certa non mostriamo alcun badge.
 async function resolveGuideAwards(entity: WikidataEntity): Promise<string[]> {
   const awardClaims = entity.claims?.P166 ?? [];
   if (awardClaims.length === 0) return [];
@@ -584,9 +859,19 @@ async function resolveGuideAwards(entity: WikidataEntity): Promise<string[]> {
       const quantity = amount?.amount
         ? Math.abs(parseInt(amount.amount, 10)) || 0
         : 0;
-      return value?.id ? { qid: value.id, quantity } : null;
+      return value?.id
+        ? {
+            qid: value.id,
+            quantity,
+            year: getAwardYear(claim),
+            hasEnd: Boolean(claim.qualifiers?.P582?.length),
+            hasReference: hasReliableClaimReference(claim),
+            rank: claim.rank ?? "normal",
+            label: "",
+          }
+        : null;
     })
-    .filter((ref): ref is { qid: string; quantity: number } => ref !== null);
+    .filter((ref): ref is AwardRef => ref !== null);
 
   if (refs.length === 0) return [];
 
@@ -594,7 +879,9 @@ async function resolveGuideAwards(entity: WikidataEntity): Promise<string[]> {
   const url =
     `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids
       .map(encodeURIComponent)
-      .join("%7C")}&props=labels&languages=it%7Cen&format=json&origin=*`;
+      .join(
+        "%7C"
+      )}&props=labels%7Caliases%7Cdescriptions&languages=it%7Cen&format=json&origin=*`;
 
   const response = await fetch(url);
   if (!response.ok) return [];
@@ -603,15 +890,63 @@ async function resolveGuideAwards(entity: WikidataEntity): Promise<string[]> {
     entities?: Record<string, WikidataEntity>;
   };
 
+  const guides = refs
+    .map((ref) => {
+      const labelEntity = data.entities?.[ref.qid];
+      return { ...ref, label: labelEntity ? getWikidataLabel(labelEntity) : "" };
+    })
+    .map((ref) => {
+      const labelEntity = data.entities?.[ref.qid];
+      const family = getGuideAwardFamily(
+        labelEntity ? getWikidataAwardMatchText(labelEntity) : ref.label
+      );
+      return ref.year > 0 && ref.hasReference && family
+        ? {
+            ...ref,
+            familyKey: family.key,
+            familyLabel: family.label,
+          }
+        : null;
+    })
+    .filter((ref): ref is GuideAwardRef => ref !== null);
+
+  if (guides.length === 0) return [];
+
+  const isMichelinStar = (ref: GuideAwardRef) =>
+    ref.familyKey === "michelin" && !/bib/i.test(ref.label) && ref.quantity > 0;
+
   const awards: string[] = [];
 
-  refs.forEach((ref) => {
-    const labelEntity = data.entities?.[ref.qid];
-    const label = labelEntity ? getWikidataLabel(labelEntity) : "";
-    if (!label || !GUIDE_AWARD_REGEX.test(label)) return;
-    const formatted = formatGuideAward(label, ref.quantity);
-    if (!awards.includes(formatted)) awards.push(formatted);
-  });
+  // Michelin: solo la valutazione più recente (preferendo quelle ancora attive).
+  const michelinStars = guides.filter(isMichelinStar);
+  if (michelinStars.length > 0) {
+    const active = michelinStars.filter((ref) => !ref.hasEnd);
+    const pool = active.length > 0 ? active : michelinStars;
+    const latestMichelin = getLatestCertainAwardRef(pool);
+    const formatted = latestMichelin ? formatAwardRef(latestMichelin) : "";
+    if (formatted) awards.push(formatted);
+  } else {
+    const latestBibOrGreen = getLatestCertainAwardRef(
+      guides.filter(
+        (ref) =>
+          ref.familyKey === "michelin" &&
+          /bib|green|verde/i.test(ref.label)
+      )
+    );
+    const formatted = latestBibOrGreen ? formatAwardRef(latestBibOrGreen) : "";
+    if (formatted) awards.push(formatted);
+  }
+
+  // Altre guide importanti: una voce per famiglia, la più recente e certa.
+  GUIDE_AWARD_FAMILIES.filter((family) => family.key !== "michelin").forEach(
+    (family) => {
+      const latestAward = getLatestCertainAwardRef(
+        guides.filter((ref) => ref.familyKey === family.key)
+      );
+      const formatted = latestAward ? formatAwardRef(latestAward) : "";
+      if (formatted && !awards.includes(formatted)) awards.push(formatted);
+    }
+  );
 
   return awards;
 }
@@ -619,7 +954,7 @@ async function resolveGuideAwards(entity: WikidataEntity): Promise<string[]> {
 async function fetchWikidataEntity(qid: string): Promise<WikidataEntity | null> {
   const url =
     `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(qid)}` +
-    `&props=labels%7Cdescriptions%7Cclaims%7Csitelinks&languages=it%7Cen` +
+    `&props=labels%7Caliases%7Cdescriptions%7Cclaims%7Csitelinks&languages=it%7Cen` +
     `&sitefilter=itwiki%7Cenwiki&format=json&origin=*`;
   const response = await fetch(url);
   if (!response.ok) return null;
@@ -640,6 +975,30 @@ function getWikidataLabel(entity: WikidataEntity) {
   return (
     cleanText(entity.labels?.it?.value) || cleanText(entity.labels?.en?.value)
   );
+}
+
+function getWikidataStringClaim(entity: WikidataEntity, property: string) {
+  const value = entity.claims?.[property]?.[0]?.mainsnak?.datavalue?.value;
+
+  if (typeof value === "string") return cleanText(value);
+  if (
+    value &&
+    typeof value === "object" &&
+    "text" in value &&
+    typeof value.text === "string"
+  ) {
+    return cleanText(value.text);
+  }
+
+  return "";
+}
+
+function getWikidataVerifiedContactData(entity: WikidataEntity) {
+  return {
+    website: getWikidataStringClaim(entity, "P856"),
+    phone: getWikidataStringClaim(entity, "P1329"),
+    address: getWikidataStringClaim(entity, "P6375"),
+  };
 }
 
 function getWikidataImageUrl(entity: WikidataEntity) {
@@ -671,6 +1030,7 @@ async function enrichFromWikidataEntity(
 
   const label = getWikidataLabel(entity);
   const description = getWikidataDescription(entity);
+  const contactData = getWikidataVerifiedContactData(entity);
 
   if (!trusted) {
     if (normalizeText(label) !== normalizeText(name)) return null;
@@ -697,25 +1057,31 @@ async function enrichFromWikidataEntity(
   const linkTitle = itTitle || enTitle;
   const linkLang = itTitle ? "it" : "en";
 
-  if (linkTitle) {
-    const summary = await fetchWikipediaSummaryByTitle(linkLang, linkTitle).catch(
-      () => null
-    );
-    if (summary) {
-      finalDescription = summary.description || finalDescription;
-      imageUrl = imageUrl || summary.imageUrl;
-      wikipediaUrl = summary.wikipediaUrl;
-      sourceTitle = linkTitle;
-    }
+  // Riassunto Wikipedia e riconoscimenti in parallelo per andare più veloce.
+  const [summary, awards] = await Promise.all([
+    linkTitle
+      ? fetchWikipediaSummaryByTitle(linkLang, linkTitle).catch(() => null)
+      : Promise.resolve(null),
+    resolveGuideAwards(entity).catch(() => [] as string[]),
+  ]);
+
+  if (summary) {
+    finalDescription = summary.description || finalDescription;
+    imageUrl = imageUrl || summary.imageUrl;
+    wikipediaUrl = summary.wikipediaUrl;
+    sourceTitle = linkTitle as string;
   }
 
   if (!wikipediaUrl && entity.id) {
     wikipediaUrl = `https://www.wikidata.org/wiki/${entity.id}`;
   }
 
-  const awards = await resolveGuideAwards(entity).catch(() => [] as string[]);
+  const hasContactData =
+    contactData.website || contactData.phone || contactData.address;
 
-  if (!finalDescription && !imageUrl && awards.length === 0) return null;
+  if (!finalDescription && !imageUrl && awards.length === 0 && !hasContactData) {
+    return null;
+  }
 
   return {
     description: finalDescription,
@@ -723,6 +1089,9 @@ async function enrichFromWikidataEntity(
     imageAttribution: linkTitle ? "Wikipedia · CC BY-SA" : "Wikidata · CC0",
     wikipediaTitle: sourceTitle,
     wikipediaUrl,
+    website: contactData.website,
+    phone: contactData.phone,
+    address: contactData.address,
     awards,
   };
 }
@@ -803,13 +1172,28 @@ async function fetchWikipediaGeosearchEnrichment(
   if (!summary || (!summary.description && !summary.imageUrl)) return null;
   if (!looksLikeFoodVenue(summary.description)) return null;
 
+  const linkedEnrichment = summary.wikidataId
+    ? await enrichFromWikidataEntity(
+        await fetchWikidataEntity(summary.wikidataId).catch(() => null),
+        name,
+        latitude,
+        longitude,
+        true
+      ).catch(() => null)
+    : null;
+
   return {
     description: summary.description,
-    imageUrl: summary.imageUrl,
-    imageAttribution: "Wikipedia · CC BY-SA",
+    imageUrl: summary.imageUrl || linkedEnrichment?.imageUrl || "",
+    imageAttribution: summary.imageUrl
+      ? "Wikipedia · CC BY-SA"
+      : linkedEnrichment?.imageAttribution || "Wikipedia · CC BY-SA",
     wikipediaTitle: match.title,
     wikipediaUrl: summary.wikipediaUrl,
-    awards: [],
+    website: linkedEnrichment?.website || "",
+    phone: linkedEnrichment?.phone || "",
+    address: linkedEnrichment?.address || "",
+    awards: linkedEnrichment?.awards ?? [],
   };
 }
 
@@ -842,13 +1226,28 @@ async function fetchEncyclopediaEnrichment(
       () => null
     );
     if (summary && (summary.description || summary.imageUrl)) {
+      const linkedEnrichment = summary.wikidataId
+        ? await enrichFromWikidataEntity(
+            await fetchWikidataEntity(summary.wikidataId).catch(() => null),
+            name,
+            latitude,
+            longitude,
+            true
+          ).catch(() => null)
+        : null;
+
       return {
         description: summary.description,
-        imageUrl: summary.imageUrl,
-        imageAttribution: "Wikipedia · CC BY-SA",
+        imageUrl: summary.imageUrl || linkedEnrichment?.imageUrl || "",
+        imageAttribution: summary.imageUrl
+          ? "Wikipedia · CC BY-SA"
+          : linkedEnrichment?.imageAttribution || "Wikipedia · CC BY-SA",
         wikipediaTitle: title,
         wikipediaUrl: summary.wikipediaUrl,
-        awards: [],
+        website: linkedEnrichment?.website || "",
+        phone: linkedEnrichment?.phone || "",
+        address: linkedEnrichment?.address || "",
+        awards: linkedEnrichment?.awards ?? [],
       };
     }
   }
@@ -886,10 +1285,12 @@ export async function enrichPlaceWithOpenData(
   let osmTags: Record<string, string> = {};
 
   try {
-    const overpassElements = await fetchOverpassElements(
-      place.latitude as number,
-      place.longitude as number
-    );
+    const overpassElements = await Promise.race([
+      fetchOverpassElements(place.latitude as number, place.longitude as number),
+      new Promise<OverpassElement[]>((resolve) =>
+        setTimeout(() => resolve([]), 6000)
+      ),
+    ]);
 
     const bestOsmElement = findBestOsmElement(place, overpassElements);
 
@@ -923,6 +1324,9 @@ export async function enrichPlaceWithOpenData(
         imageUrl: wikipedia.imageUrl || enrichment.imageUrl,
         imageAttribution:
           wikipedia.imageAttribution || enrichment.imageAttribution,
+        website: wikipedia.website || enrichment.website,
+        phone: wikipedia.phone || enrichment.phone,
+        address: wikipedia.address || enrichment.address,
         wikipediaTitle: wikipedia.wikipediaTitle,
         wikipediaUrl: wikipedia.wikipediaUrl,
         guideAwards: wikipedia.awards,

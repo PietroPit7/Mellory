@@ -91,6 +91,52 @@ const WEEK_DAYS = [
   "Domenica",
 ];
 
+const EMPTY_GUIDE_AWARDS: string[] = [];
+
+type OpeningHoursRow = {
+  day: string;
+  dayIndex: number;
+  value: string;
+};
+
+const DAY_TOKEN_TO_INDEX: Record<string, number> = {
+  mo: 0,
+  mon: 0,
+  monday: 0,
+  lun: 0,
+  lunedi: 0,
+  tu: 1,
+  tue: 1,
+  tuesday: 1,
+  mar: 1,
+  martedi: 1,
+  we: 2,
+  wed: 2,
+  wednesday: 2,
+  mer: 2,
+  mercoledi: 2,
+  th: 3,
+  thu: 3,
+  thursday: 3,
+  gio: 3,
+  giovedi: 3,
+  fr: 4,
+  fri: 4,
+  friday: 4,
+  ven: 4,
+  venerdi: 4,
+  sa: 5,
+  sat: 5,
+  saturday: 5,
+  sab: 5,
+  sabato: 5,
+  su: 6,
+  sun: 6,
+  sunday: 6,
+  dom: 6,
+  domenica: 6,
+};
+
 function emptyHoursByDay() {
   return ["", "", "", "", "", "", ""];
 }
@@ -110,13 +156,29 @@ function composeOpeningHours(hoursByDay: string[]) {
 function getOpenNowState(hoursByDay: string[]): boolean | null {
   if (!Array.isArray(hoursByDay) || hoursByDay.length < 7) return null;
 
-  const now = new Date();
-  const dayIndex = (now.getDay() + 6) % 7;
-  const entry = (hoursByDay[dayIndex] ?? "").trim();
-  if (!entry) return null;
+  const entry = (hoursByDay[getCurrentWeekDayIndex()] ?? "").trim();
 
+  return getOpenNowStateFromHoursValue(entry);
+}
+
+function getCurrentWeekDayIndex() {
+  return (new Date().getDay() + 6) % 7;
+}
+
+function getOpenNowStateFromHoursValue(value: string): boolean | null {
+  const cleanValue = value.trim();
+  if (!cleanValue) return null;
+  if (isClosedOpeningHoursValue(cleanValue)) return false;
+  if (/^aperto 24 ore$/i.test(cleanValue) || /^24\/7$/i.test(cleanValue)) {
+    return true;
+  }
+
+  const now = new Date();
   const minutesNow = now.getHours() * 60 + now.getMinutes();
-  const ranges = entry.split(/[,;]/).map((part) => part.trim()).filter(Boolean);
+  const ranges = cleanValue
+    .split(/[,;/]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 
   let parsedAny = false;
 
@@ -490,11 +552,131 @@ function parseDelimitedList(value: string) {
     .filter(Boolean);
 }
 
-function getOpeningHoursRows(openingHours: string) {
-  return openingHours
+function normalizeDayToken(value: string) {
+  return value
+    .trim()
+    .replace(/\./g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function getDayIndex(value: string) {
+  return DAY_TOKEN_TO_INDEX[normalizeDayToken(value)] ?? null;
+}
+
+function expandDayRange(startIndex: number, endIndex: number) {
+  const days: number[] = [];
+  let currentIndex = startIndex;
+
+  while (true) {
+    days.push(currentIndex);
+    if (currentIndex === endIndex) break;
+    currentIndex = (currentIndex + 1) % WEEK_DAYS.length;
+  }
+
+  return days;
+}
+
+function getDayIndexes(expression: string) {
+  const indexes: number[] = [];
+  const chunks = expression
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+
+  chunks.forEach((chunk) => {
+    const [start, end] = chunk.split(/\s*[-–]\s*/);
+    const startIndex = getDayIndex(start);
+
+    if (startIndex === null) return;
+
+    if (!end) {
+      indexes.push(startIndex);
+      return;
+    }
+
+    const endIndex = getDayIndex(end);
+    if (endIndex === null) return;
+
+    indexes.push(...expandDayRange(startIndex, endIndex));
+  });
+
+  return Array.from(new Set(indexes));
+}
+
+function formatOpeningHoursValue(value: string) {
+  return value
+    .replace(/\b24\/7\b/gi, "Aperto 24 ore")
+    .replace(/\boff\b/gi, "Chiuso")
+    .replace(/\bclosed\b/gi, "Chiuso")
+    .replace(/\bopen\b/gi, "Aperto")
+    .replace(/\s*-\s*/g, " - ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isClosedOpeningHoursValue(value: string) {
+  return value.trim().toLowerCase() === "chiuso";
+}
+
+function getOpeningHoursRows(openingHours: string): OpeningHoursRow[] {
+  const cleanOpeningHours = openingHours.trim();
+
+  if (!cleanOpeningHours) return [];
+
+  if (/^24\/7$/i.test(cleanOpeningHours)) {
+    return WEEK_DAYS.map((day, dayIndex) => ({
+      day,
+      dayIndex,
+      value: "Aperto 24 ore",
+    }));
+  }
+
+  const dayValues = WEEK_DAYS.map(() => [] as string[]);
+  let hasDayRows = false;
+
+  cleanOpeningHours
     .split(";")
     .map((row) => row.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .forEach((row) => {
+      const match = row.match(
+        /^([A-Za-zÀ-ÿ]{2,9}(?:\s*[-–]\s*[A-Za-zÀ-ÿ]{2,9})?(?:\s*,\s*[A-Za-zÀ-ÿ]{2,9}(?:\s*[-–]\s*[A-Za-zÀ-ÿ]{2,9})?)*)\s+(.+)$/
+      );
+
+      if (!match) {
+        return;
+      }
+
+      const dayIndexes = getDayIndexes(match[1]);
+      const formattedValue = formatOpeningHoursValue(match[2]);
+
+      if (dayIndexes.length === 0 || !formattedValue) {
+        return;
+      }
+
+      hasDayRows = true;
+      dayIndexes.forEach((dayIndex) => {
+        dayValues[dayIndex].push(formattedValue);
+      });
+    });
+
+  if (!hasDayRows) return [];
+
+  return dayValues.map((values, index) => {
+    const uniqueValues = Array.from(new Set(values));
+
+    return {
+      day: WEEK_DAYS[index],
+      dayIndex: index,
+      value:
+        uniqueValues.length > 0
+          ? uniqueValues.join(" / ")
+          : "Chiuso",
+    };
+  });
 }
 
 function getEditorialRecognitionsFromParams(rawValue: string) {
@@ -939,8 +1121,11 @@ export default function PlaceDetailScreen() {
   const enrichedOpeningHours = openDataEnrichment?.openingHours || "";
   const enrichedAddress = openDataEnrichment?.address || "";
   const wikiDescription = openDataEnrichment?.description || "";
+  // Mostriamo la descrizione solo se è sostanziosa: evitiamo righe scarne tipo
+  // "ristorante in Italia".
+  const hasRichDescription = wikiDescription.trim().length >= 60;
   const wikiImageUrl = openDataEnrichment?.imageUrl || "";
-  const guideAwards = openDataEnrichment?.guideAwards ?? [];
+  const guideAwards = openDataEnrichment?.guideAwards ?? EMPTY_GUIDE_AWARDS;
   const routeAddress = hasUsablePlaceDetail(detail) ? detail.trim() : "";
   const automaticDetails = useMemo(
     () => ({
@@ -991,17 +1176,24 @@ export default function PlaceDetailScreen() {
   const hasWebsite = effectiveWebsite.length > 0;
   const hasPhone = effectivePhone.length > 0;
   const hasRealContacts = hasWebsite || hasPhone;
-  const hasRealHours = effectiveOpeningHours.length > 0;
   const openNowState = getOpenNowState(experience.personalDetails.hoursByDay);
   const hasDistance = distance.trim().length > 0 && distance !== "Distanza da te";
+  const cuisine = openDataEnrichment?.cuisine?.trim() || "";
   const infoRows = useMemo(
     () =>
       [
+        { label: "Cucina", value: cuisine, symbol: "✦" },
         { label: "Indirizzo o zona", value: displayDetails.address, symbol: "●" },
         { label: "Distanza", value: hasDistance ? distance : "", symbol: "↗" },
         { label: "Note pratiche", value: displayDetails.practicalNotes },
       ].filter((row) => row.value.trim().length > 0),
-    [displayDetails.address, displayDetails.practicalNotes, distance, hasDistance]
+    [
+      cuisine,
+      displayDetails.address,
+      displayDetails.practicalNotes,
+      distance,
+      hasDistance,
+    ]
   );
 
   useEffect(() => {
@@ -1053,22 +1245,53 @@ export default function PlaceDetailScreen() {
     () => getOpeningHoursRows(effectiveOpeningHours),
     [effectiveOpeningHours]
   );
+  const hasRealHours = openingHoursRows.length > 0;
+  const currentDayIndex = getCurrentWeekDayIndex();
+  const todayOpeningHoursRow = useMemo(
+    () =>
+      openingHoursRows.find((row) => row.dayIndex === currentDayIndex) ?? null,
+    [currentDayIndex, openingHoursRows]
+  );
+  const displayedOpenNowState =
+    openNowState ?? (todayOpeningHoursRow
+      ? getOpenNowStateFromHoursValue(todayOpeningHoursRow.value)
+      : null);
 
   const visibleOpeningHoursRows = isHoursExpanded
     ? openingHoursRows
-    : openingHoursRows.slice(0, 2);
+    : todayOpeningHoursRow
+      ? [todayOpeningHoursRow]
+      : [];
 
   const editorialRecognitionsFromParams = useMemo(
     () => getEditorialRecognitionsFromParams(editorialAwards),
     [editorialAwards]
   );
 
+  const verifiedRecognitions = useMemo<EditorialRecognition[]>(
+    () =>
+      guideAwards.map((award, index) => ({
+        id: `verified-${index}-${award}`,
+        title: award,
+        source: "Riconoscimento verificato",
+        url: "",
+        createdAt: "",
+        isUserAdded: false,
+      })),
+    [guideAwards]
+  );
+
   const allEditorialRecognitions = useMemo(
     () => [
+      ...verifiedRecognitions,
       ...editorialRecognitionsFromParams,
       ...experience.editorialRecognitions,
     ],
-    [editorialRecognitionsFromParams, experience.editorialRecognitions]
+    [
+      editorialRecognitionsFromParams,
+      experience.editorialRecognitions,
+      verifiedRecognitions,
+    ]
   );
 
   const activeStatuses = experience.statuses;
@@ -1640,6 +1863,22 @@ export default function PlaceDetailScreen() {
     if (!cleanPhone) return;
 
     Linking.openURL(`tel:${cleanPhone}`);
+  }
+
+  function serviceQuery() {
+    return encodeURIComponent(`${effectiveName} ${effectiveDetail}`.trim());
+  }
+
+  function openTripAdvisor() {
+    Linking.openURL(`https://www.tripadvisor.it/Search?q=${serviceQuery()}`);
+  }
+
+  function openTheFork() {
+    // TheFork non ha un endpoint di ricerca pubblico affidabile: usiamo una
+    // ricerca mirata che porta alla scheda del locale su TheFork.
+    Linking.openURL(
+      `https://www.google.com/search?q=${serviceQuery()}%20thefork`
+    );
   }
 
   function openEditorialRecognition(recognition: EditorialRecognition) {
@@ -2672,12 +2911,12 @@ export default function PlaceDetailScreen() {
               <View style={styles.hoursCard}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.hoursTitle}>Orari</Text>
-                  {openNowState !== null ? (
+                  {displayedOpenNowState !== null ? (
                     <View
                       style={[
                         styles.openNowChip,
                         {
-                          backgroundColor: openNowState
+                          backgroundColor: displayedOpenNowState
                             ? "rgba(111,147,75,0.18)"
                             : "rgba(129,122,116,0.18)",
                         },
@@ -2686,16 +2925,24 @@ export default function PlaceDetailScreen() {
                       <View
                         style={[
                           styles.openNowDot,
-                          { backgroundColor: openNowState ? colors.green : colors.muted },
+                          {
+                            backgroundColor: displayedOpenNowState
+                              ? colors.green
+                              : colors.muted,
+                          },
                         ]}
                       />
                       <Text
                         style={[
                           styles.openNowText,
-                          { color: openNowState ? colors.green : colors.muted },
+                          {
+                            color: displayedOpenNowState
+                              ? colors.green
+                              : colors.muted,
+                          },
                         ]}
                       >
-                        {openNowState ? "Aperto ora" : "Chiuso ora"}
+                        {displayedOpenNowState ? "Aperto ora" : "Chiuso ora"}
                       </Text>
                     </View>
                   ) : (
@@ -2704,10 +2951,17 @@ export default function PlaceDetailScreen() {
                 </View>
 
                 <View style={styles.hoursRows}>
-                  {visibleOpeningHoursRows.map((row) => (
-                    <Text key={row} style={styles.hoursText}>
-                      {row}
-                    </Text>
+                  {visibleOpeningHoursRows.map((row, index) => (
+                    <View
+                      key={`${row.day}-${row.value}-${index}`}
+                      style={styles.hoursDayRow}
+                    >
+                      <Text style={styles.hoursDayLabel}>{row.day}</Text>
+
+                      <Text style={styles.hoursText}>
+                        {row.value}
+                      </Text>
+                    </View>
                   ))}
                 </View>
 
@@ -2761,7 +3015,47 @@ export default function PlaceDetailScreen() {
             )}
           </Section>
 
-          {wikiDescription ? (
+          <Section title="TROVALO ONLINE">
+            <View style={styles.serviceRow}>
+              <PressableScale style={styles.serviceChip} onPress={openMaps}>
+                <View
+                  style={[styles.serviceDot, { backgroundColor: "#4285F4" }]}
+                />
+                <Text style={styles.serviceChipText}>Google Maps</Text>
+              </PressableScale>
+
+              <PressableScale
+                style={styles.serviceChip}
+                onPress={openTripAdvisor}
+              >
+                <View
+                  style={[styles.serviceDot, { backgroundColor: "#34E0A1" }]}
+                />
+                <Text style={styles.serviceChipText}>Tripadvisor</Text>
+              </PressableScale>
+
+              <PressableScale style={styles.serviceChip} onPress={openTheFork}>
+                <View
+                  style={[styles.serviceDot, { backgroundColor: "#1BA085" }]}
+                />
+                <Text style={styles.serviceChipText}>TheFork</Text>
+              </PressableScale>
+
+              {hasWebsite ? (
+                <PressableScale style={styles.serviceChip} onPress={openWebsite}>
+                  <View
+                    style={[
+                      styles.serviceDot,
+                      { backgroundColor: colors.gold },
+                    ]}
+                  />
+                  <Text style={styles.serviceChipText}>Sito ufficiale</Text>
+                </PressableScale>
+              ) : null}
+            </View>
+          </Section>
+
+          {hasRichDescription ? (
             <Section title="DESCRIZIONE">
               <View style={styles.descriptionCard}>
                 <Text style={styles.descriptionText}>{wikiDescription}</Text>
@@ -3374,6 +3668,32 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.3,
   },
+  serviceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  serviceChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    minHeight: 46,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    backgroundColor: colors.card2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  serviceDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  serviceChipText: {
+    color: colors.cream,
+    fontSize: 14,
+    fontWeight: "900",
+  },
   descriptionCard: {
     backgroundColor: colors.card2,
     borderRadius: 22,
@@ -3883,12 +4203,33 @@ const styles = StyleSheet.create({
   },
   hoursRows: {
     marginTop: 12,
-    gap: 8,
+    gap: 7,
+  },
+  hoursDayRow: {
+    minHeight: 42,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,248,239,0.045)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.07)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  hoursDayLabel: {
+    width: 88,
+    color: colors.cream,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
   },
   hoursText: {
+    flex: 1,
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 22,
+    fontWeight: "700",
   },
   weekButton: {
     alignSelf: "flex-start",
