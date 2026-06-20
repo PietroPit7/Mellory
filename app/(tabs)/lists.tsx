@@ -619,100 +619,195 @@ export default function ListsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.topRule} />
+      <View style={styles.safeTop} />
 
+      {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.kicker}>RACCOLTE</Text>
-          <Text style={styles.title}>Liste</Text>
-          <Text style={styles.subtitle}>
-            Organizza i posti che contano in raccolte personali, veloci da
-            aprire e facili da aggiornare.
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.heroCard}>
-        <View style={styles.heroTop}>
-          <View style={styles.heroMark}>
-            <Text style={styles.heroMarkText}>L</Text>
-          </View>
-
-          <Text style={styles.heroMeta}>ARCHIVIO ORDINATO</Text>
-        </View>
-
-        <Text style={styles.heroTitle}>
-          Le tue raccolte,{"\n"}la tua storia.
+        <Text style={styles.title}>Liste</Text>
+        <Text style={styles.stats}>
+          {totalPlaces} locali · {collections.length} raccolte
         </Text>
-
-        <View style={styles.heroStats}>
-          <View>
-            <Text style={styles.heroStatValue}>{collections.length}</Text>
-            <Text style={styles.heroStatLabel}>liste</Text>
-          </View>
-
-          <View style={styles.heroDivider} />
-
-          <View>
-            <Text style={styles.heroStatValue}>{totalPlaces}</Text>
-            <Text style={styles.heroStatLabel}>locali</Text>
-          </View>
-        </View>
       </View>
 
-      <View style={styles.collectionGrid}>
+      {/* Collection pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.pillRow}
+        style={styles.pillScroll}
+      >
         {collections.map((collection) => {
           const isSelected = selectedCollection?.id === collection.id;
-
           return (
             <PressableScale
               key={collection.id}
               style={[
-                styles.collectionCard,
+                styles.collectionPill,
                 isSelected && {
-                  borderColor: `${collection.color}AA`,
-                  backgroundColor: `${collection.color}16`,
+                  backgroundColor: `${collection.color}22`,
+                  borderColor: collection.color,
                 },
               ]}
               onPress={() => setSelectedCollectionId(collection.id)}
             >
-              <View
+              <Text
                 style={[
-                  styles.collectionIcon,
-                  { backgroundColor: `${collection.color}24` },
+                  styles.collectionPillIcon,
+                  { color: collection.color },
                 ]}
               >
-                <Text
-                  style={[styles.collectionIconText, { color: collection.color }]}
-                >
-                  {collection.icon}
-                </Text>
-              </View>
-
-              <View style={styles.collectionTextBlock}>
-                <Text numberOfLines={1} style={styles.collectionTitle}>
-                  {collection.title}
-                </Text>
-                <Text numberOfLines={2} style={styles.collectionSubtitle}>
-                  {collection.subtitle}
-                </Text>
-              </View>
-
-              <View style={styles.countBubble}>
-                <Text style={styles.countText}>{collection.count}</Text>
-              </View>
+                {collection.icon}
+              </Text>
+              <Text
+                style={[
+                  styles.collectionPillText,
+                  isSelected && { color: colors.cream },
+                ]}
+              >
+                {collection.title}
+              </Text>
+              <Text
+                style={[
+                  styles.collectionPillCount,
+                  isSelected && { color: collection.color },
+                ]}
+              >
+                {collection.count}
+              </Text>
             </PressableScale>
           );
         })}
-      </View>
+      </ScrollView>
 
-      <View style={styles.createCard}>
-        <View style={styles.createHeader}>
-          <View>
-            <Text style={styles.sectionKicker}>NUOVA LISTA</Text>
-            <Text style={styles.sectionTitle}>Crea una raccolta</Text>
+      {/* Selected collection detail */}
+      {selectedCollection && (
+        <>
+          <View style={styles.sectionRow}>
+            {selectedCollection.kind === "custom" &&
+            renamingListId === selectedCollection.customListId ? (
+              <View style={styles.renameRow}>
+                <TextInput
+                  value={renameTitle}
+                  onChangeText={setRenameTitle}
+                  placeholder="Nome lista"
+                  placeholderTextColor={colors.muted}
+                  style={styles.renameInput}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={saveRename}
+                />
+                <PressableScale style={styles.renameSaveButton} onPress={saveRename}>
+                  <Text style={styles.renameSaveText}>Salva</Text>
+                </PressableScale>
+                <PressableScale style={styles.renameCancelButton} onPress={cancelRename}>
+                  <Text style={styles.renameCancelText}>×</Text>
+                </PressableScale>
+              </View>
+            ) : (
+              <Text style={styles.sectionTitle}>{selectedCollection.title}</Text>
+            )}
+            <Text style={styles.sectionCount}>
+              {selectedCollection.count === 1
+                ? "1 locale"
+                : `${selectedCollection.count} locali`}
+            </Text>
           </View>
-        </View>
+
+          {selectedCollection.kind === "custom" &&
+          renamingListId !== selectedCollection.customListId ? (
+            <View style={styles.listActionsRow}>
+              <PressableScale style={styles.listActionButton} onPress={startRenameSelectedList}>
+                <Text style={styles.listActionText}>Rinomina</Text>
+              </PressableScale>
+              <PressableScale
+                style={styles.listActionButton}
+                onPress={() => moveSelectedList(-1)}
+              >
+                <Text style={styles.listActionText}>↑</Text>
+              </PressableScale>
+              <PressableScale
+                style={styles.listActionButton}
+                onPress={() => moveSelectedList(1)}
+              >
+                <Text style={styles.listActionText}>↓</Text>
+              </PressableScale>
+              <PressableScale style={styles.listActionDanger} onPress={deleteSelectedCustomList}>
+                <Text style={styles.listActionDangerText}>Elimina</Text>
+              </PressableScale>
+            </View>
+          ) : null}
+
+          {selectedPlaces.length > 0 ? (
+            <View style={styles.placeList}>
+              {selectedPlaces.map((place) => {
+                const placeStatus = place.status || selectedCollection.status;
+                const statusColor = placeStatus
+                  ? getStatusColor(placeStatus)
+                  : selectedCollection.color;
+
+                return (
+                  <PressableScale
+                    key={place.id}
+                    style={styles.placeRow}
+                    onPress={() => openPlaceDetail(place)}
+                  >
+                    <View
+                      style={[
+                        styles.placeAvatar,
+                        { backgroundColor: `${statusColor}18` },
+                      ]}
+                    >
+                      <Text style={[styles.placeAvatarText, { color: statusColor }]}>
+                        {getPlaceInitial(place.name)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.placeInfo}>
+                      <Text numberOfLines={1} style={styles.placeName}>
+                        {place.name}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.placeSub}>
+                        {place.category}
+                        {place.distance ? ` · ${place.distance}` : ""}
+                      </Text>
+                    </View>
+
+                    {selectedCollection.kind === "custom" ? (
+                      <PressableScale
+                        style={styles.removeButton}
+                        onPress={(event) => {
+                          event.stopPropagation?.();
+                          removePlaceFromCustomList(place.id);
+                        }}
+                      >
+                        <Text style={styles.removeText}>×</Text>
+                      </PressableScale>
+                    ) : (
+                      <Text style={styles.placeChevron}>›</Text>
+                    )}
+                  </PressableScale>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                Aggiungi locali dalla mappa o dalla scheda dettaglio.
+              </Text>
+              <PressableScale
+                style={styles.emptyButton}
+                onPress={() => router.push("/map" as never)}
+              >
+                <Text style={styles.emptyButtonText}>Apri la mappa</Text>
+              </PressableScale>
+            </View>
+          )}
+        </>
+      )}
+
+      {/* Create new list */}
+      <View style={styles.createCard}>
+        <Text style={styles.createTitle}>Nuova raccolta</Text>
 
         <TextInput
           value={draftTitle}
@@ -756,166 +851,6 @@ export default function ListsScreen() {
         </PressableScale>
       </View>
 
-      {selectedCollection && (
-        <View style={styles.detailSection}>
-          <View style={styles.detailHeader}>
-            <View style={styles.detailTitleBlock}>
-              <Text style={styles.sectionKicker}>LISTA APERTA</Text>
-
-              {selectedCollection.kind === "custom" &&
-              renamingListId === selectedCollection.customListId ? (
-                <View style={styles.renameRow}>
-                  <TextInput
-                    value={renameTitle}
-                    onChangeText={setRenameTitle}
-                    placeholder="Nome lista"
-                    placeholderTextColor={colors.muted}
-                    style={styles.renameInput}
-                    autoFocus
-                    returnKeyType="done"
-                    onSubmitEditing={saveRename}
-                  />
-                  <PressableScale
-                    style={styles.renameSaveButton}
-                    onPress={saveRename}
-                  >
-                    <Text style={styles.renameSaveText}>Salva</Text>
-                  </PressableScale>
-                  <PressableScale
-                    style={styles.renameCancelButton}
-                    onPress={cancelRename}
-                  >
-                    <Text style={styles.renameCancelText}>Annulla</Text>
-                  </PressableScale>
-                </View>
-              ) : (
-                <Text style={styles.detailTitle}>{selectedCollection.title}</Text>
-              )}
-
-              <Text style={styles.detailSubtitle}>
-                {selectedCollection.count === 1
-                  ? "1 locale salvato"
-                  : `${selectedCollection.count} locali salvati`}
-              </Text>
-            </View>
-          </View>
-
-          {selectedCollection.kind === "custom" &&
-          renamingListId !== selectedCollection.customListId ? (
-            <View style={styles.listActionsRow}>
-              <PressableScale
-                style={styles.listActionButton}
-                onPress={startRenameSelectedList}
-              >
-                <Text style={styles.listActionText}>Rinomina</Text>
-              </PressableScale>
-
-              <PressableScale
-                style={styles.listActionIcon}
-                onPress={() => moveSelectedList(-1)}
-                accessibilityLabel="Sposta su"
-              >
-                <Text style={styles.listActionIconText}>↑</Text>
-              </PressableScale>
-
-              <PressableScale
-                style={styles.listActionIcon}
-                onPress={() => moveSelectedList(1)}
-                accessibilityLabel="Sposta giù"
-              >
-                <Text style={styles.listActionIconText}>↓</Text>
-              </PressableScale>
-
-              <PressableScale
-                style={styles.listActionDanger}
-                onPress={deleteSelectedCustomList}
-              >
-                <Text style={styles.listActionDangerText}>Elimina</Text>
-              </PressableScale>
-            </View>
-          ) : null}
-
-          {selectedPlaces.length > 0 ? (
-            <View style={styles.placeList}>
-              {selectedPlaces.map((place) => {
-                const placeStatus = place.status || selectedCollection.status;
-                const statusColor = placeStatus
-                  ? getStatusColor(placeStatus)
-                  : selectedCollection.color;
-
-                return (
-                  <PressableScale
-                    key={place.id}
-                    style={styles.placeCard}
-                    onPress={() => openPlaceDetail(place)}
-                  >
-                    <View
-                      style={[
-                        styles.placeMark,
-                        { backgroundColor: `${statusColor}24` },
-                      ]}
-                    >
-                      <Text style={[styles.placeMarkText, { color: statusColor }]}>
-                        {getPlaceInitial(place.name)}
-                      </Text>
-                    </View>
-
-                    <View style={styles.placeBody}>
-                      <Text numberOfLines={1} style={styles.placeName}>
-                        {place.name}
-                      </Text>
-                      <Text numberOfLines={1} style={styles.placeCategory}>
-                        {place.category}
-                      </Text>
-                      <Text numberOfLines={1} style={styles.placeDetail}>
-                        {place.detail}
-                      </Text>
-
-                      <View style={styles.placeFooter}>
-                        <Text style={styles.placeDistance}>{place.distance}</Text>
-                        {placeStatus ? (
-                          <Text style={[styles.placeTag, { color: statusColor }]}>
-                            {getStatusLabel(placeStatus)}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </View>
-
-                    {selectedCollection.kind === "custom" ? (
-                      <PressableScale
-                        style={styles.removePlaceButton}
-                        onPress={(event) => {
-                          event.stopPropagation?.();
-                          removePlaceFromCustomList(place.id);
-                        }}
-                      >
-                        <Text style={styles.removePlaceText}>×</Text>
-                      </PressableScale>
-                    ) : (
-                      <Text style={styles.placeArrow}>›</Text>
-                    )}
-                  </PressableScale>
-                );
-              })}
-            </View>
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Lista pronta.</Text>
-              <Text style={styles.emptyText}>
-                Aggiungi locali dalla mappa o dalla scheda dettaglio per
-                ritrovarli qui.
-              </Text>
-              <PressableScale
-                style={styles.emptyButton}
-                onPress={() => router.push("/map" as never)}
-              >
-                <Text style={styles.emptyButtonText}>Apri la mappa</Text>
-              </PressableScale>
-            </View>
-          )}
-        </View>
-      )}
-
       <View style={styles.bottomSpace} />
     </ScrollView>
   );
@@ -927,195 +862,263 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
   },
   content: {
-    paddingHorizontal: 18,
-    paddingTop: 42,
+    paddingHorizontal: 20,
   },
-  topRule: {
-    width: 74,
-    height: 2,
-    backgroundColor: colors.gold,
-    marginBottom: 26,
+  safeTop: {
+    height: 16,
   },
   header: {
-    marginBottom: 22,
-  },
-  kicker: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 2.7,
-    marginBottom: 9,
+    marginBottom: 18,
   },
   title: {
     color: colors.cream,
-    fontSize: 48,
-    lineHeight: 52,
-    fontFamily: undefined,
-    fontWeight: "900",
-    letterSpacing: -1.2,
-    marginBottom: 10,
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 23,
-    maxWidth: 342,
-  },
-  heroCard: {
-    backgroundColor: colors.card,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.08)",
-    padding: 20,
-    marginBottom: 16,
-    overflow: "hidden",
-  },
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 22,
-  },
-  heroMark: {
-    width: 48,
-    height: 48,
-    borderRadius: 999,
-    backgroundColor: colors.pink,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroMarkText: {
-    color: colors.cream,
-    fontSize: 21,
-    fontFamily: undefined,
-    fontWeight: "900",
-  },
-  heroMeta: {
-    color: colors.gold,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 2,
-  },
-  heroTitle: {
-    color: colors.cream,
-    fontSize: 34,
-    lineHeight: 39,
-    fontFamily: undefined,
-    fontWeight: "900",
+    fontSize: 26,
+    fontWeight: "800",
     letterSpacing: -0.8,
+    marginBottom: 4,
+  },
+  stats: {
+    color: colors.muted,
+    fontSize: 14,
+  },
+  pillScroll: {
     marginBottom: 18,
   },
-  heroStats: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 18,
+  pillRow: {
+    gap: 8,
+    paddingRight: 20,
   },
-  heroStatValue: {
-    color: colors.cream,
-    fontSize: 27,
-    lineHeight: 31,
-    fontWeight: "900",
-  },
-  heroStatLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  heroDivider: {
-    width: 1,
+  collectionPill: {
     height: 40,
-    backgroundColor: "rgba(255,248,239,0.08)",
-  },
-  collectionGrid: {
-    gap: 10,
-    marginBottom: 18,
-  },
-  collectionCard: {
-    minHeight: 86,
-    borderRadius: 24,
+    borderRadius: 10,
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.08)",
-    padding: 14,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 13,
+    gap: 8,
   },
-  collectionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
+  collectionPillIcon: {
+    fontSize: 14,
+    fontWeight: "700",
   },
-  collectionIconText: {
-    fontSize: 18,
-    lineHeight: 22,
-    fontWeight: "900",
-  },
-  collectionTextBlock: {
-    flex: 1,
-  },
-  collectionTitle: {
-    color: colors.cream,
-    fontSize: 18,
-    lineHeight: 23,
-    fontWeight: "900",
-    marginBottom: 3,
-  },
-  collectionSubtitle: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  countBubble: {
-    minWidth: 34,
-    height: 34,
-    borderRadius: 999,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 8,
-  },
-  countText: {
-    color: colors.cream,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  createCard: {
-    backgroundColor: colors.card,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.08)",
-    padding: 18,
-    marginBottom: 22,
-  },
-  createHeader: {
-    marginBottom: 14,
-  },
-  sectionKicker: {
+  collectionPillText: {
     color: colors.muted,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 2.2,
-    marginBottom: 7,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  collectionPillCount: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  sectionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: 14,
   },
   sectionTitle: {
     color: colors.cream,
-    fontSize: 27,
-    lineHeight: 32,
-    fontFamily: undefined,
-    fontWeight: "900",
+    fontSize: 20,
+    fontWeight: "700",
+    letterSpacing: -0.4,
   },
-  input: {
-    minHeight: 50,
-    borderRadius: 16,
-    backgroundColor: colors.black,
+  sectionCount: {
+    color: colors.muted,
+    fontSize: 14,
+  },
+  listActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  listActionButton: {
+    height: 36,
+    borderRadius: 9,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  listActionText: {
     color: colors.cream,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  listActionDanger: {
+    height: 36,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "rgba(185,71,71,0.5)",
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: "auto",
+  },
+  listActionDangerText: {
+    color: colors.red,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  renameRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  renameInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.cream,
+    fontSize: 16,
+    fontWeight: "600",
+    paddingHorizontal: 12,
+  },
+  renameSaveButton: {
+    height: 40,
+    borderRadius: 9,
+    backgroundColor: colors.pink,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  renameSaveText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  renameCancelButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 9,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  renameCancelText: {
+    color: colors.muted,
+    fontSize: 20,
+    fontWeight: "400",
+  },
+  placeList: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+    marginBottom: 20,
+  },
+  placeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.softBorder,
+  },
+  placeAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  placeAvatarText: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  placeInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  placeName: {
+    color: colors.cream,
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  placeSub: {
+    color: colors.muted,
+    fontSize: 13,
+  },
+  placeChevron: {
+    color: colors.muted,
+    fontSize: 20,
+  },
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.black,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removeText: {
+    color: colors.muted,
+    fontSize: 20,
+    lineHeight: 22,
+  },
+  emptyCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 20,
+    marginBottom: 20,
+  },
+  emptyText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  emptyButton: {
+    backgroundColor: colors.cream,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  emptyButtonText: {
+    color: colors.black,
     fontSize: 15,
     fontWeight: "700",
+  },
+  createCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 18,
+    marginBottom: 20,
+  },
+  createTitle: {
+    color: colors.cream,
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 14,
+  },
+  input: {
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: colors.black,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.cream,
+    fontSize: 15,
+    fontWeight: "500",
     paddingHorizontal: 14,
     marginBottom: 10,
   },
@@ -1123,286 +1126,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginTop: 4,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   colorDot: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     borderWidth: 2,
     borderColor: "transparent",
   },
   colorDotActive: {
     borderColor: colors.cream,
-    transform: [{ scale: 1.08 }],
   },
   createButton: {
-    minHeight: 50,
-    borderRadius: 999,
+    height: 48,
+    borderRadius: 10,
     backgroundColor: colors.pink,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
   },
   createButtonDisabled: {
-    opacity: 0.44,
+    opacity: 0.4,
   },
   createButtonText: {
-    color: colors.cream,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  detailSection: {
-    marginBottom: 8,
-  },
-  detailHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 14,
-  },
-  detailTitleBlock: {
-    flex: 1,
-  },
-  detailTitle: {
-    color: colors.cream,
-    fontSize: 34,
-    lineHeight: 39,
-    fontFamily: undefined,
-    fontWeight: "900",
-    letterSpacing: -0.8,
-    marginBottom: 4,
-  },
-  detailSubtitle: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  deleteListButton: {
-    minHeight: 38,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(185,71,71,0.5)",
-    paddingHorizontal: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 22,
-  },
-  deleteListText: {
-    color: colors.red,
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  listActionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 16,
-  },
-  listActionButton: {
-    minHeight: 40,
-    borderRadius: 999,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.12)",
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  listActionText: {
-    color: colors.cream,
-    fontSize: 12.5,
-    fontWeight: "900",
-  },
-  listActionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  listActionIconText: {
-    color: colors.cream,
-    fontSize: 18,
-    lineHeight: 20,
-    fontWeight: "900",
-  },
-  listActionDanger: {
-    minHeight: 40,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(185,71,71,0.5)",
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: "auto",
-  },
-  listActionDangerText: {
-    color: colors.red,
-    fontSize: 12.5,
-    fontWeight: "900",
-  },
-  renameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 4,
-  },
-  renameInput: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: 14,
-    backgroundColor: colors.black,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.14)",
-    color: colors.cream,
-    fontSize: 18,
-    fontWeight: "800",
-    paddingHorizontal: 12,
-  },
-  renameSaveButton: {
-    minHeight: 46,
-    borderRadius: 999,
-    backgroundColor: colors.pink,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  renameSaveText: {
-    color: colors.cream,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  renameCancelButton: {
-    minHeight: 46,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  renameCancelText: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  placeList: {
-    gap: 10,
-  },
-  placeCard: {
-    minHeight: 116,
-    borderRadius: 24,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.08)",
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  placeMark: {
-    width: 50,
-    height: 50,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeMarkText: {
-    fontSize: 19,
-    fontFamily: undefined,
-    fontWeight: "900",
-  },
-  placeBody: {
-    flex: 1,
-  },
-  placeName: {
-    color: colors.cream,
-    fontSize: 18,
-    lineHeight: 23,
-    fontWeight: "900",
-    marginBottom: 3,
-  },
-  placeCategory: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  placeDetail: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 17,
-    marginBottom: 9,
-  },
-  placeFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-  },
-  placeDistance: {
-    color: colors.gold,
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  placeTag: {
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  placeArrow: {
-    color: colors.pink,
-    fontSize: 28,
-    fontWeight: "900",
-  },
-  removePlaceButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 999,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  removePlaceText: {
-    color: colors.muted,
-    fontSize: 25,
-    lineHeight: 28,
+    color: "#fff",
+    fontSize: 15,
     fontWeight: "700",
-  },
-  emptyCard: {
-    backgroundColor: colors.card,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.08)",
-    padding: 20,
-  },
-  emptyTitle: {
-    color: colors.cream,
-    fontSize: 26,
-    lineHeight: 31,
-    fontFamily: undefined,
-    fontWeight: "900",
-    marginBottom: 8,
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  emptyButton: {
-    minHeight: 48,
-    borderRadius: 999,
-    backgroundColor: colors.cream,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyButtonText: {
-    color: colors.black,
-    fontSize: 14,
-    fontWeight: "900",
   },
   bottomSpace: {
     height: 122,
