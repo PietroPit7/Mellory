@@ -1187,8 +1187,9 @@ export default function HomeScreen() {
   }
 
   return (
+    <View style={styles.screen}>
     <ScrollView
-      style={styles.screen}
+      style={styles.scrollFill}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
@@ -1309,6 +1310,14 @@ export default function HomeScreen() {
                         setActiveThemeId(null);
                       }}
                     >
+                      <Text
+                        style={[
+                          styles.filterPillIcon,
+                          isSelected && styles.filterPillIconSelected,
+                        ]}
+                      >
+                        {category.icon}
+                      </Text>
                       <Text
                         style={[
                           styles.filterPillText,
@@ -1432,6 +1441,17 @@ export default function HomeScreen() {
 
       <View style={styles.bottomSpace} />
     </ScrollView>
+
+    {hasDashboard && hasPlaces && (
+      <PressableScale
+        style={[styles.floatingMapPill, { bottom: insets.bottom + 68 }]}
+        onPress={openContextSearch}
+      >
+        <Text style={styles.floatingMapPillIcon}>⊞</Text>
+        <Text style={styles.floatingMapPillText}>Mappa</Text>
+      </PressableScale>
+    )}
+    </View>
   );
 }
 
@@ -1441,8 +1461,36 @@ function createStyles(colors: MelloryThemeColors) {
       flex: 1,
       backgroundColor: colors.black,
     },
+    scrollFill: {
+      flex: 1,
+    },
     content: {
       paddingHorizontal: 20,
+    },
+    floatingMapPill: {
+      position: "absolute",
+      alignSelf: "center",
+      left: "50%",
+      transform: [{ translateX: -54 }],
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      height: 40,
+      paddingHorizontal: 18,
+      borderRadius: 22,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.softBorder,
+    },
+    floatingMapPillIcon: {
+      color: colors.pink,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    floatingMapPillText: {
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "700",
     },
     safeTop: {
       height: 16,
@@ -1610,13 +1658,22 @@ function createStyles(colors: MelloryThemeColors) {
       backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.border,
-      paddingHorizontal: 14,
+      paddingHorizontal: 12,
+      flexDirection: "row",
       justifyContent: "center",
       alignItems: "center",
+      gap: 5,
     },
     filterPillSelected: {
       backgroundColor: colors.cream,
       borderColor: colors.cream,
+    },
+    filterPillIcon: {
+      color: colors.pink,
+      fontSize: 12,
+    },
+    filterPillIconSelected: {
+      color: colors.black,
     },
     filterPillText: {
       color: colors.cream,

@@ -398,6 +398,54 @@ function getDistanceMeters(
   return Math.round(earthRadiusMeters * c);
 }
 
+function DotsLoader() {
+  const dot1 = useRef(new Animated.Value(0.2)).current;
+  const dot2 = useRef(new Animated.Value(0.2)).current;
+  const dot3 = useRef(new Animated.Value(0.2)).current;
+  const dot4 = useRef(new Animated.Value(0.2)).current;
+
+  useEffect(() => {
+    const all = [dot1, dot2, dot3, dot4];
+    const anims = all.map((dot, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 140),
+          Animated.timing(dot, { toValue: 1, duration: 230, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.2, duration: 300, useNativeDriver: true }),
+          Animated.delay(Math.max(0, (3 - i) * 140) + 60),
+        ])
+      )
+    );
+    anims.forEach((a) => a.start());
+    return () => anims.forEach((a) => a.stop());
+  }, [dot1, dot2, dot3, dot4]);
+
+  return (
+    <View style={dotsStyles.row}>
+      {([dot1, dot2, dot3, dot4] as Animated.Value[]).map((dot, i) => (
+        <Animated.View key={i} style={[dotsStyles.dot, { opacity: dot }]} />
+      ))}
+    </View>
+  );
+}
+
+const dotsStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    gap: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 22,
+    backgroundColor: "rgba(7,6,4,0.84)",
+  },
+  dot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.cream,
+  },
+});
+
 function getMapCenter(places: MapPlace[], selectedCity: CitySuggestion | null) {
   if (selectedCity) {
     return {
@@ -972,15 +1020,18 @@ export default function MapScreen() {
     setMapRegion(region);
   }, []);
 
-  const areaSearchAnim = useRef(new Animated.Value(0)).current;
+  // Auto-search when map settles on a new area
+  const searchAroundRegionRef = useRef<() => void>(() => {});
+  searchAroundRegionRef.current = () => {
+    if (!isMapLoading && mapRegion) void searchPlacesAroundMapRegion();
+  };
 
   useEffect(() => {
-    Animated.timing(areaSearchAnim, {
-      toValue: shouldShowAreaSearch ? 1 : 0,
-      duration: 260,
-      useNativeDriver: true,
-    }).start();
-  }, [areaSearchAnim, shouldShowAreaSearch]);
+    if (!shouldShowAreaSearch) return;
+    const timer = setTimeout(() => searchAroundRegionRef.current(), 750);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldShowAreaSearch, mapRegion]);
 
   useEffect(() => {
     if (!previewPlace) return;
@@ -1042,32 +1093,12 @@ export default function MapScreen() {
         fullScreen
       />
 
-      {/* Loading overlay */}
+      {/* Dots loader — centered on map while loading */}
       {isMapLoading ? (
-        <View style={styles.mapLoadingOverlay}>
-          <ActivityIndicator color={colors.yellow} />
-          <Text style={styles.mapLoadingText}>
-            {isLocatingUser ? "Trovo la tua zona..." : mode === "saved" ? "Preparo i tuoi luoghi..." : "Cerco locali..."}
-          </Text>
+        <View style={styles.mapDotsCenter} pointerEvents="none">
+          <DotsLoader />
         </View>
       ) : null}
-
-      {/* Area search button — floats in the center of visible map */}
-      <Animated.View
-        pointerEvents={shouldShowAreaSearch ? "box-none" : "none"}
-        style={[
-          styles.searchAreaButtonWrap,
-          {
-            opacity: areaSearchAnim,
-            transform: [{ translateY: areaSearchAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }],
-          },
-        ]}
-      >
-        <PressableScale style={styles.searchAreaButton} onPress={searchPlacesAroundMapRegion}>
-          <View style={styles.searchAreaDot} />
-          <Text style={styles.searchAreaButtonText}>Cerca in questa zona</Text>
-        </PressableScale>
-      </Animated.View>
 
       {/* Top controls overlay */}
       <View style={[styles.topOverlay, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
@@ -1295,14 +1326,8 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.black },
 
-  // Full-screen map overlays
-  mapLoadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(7,6,4,0.5)", alignItems: "center", justifyContent: "center", gap: 12, zIndex: 5 },
-  mapLoadingText: { color: colors.cream, fontSize: 14, fontWeight: "600" },
-
-  searchAreaButtonWrap: { position: "absolute", top: "42%", left: 0, right: 0, alignItems: "center", zIndex: 6 },
-  searchAreaButton: { height: 38, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.softBorder, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 8, shadowColor: "#000", shadowOpacity: 0.24, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
-  searchAreaDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.pink },
-  searchAreaButtonText: { color: colors.cream, fontSize: 13, fontWeight: "600" },
+  // Dots loading indicator
+  mapDotsCenter: { position: "absolute", top: "42%", left: 0, right: 0, alignItems: "center", zIndex: 6 },
 
   // Top floating controls
   topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, paddingHorizontal: 12 },
