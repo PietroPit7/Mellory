@@ -21,6 +21,12 @@ export type MelloryMapProps = {
   center: MelloryMapCenter;
   onMarkerPress: (placeId: string) => void;
   onRegionChange?: (center: MelloryMapCenter) => void;
+  onPoiPress?: (poi: {
+    name: string;
+    placeId: string;
+    latitude: number;
+    longitude: number;
+  }) => void;
   fullScreen?: boolean;
 };
 

@@ -1020,6 +1020,51 @@ export default function MapScreen() {
     setMapRegion(region);
   }, []);
 
+  const handlePoiPress = useCallback(
+    (poi: { name: string; placeId: string; latitude: number; longitude: number }) => {
+      const quickId = poi.placeId || `poi-${poi.latitude.toFixed(6)}-${poi.longitude.toFixed(6)}`;
+      const quickPlace: MapPlace = {
+        id: quickId,
+        name: poi.name,
+        category: "Locale",
+        categoryBase: "Locale",
+        detail: "",
+        distance: "",
+        distanceMeters: 0,
+        website: "",
+        phone: "",
+        openingHours: "",
+        editorialAwards: "",
+        latitude: poi.latitude,
+        longitude: poi.longitude,
+        statuses: [],
+        coverImageUri: "",
+        note: "",
+      };
+      setPreviewPlace(quickPlace);
+
+      if (!hasGeoapifyApiKey()) return;
+
+      void (async () => {
+        try {
+          const results = await fetchPlaceSuggestions(poi.name, {
+            latitude: poi.latitude,
+            longitude: poi.longitude,
+          });
+          const best = results[0] ? nearbyPlaceToMapPlace(results[0]) : null;
+          if (!best) return;
+          setPreviewPlace((current) => {
+            if (!current || current.id !== quickId) return current;
+            return mergeMapPlaces(quickPlace, { ...best, id: quickId, name: poi.name });
+          });
+        } catch {
+          // silently ignore enrichment failures
+        }
+      })();
+    },
+    []
+  );
+
   // Auto-search when map settles on a new area
   const searchAroundRegionRef = useRef<() => void>(() => {});
   searchAroundRegionRef.current = () => {
@@ -1090,6 +1135,7 @@ export default function MapScreen() {
         center={mapCenter}
         onMarkerPress={handleMarkerPress}
         onRegionChange={handleMapRegionChange}
+        onPoiPress={handlePoiPress}
         fullScreen
       />
 

@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Camera,
-  Map,
+import { useEffect, useRef, useState } from "react";
+import MapView, {
   Marker,
-  type StyleSpecification,
-} from "@maplibre/maplibre-react-native";
+  PROVIDER_DEFAULT,
+  type Region,
+} from "react-native-maps";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { melloryThemeVars } from "@/contexts/mellory-theme";
@@ -32,89 +31,25 @@ type MelloryMapProps = {
   center: MelloryMapCenter;
   onMarkerPress: (placeId: string) => void;
   onRegionChange?: (center: MelloryMapCenter) => void;
+  onPoiPress?: (poi: {
+    name: string;
+    placeId: string;
+    latitude: number;
+    longitude: number;
+  }) => void;
   fullScreen?: boolean;
 };
 
 const colors = melloryThemeVars;
+
 const MAP_LAYER_OPTIONS: { id: MelloryMapLayer; label: string }[] = [
   { id: "streets", label: "Strade" },
   { id: "satellite", label: "Satellite" },
 ];
-const MIN_ZOOM = 3;
-const MAX_ZOOM = 18;
 
-function createMelloryMapStyle(mapLayer: MelloryMapLayer): StyleSpecification {
-  const isSatellite = mapLayer === "satellite";
-
-  return {
-  version: 8,
-  sources: {
-    streets: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors © CARTO",
-    },
-    satellite: {
-      type: "raster",
-      tiles: [
-        "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      attribution:
-        "Tiles © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-    },
-    labels: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors © CARTO",
-    },
-  },
-  layers: [
-    {
-      id: "streets",
-      type: "raster",
-      source: "streets",
-      layout: {
-        visibility: isSatellite ? "none" : "visible",
-      },
-      paint: {
-        "raster-opacity": 0.78,
-      },
-    },
-    {
-      id: "satellite",
-      type: "raster",
-      source: "satellite",
-      layout: {
-        visibility: isSatellite ? "visible" : "none",
-      },
-      paint: {
-        "raster-opacity": 0.86,
-        "raster-saturation": -0.18,
-      },
-    },
-    {
-      id: "labels",
-      type: "raster",
-      source: "labels",
-      paint: {
-        "raster-opacity": 0.9,
-      },
-    },
-  ],
-  };
+// Zoom (MapLibre / tile convention) ↔ latitudeDelta (react-native-maps)
+function zoomToLatDelta(zoom: number): number {
+  return 360 / Math.pow(2, zoom);
 }
 
 export default function MelloryMap({
@@ -122,81 +57,104 @@ export default function MelloryMap({
   center,
   onMarkerPress,
   onRegionChange,
+  onPoiPress,
   fullScreen = false,
 }: MelloryMapProps) {
-  const [hasMapError, setHasMapError] = useState(false);
+  const mapRef = useRef<MapView>(null);
   const [mapLayer, setMapLayer] = useState<MelloryMapLayer>("streets");
-  const [viewCenter, setViewCenter] = useState(center);
-  const mapStyle = useMemo(() => createMelloryMapStyle(mapLayer), [mapLayer]);
+  const currentZoomRef = useRef(center.zoom);
+  const prevCenterRef = useRef({ ...center });
 
+  // Anima la camera quando il centro cambia dall'esterno (ricerca, selezione
+  // marcatore ecc.) senza interferire con il pan/zoom dell'utente.
   useEffect(() => {
-    setViewCenter({
-      latitude: center.latitude,
-      longitude: center.longitude,
-      zoom: center.zoom,
-    });
+    const prev = prevCenterRef.current;
+    if (
+      prev.latitude === center.latitude &&
+      prev.longitude === center.longitude &&
+      prev.zoom === center.zoom
+    ) {
+      return;
+    }
+    prevCenterRef.current = { ...center };
+    const delta = zoomToLatDelta(center.zoom);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: center.latitude,
+        longitude: center.longitude,
+        latitudeDelta: delta,
+        longitudeDelta: delta,
+      },
+      650
+    );
   }, [center.latitude, center.longitude, center.zoom]);
 
-  function handleZoom(delta: number) {
-    setViewCenter((currentCenter) => ({
-      ...currentCenter,
-      zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentCenter.zoom + delta)),
-    }));
+  function handleRegionChangeComplete(region: Region) {
+    const zoom = Math.log2(360 / region.latitudeDelta);
+    currentZoomRef.current = zoom;
+    onRegionChange?.({
+      latitude: region.latitude,
+      longitude: region.longitude,
+      zoom,
+    });
   }
 
+  function handleZoom(delta: number) {
+    const newZoom = Math.max(3, Math.min(20, currentZoomRef.current + delta));
+    mapRef.current?.animateCamera({ zoom: newZoom }, { duration: 250 });
+    currentZoomRef.current = newZoom;
+  }
+
+  const initialDelta = zoomToLatDelta(center.zoom);
+
   return (
-    <View style={[styles.frame, fullScreen && StyleSheet.absoluteFill, fullScreen && { borderRadius: 0 }]}>
-      <Map
+    <View
+      style={[
+        styles.frame,
+        fullScreen && StyleSheet.absoluteFill,
+        fullScreen && { borderRadius: 0 },
+      ]}
+    >
+      <MapView
+        ref={mapRef}
         style={styles.map}
-        mapStyle={mapStyle}
-        logo={false}
-        compass={false}
-        attribution
-        attributionPosition={{ top: 14, left: 14 }}
-        onDidFailLoadingMap={() => setHasMapError(true)}
-        onRegionDidChange={(event) => {
-          const [longitude, latitude] = event.nativeEvent.center;
-
-          if (
-            typeof latitude !== "number" ||
-            typeof longitude !== "number"
-          ) {
-            return;
-          }
-
-          const nextCenter = {
-            latitude,
-            longitude,
-            zoom: event.nativeEvent.zoom,
-          };
-
-          setViewCenter(nextCenter);
-          onRegionChange?.({
-            latitude: nextCenter.latitude,
-            longitude: nextCenter.longitude,
-            zoom: nextCenter.zoom,
+        provider={PROVIDER_DEFAULT}
+        mapType={mapLayer === "satellite" ? "satellite" : "standard"}
+        initialRegion={{
+          latitude: center.latitude,
+          longitude: center.longitude,
+          latitudeDelta: initialDelta,
+          longitudeDelta: initialDelta,
+        }}
+        showsUserLocation
+        showsPointsOfInterests
+        showsBuildings
+        showsCompass={false}
+        toolbarEnabled={false}
+        onRegionChangeComplete={handleRegionChangeComplete}
+        onPoiClick={(event) => {
+          const { name, placeId, coordinate } = event.nativeEvent;
+          onPoiPress?.({
+            name,
+            placeId,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
           });
         }}
       >
-        <Camera
-          center={[viewCenter.longitude, viewCenter.latitude]}
-          zoom={viewCenter.zoom}
-          duration={650}
-        />
-
         {markers.map((marker) => (
           <Marker
             key={`${marker.id}-${marker.latitude}-${marker.longitude}`}
-            id={marker.id}
-            lngLat={[marker.longitude, marker.latitude]}
+            coordinate={{
+              latitude: marker.latitude,
+              longitude: marker.longitude,
+            }}
             onPress={() => onMarkerPress(marker.id)}
           >
             <View
               style={[
                 styles.marker,
-                {
-                  backgroundColor: marker.color || colors.pink,
-                },
+                { backgroundColor: marker.color || colors.pink },
               ]}
             >
               <View style={styles.markerInner}>
@@ -207,13 +165,13 @@ export default function MelloryMap({
             </View>
           </Marker>
         ))}
-      </Map>
+      </MapView>
 
+      {/* Layer + zoom controls — floated above the map */}
       <View pointerEvents="box-none" style={styles.controlDeck}>
         <View style={styles.layerControl}>
           {MAP_LAYER_OPTIONS.map((option) => {
             const isActive = mapLayer === option.id;
-
             return (
               <Pressable
                 key={option.id}
@@ -260,19 +218,10 @@ export default function MelloryMap({
             style={styles.zoomButton}
             onPress={() => handleZoom(-1)}
           >
-            <Text style={styles.zoomButtonText}>-</Text>
+            <Text style={styles.zoomButtonText}>−</Text>
           </Pressable>
         </View>
       </View>
-
-      {hasMapError ? (
-        <View style={styles.fallback}>
-          <Text style={styles.fallbackTitle}>Mappa non disponibile</Text>
-          <Text style={styles.fallbackText}>
-            Riprova tra poco: i luoghi restano comunque nella lista.
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -388,26 +337,5 @@ const styles = StyleSheet.create({
     color: colors.paperText,
     fontSize: 12,
     fontWeight: "900",
-  },
-  fallback: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    gap: 8,
-  },
-  fallbackTitle: {
-    color: colors.cream,
-    fontSize: 20,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  fallbackText: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "700",
-    textAlign: "center",
   },
 });

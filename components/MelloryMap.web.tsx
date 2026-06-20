@@ -27,6 +27,13 @@ type MelloryMapProps = {
   center: MelloryMapCenter;
   onMarkerPress: (placeId: string) => void;
   onRegionChange?: (center: MelloryMapCenter) => void;
+  onPoiPress?: (poi: {
+    name: string;
+    placeId: string;
+    latitude: number;
+    longitude: number;
+  }) => void;
+  fullScreen?: boolean;
 };
 
 const colors = melloryThemeVars;
@@ -263,6 +270,7 @@ export default function MelloryMap({
   center,
   onMarkerPress,
   onRegionChange,
+  fullScreen = false,
 }: MelloryMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -511,8 +519,12 @@ export default function MelloryMap({
     map.easeTo({ zoom: nextZoom, duration: 260 });
   }
 
+  const frameStyle: CSSProperties = fullScreen
+    ? { position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "hidden", backgroundColor: colors.black }
+    : styles.frame;
+
   return (
-    <div style={styles.frame}>
+    <div style={frameStyle}>
       <div ref={containerRef} style={styles.mapCanvas} />
 
       <div style={styles.controlColumn}>
