@@ -21,6 +21,7 @@ export type MelloryMapProps = {
   center: MelloryMapCenter;
   onMarkerPress: (placeId: string) => void;
   onRegionChange?: (center: MelloryMapCenter) => void;
+  fullScreen?: boolean;
 };
 
 export default function MelloryMap(props: MelloryMapProps): ReactElement;

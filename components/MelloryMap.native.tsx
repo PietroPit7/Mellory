@@ -32,6 +32,7 @@ type MelloryMapProps = {
   center: MelloryMapCenter;
   onMarkerPress: (placeId: string) => void;
   onRegionChange?: (center: MelloryMapCenter) => void;
+  fullScreen?: boolean;
 };
 
 const colors = melloryThemeVars;
@@ -121,6 +122,7 @@ export default function MelloryMap({
   center,
   onMarkerPress,
   onRegionChange,
+  fullScreen = false,
 }: MelloryMapProps) {
   const [hasMapError, setHasMapError] = useState(false);
   const [mapLayer, setMapLayer] = useState<MelloryMapLayer>("streets");
@@ -143,7 +145,7 @@ export default function MelloryMap({
   }
 
   return (
-    <View style={styles.frame}>
+    <View style={[styles.frame, fullScreen && StyleSheet.absoluteFill, fullScreen && { borderRadius: 0 }]}>
       <Map
         style={styles.map}
         mapStyle={mapStyle}

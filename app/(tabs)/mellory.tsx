@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PressableScale } from "@/components/pressable-scale";
 import { melloryThemeVars } from "@/contexts/mellory-theme";
@@ -448,6 +449,7 @@ function mergePlacesWithStatuses({
 }
 
 export default function MyMelloryScreen() {
+  const insets = useSafeAreaInsets();
   const [favoritePlaces, setFavoritePlaces] = useState<SavedPlace[]>([]);
   const [tryPlaces, setTryPlaces] = useState<SavedPlace[]>([]);
   const [visitedPlaces, setVisitedPlaces] = useState<SavedPlace[]>([]);
@@ -706,7 +708,7 @@ export default function MyMelloryScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.safeTop} />
+      <View style={{ height: insets.top + 8 }} />
 
       {/* Header */}
       <View style={styles.header}>

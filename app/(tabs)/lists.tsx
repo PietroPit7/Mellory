@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Alert,
   Platform,
@@ -287,6 +288,7 @@ function getStatusColor(status: PlaceStatus) {
 }
 
 export default function ListsScreen() {
+  const insets = useSafeAreaInsets();
   const [favoritePlaces, setFavoritePlaces] = useState<SavedPlace[]>([]);
   const [tryPlaces, setTryPlaces] = useState<SavedPlace[]>([]);
   const [visitedPlaces, setVisitedPlaces] = useState<SavedPlace[]>([]);
@@ -619,7 +621,7 @@ export default function ListsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.safeTop} />
+      <View style={{ height: insets.top + 8 }} />
 
       {/* Header */}
       <View style={styles.header}>

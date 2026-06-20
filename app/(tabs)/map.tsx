@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MelloryMap from "@/components/MelloryMap";
 import { PressableScale } from "@/components/pressable-scale";
@@ -444,6 +446,7 @@ function getUserLocationSuggestion(
 }
 
 export default function MapScreen() {
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
   const [placeSuggestions, setPlaceSuggestions] = useState<MapPlace[]>([]);
@@ -1030,11 +1033,89 @@ export default function MapScreen() {
 
   return (
     <View style={styles.root}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <View style={styles.safeTop} />
+      {/* Full-screen map */}
+      <MelloryMap
+        markers={mapMarkers}
+        center={mapCenter}
+        onMarkerPress={handleMarkerPress}
+        onRegionChange={handleMapRegionChange}
+        fullScreen
+      />
 
-        <View style={styles.header}>
-          <Text style={styles.logo}>Mappa</Text>
+      {/* Loading overlay */}
+      {isMapLoading ? (
+        <View style={styles.mapLoadingOverlay}>
+          <ActivityIndicator color={colors.yellow} />
+          <Text style={styles.mapLoadingText}>
+            {isLocatingUser ? "Trovo la tua zona..." : mode === "saved" ? "Preparo i tuoi luoghi..." : "Cerco locali..."}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Area search button — floats in the center of visible map */}
+      <Animated.View
+        pointerEvents={shouldShowAreaSearch ? "box-none" : "none"}
+        style={[
+          styles.searchAreaButtonWrap,
+          {
+            opacity: areaSearchAnim,
+            transform: [{ translateY: areaSearchAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }],
+          },
+        ]}
+      >
+        <PressableScale style={styles.searchAreaButton} onPress={searchPlacesAroundMapRegion}>
+          <View style={styles.searchAreaDot} />
+          <Text style={styles.searchAreaButtonText}>Cerca in questa zona</Text>
+        </PressableScale>
+      </Animated.View>
+
+      {/* Top controls overlay */}
+      <View style={[styles.topOverlay, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
+        <View pointerEvents="auto" style={styles.topCard}>
+          {/* Search box */}
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              value={searchQuery}
+              onChangeText={(value) => {
+                setPreviewPlace(null);
+                setSearchQuery(value);
+                setMode("search");
+                setErrorMessage("");
+                if (value.trim() !== selectedSearchLabel) {
+                  setSelectedSearchLabel("");
+                }
+              }}
+              placeholder="Cerca città o locale"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={handleSearchPress}
+              style={styles.searchInput}
+            />
+            {(isSuggesting || isSearchingPlaces) && !isLocatingUser ? (
+              <ActivityIndicator color={colors.pink} size="small" />
+            ) : null}
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel="Usa la mia posizione"
+              style={[styles.locationButton, (isLocatingUser || isSearchingPlaces) && { opacity: 0.6 }]}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                void searchPlacesAroundUser();
+              }}
+              disabled={isLocatingUser || isSearchingPlaces}
+            >
+              {isLocatingUser ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <View style={styles.locationDot} />
+              )}
+            </PressableScale>
+          </View>
+
+          {/* Mode toggle */}
           <View style={styles.modeRow}>
             <PressableScale
               style={[styles.modePill, mode === "search" && styles.modePillActive]}
@@ -1044,205 +1125,123 @@ export default function MapScreen() {
             </PressableScale>
             <PressableScale
               style={[styles.modePill, mode === "saved" && styles.modePillActive]}
-              onPress={refreshSavedPlaces}
+              onPress={() => { void Haptics.selectionAsync(); void refreshSavedPlaces(); }}
             >
               <Text style={[styles.modePillText, mode === "saved" && styles.modePillTextActive]}>Salvati</Text>
             </PressableScale>
           </View>
-        </View>
 
-        <View style={styles.searchBox}>
-          <Text style={styles.searchIcon}>⌕</Text>
-          <TextInput
-            value={searchQuery}
-            onChangeText={(value) => {
-              setPreviewPlace(null);
-              setSearchQuery(value);
-              setMode("search");
-              setErrorMessage("");
-              if (value.trim() !== selectedSearchLabel) {
-                setSelectedSearchLabel("");
-              }
-            }}
-            placeholder="Cerca città o locale"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="words"
-            autoCorrect={false}
-            returnKeyType="search"
-            onSubmitEditing={handleSearchPress}
-            style={styles.searchInput}
-          />
-          {(isSuggesting || isSearchingPlaces) && !isLocatingUser ? (
-            <ActivityIndicator color={colors.pink} size="small" />
-          ) : null}
-          <PressableScale
-            accessibilityRole="button"
-            accessibilityLabel="Usa la mia posizione"
-            style={[styles.locationButton, (isLocatingUser || isSearchingPlaces) && { opacity: 0.6 }]}
-            onPress={searchPlacesAroundUser}
-            disabled={isLocatingUser || isSearchingPlaces}
-          >
-            {isLocatingUser ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <View style={styles.locationDot} />
-            )}
-          </PressableScale>
-        </View>
-
-        {(placeSuggestions.length > 0 || citySuggestions.length > 0) && mode === "search" ? (
-          <View style={styles.suggestionsBox}>
-            {placeSuggestions.length > 0 ? (
-              <View>
-                <Text style={styles.suggestionGroupTitle}>Locali</Text>
-                {placeSuggestions.slice(0, 8).map((place) => (
-                  <PressableScale
-                    key={place.id}
-                    style={styles.suggestionRow}
-                    onPress={() => handlePlaceSuggestionPress(place)}
-                  >
-                    <View style={styles.suggestionTextBlock}>
-                      <Text numberOfLines={1} style={styles.suggestionTitle}>{place.name}</Text>
-                      <Text numberOfLines={1} style={styles.suggestionSubtitle}>
-                        {place.detail ? `${place.category} - ${place.detail}` : place.category}
-                      </Text>
-                    </View>
-                    <Text style={styles.suggestionArrow}>›</Text>
-                  </PressableScale>
-                ))}
-              </View>
-            ) : null}
-            {citySuggestions.length > 0 ? (
-              <Text style={styles.suggestionGroupTitle}>Località</Text>
-            ) : null}
-            {citySuggestions.slice(0, 5).map((city) => (
-              <PressableScale
-                key={`${city.cityLabel}-${city.latitude}-${city.longitude}`}
-                style={styles.suggestionRow}
-                onPress={() => searchPlacesAroundCity(city)}
-              >
+          {/* Suggestions dropdown */}
+          {(placeSuggestions.length > 0 || citySuggestions.length > 0) && mode === "search" ? (
+            <View style={styles.suggestionsBox}>
+              {placeSuggestions.length > 0 ? (
                 <View>
-                  <Text style={styles.suggestionTitle}>{city.cityLabel}</Text>
-                  <Text style={styles.suggestionSubtitle}>Tocca per esplorare questa zona</Text>
-                </View>
-                <Text style={styles.suggestionArrow}>›</Text>
-              </PressableScale>
-            ))}
-          </View>
-        ) : null}
-
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.pillsContent}
-          style={styles.pillsRow}
-        >
-          {categories.map((category) => {
-            const isActive = selectedCategory === category;
-            return (
-              <PressableScale
-                key={category}
-                style={[styles.filterPill, isActive && styles.filterPillSelected]}
-                onPress={() => { setPreviewPlace(null); setSelectedCategory(category); }}
-              >
-                <Text style={[styles.filterPillText, isActive && styles.filterPillTextSelected]}>
-                  {category}
-                </Text>
-              </PressableScale>
-            );
-          })}
-        </ScrollView>
-
-        <View style={styles.mapCard}>
-          <MelloryMap
-            markers={mapMarkers}
-            center={mapCenter}
-            onMarkerPress={handleMarkerPress}
-            onRegionChange={handleMapRegionChange}
-          />
-
-          {previewPlace ? (
-            <Animated.View
-              pointerEvents="box-none"
-              style={[
-                styles.previewWrap,
-                {
-                  opacity: previewAnim,
-                  transform: [
-                    { translateY: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
-                    { scale: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
-                  ],
-                },
-              ]}
-            >
-              <PressableScale
-                style={styles.previewCard}
-                onPress={() => {
-                  const place = previewPlace;
-                  setPreviewPlace(null);
-                  pushPlaceDetail(place);
-                }}
-              >
-                <View style={[styles.previewMark, { backgroundColor: `${getCategoryColor(previewPlace.categoryBase)}26` }]}>
-                  <Text style={[styles.previewMarkText, { color: getCategoryColor(previewPlace.categoryBase) }]}>
-                    {previewPlace.name.trim().charAt(0).toUpperCase() || "M"}
-                  </Text>
-                </View>
-                <View style={styles.previewBody}>
-                  <Text numberOfLines={1} style={styles.previewName}>{previewPlace.name}</Text>
-                  <Text numberOfLines={1} style={styles.previewMeta}>
-                    {previewPlace.detail ? `${previewPlace.category} · ${previewPlace.detail}` : previewPlace.category}
-                  </Text>
-                  <View style={styles.previewSignalRow}>
-                    <View style={styles.previewDistanceChip}>
-                      <Text style={styles.previewDistanceText}>{previewPlace.distance}</Text>
-                    </View>
-                    {getPlaceSignals(previewPlace).map((signal) => (
-                      <View key={signal} style={styles.previewSignalChip}>
-                        <Text style={styles.previewSignalText}>{signal}</Text>
+                  <Text style={styles.suggestionGroupTitle}>Locali</Text>
+                  {placeSuggestions.slice(0, 6).map((place) => (
+                    <PressableScale
+                      key={place.id}
+                      style={styles.suggestionRow}
+                      onPress={() => handlePlaceSuggestionPress(place)}
+                    >
+                      <View style={styles.suggestionTextBlock}>
+                        <Text numberOfLines={1} style={styles.suggestionTitle}>{place.name}</Text>
+                        <Text numberOfLines={1} style={styles.suggestionSubtitle}>
+                          {place.detail ? `${place.category} · ${place.detail}` : place.category}
+                        </Text>
                       </View>
-                    ))}
-                  </View>
-                  <Text style={styles.previewCta}>Apri scheda ›</Text>
+                      <Text style={styles.suggestionArrow}>›</Text>
+                    </PressableScale>
+                  ))}
                 </View>
-                <PressableScale style={styles.previewClose} onPress={() => setPreviewPlace(null)}>
-                  <Text style={styles.previewCloseText}>×</Text>
+              ) : null}
+              {citySuggestions.length > 0 ? (
+                <Text style={styles.suggestionGroupTitle}>Località</Text>
+              ) : null}
+              {citySuggestions.slice(0, 4).map((city) => (
+                <PressableScale
+                  key={`${city.cityLabel}-${city.latitude}-${city.longitude}`}
+                  style={styles.suggestionRow}
+                  onPress={() => searchPlacesAroundCity(city)}
+                >
+                  <View style={styles.suggestionTextBlock}>
+                    <Text style={styles.suggestionTitle}>{city.cityLabel}</Text>
+                    <Text style={styles.suggestionSubtitle}>Esplora questa zona</Text>
+                  </View>
+                  <Text style={styles.suggestionArrow}>›</Text>
                 </PressableScale>
-              </PressableScale>
-            </Animated.View>
+              ))}
+            </View>
           ) : null}
 
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+          {/* Category pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pillsContent}
+          >
+            {categories.map((category) => {
+              const isActive = selectedCategory === category;
+              return (
+                <PressableScale
+                  key={category}
+                  style={[styles.filterPill, isActive && styles.filterPillSelected]}
+                  onPress={() => { setPreviewPlace(null); setSelectedCategory(category); }}
+                >
+                  <Text style={[styles.filterPillText, isActive && styles.filterPillTextSelected]}>
+                    {category}
+                  </Text>
+                </PressableScale>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* Bottom results panel */}
+      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <View style={styles.panelHandle} />
+
+        {previewPlace ? (
           <Animated.View
-            pointerEvents={shouldShowAreaSearch ? "box-none" : "none"}
             style={[
-              styles.searchAreaButtonWrap,
+              styles.previewRow,
               {
-                opacity: areaSearchAnim,
-                transform: [
-                  { translateY: areaSearchAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) },
-                ],
+                opacity: previewAnim,
+                transform: [{ translateY: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
               },
             ]}
           >
-            <PressableScale style={styles.searchAreaButton} onPress={searchPlacesAroundMapRegion}>
-              <View style={styles.searchAreaDot} />
-              <Text style={styles.searchAreaButtonText}>Cerca in questa zona</Text>
-            </PressableScale>
-          </Animated.View>
-
-          {isMapLoading ? (
-            <View style={styles.mapLoadingOverlay}>
-              <ActivityIndicator color={colors.yellow} />
-              <Text style={styles.mapLoadingText}>
-                {isLocatingUser ? "Trovo la tua zona..." : mode === "saved" ? "Preparo i tuoi luoghi..." : "Cerco locali..."}
+            <View style={[styles.previewAvatar, { backgroundColor: `${getCategoryColor(previewPlace.categoryBase)}26` }]}>
+              <Text style={[styles.previewAvatarText, { color: getCategoryColor(previewPlace.categoryBase) }]}>
+                {previewPlace.name.trim().charAt(0).toUpperCase() || "M"}
               </Text>
             </View>
-          ) : null}
-        </View>
-
-        {visiblePlaces.length > 0 ? (
+            <View style={styles.previewInfo}>
+              <Text numberOfLines={1} style={styles.previewName}>{previewPlace.name}</Text>
+              <Text numberOfLines={1} style={styles.previewMeta}>
+                {previewPlace.detail
+                  ? `${previewPlace.category} · ${previewPlace.detail}`
+                  : previewPlace.category}
+                {previewPlace.distance ? ` · ${previewPlace.distance}` : ""}
+              </Text>
+            </View>
+            <PressableScale
+              style={styles.previewOpenBtn}
+              onPress={() => {
+                const place = previewPlace;
+                setPreviewPlace(null);
+                pushPlaceDetail(place);
+              }}
+            >
+              <Text style={styles.previewOpenBtnText}>Apri ›</Text>
+            </PressableScale>
+            <PressableScale style={styles.previewCloseBtn} onPress={() => setPreviewPlace(null)}>
+              <Text style={styles.previewCloseBtnText}>×</Text>
+            </PressableScale>
+          </Animated.View>
+        ) : visiblePlaces.length > 0 ? (
           <>
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>
@@ -1252,7 +1251,7 @@ export default function MapScreen() {
                 {visiblePlaces.length} {visiblePlaces.length === 1 ? "posto" : "posti"}
               </Text>
             </View>
-            <View style={styles.placeList}>
+            <ScrollView style={styles.panelList} showsVerticalScrollIndicator={false}>
               {visiblePlaces.map((place) => (
                 <PressableScale
                   key={place.id}
@@ -1274,90 +1273,95 @@ export default function MapScreen() {
                   <Text style={styles.placeChevron}>›</Text>
                 </PressableScale>
               ))}
-            </View>
+            </ScrollView>
           </>
         ) : !isMapLoading ? (
-          <View style={styles.emptyCard}>
+          <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>Cerca una città per iniziare.</Text>
-            <PressableScale style={styles.emptyButton} onPress={refreshSavedPlaces}>
+            <PressableScale style={styles.emptyButton} onPress={() => void refreshSavedPlaces()}>
               <Text style={styles.emptyButtonText}>Mostra i salvati</Text>
             </PressableScale>
           </View>
-        ) : null}
-
-        <View style={styles.bottomSpace} />
-      </ScrollView>
+        ) : (
+          <View style={styles.panelLoading}>
+            <ActivityIndicator color={colors.pink} />
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.black },
-  screen: { flex: 1, backgroundColor: colors.black },
-  content: { paddingHorizontal: 20 },
-  safeTop: { height: 16 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
-  logo: { color: colors.cream, fontSize: 26, fontWeight: "800", letterSpacing: -0.8 },
-  modeRow: { flexDirection: "row", gap: 8 },
-  modePill: { height: 34, borderRadius: 9, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+
+  // Full-screen map overlays
+  mapLoadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(7,6,4,0.5)", alignItems: "center", justifyContent: "center", gap: 12, zIndex: 5 },
+  mapLoadingText: { color: colors.cream, fontSize: 14, fontWeight: "600" },
+
+  searchAreaButtonWrap: { position: "absolute", top: "42%", left: 0, right: 0, alignItems: "center", zIndex: 6 },
+  searchAreaButton: { height: 38, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.softBorder, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 8, shadowColor: "#000", shadowOpacity: 0.24, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  searchAreaDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.pink },
+  searchAreaButtonText: { color: colors.cream, fontSize: 13, fontWeight: "600" },
+
+  // Top floating controls
+  topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, paddingHorizontal: 12 },
+  topCard: { backgroundColor: "rgba(23,19,15,0.94)", borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 12, gap: 10 },
+  searchBox: { height: 46, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingLeft: 14, paddingRight: 6, flexDirection: "row", alignItems: "center", gap: 10 },
+  searchIcon: { color: colors.textMuted, fontSize: 18 },
+  searchInput: { flex: 1, color: colors.cream, fontSize: 15, fontWeight: "500" },
+  locationButton: { width: 34, height: 34, borderRadius: 9, backgroundColor: colors.pink, alignItems: "center", justifyContent: "center" },
+  locationDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#fff" },
+  modeRow: { flexDirection: "row", gap: 7 },
+  modePill: { height: 30, borderRadius: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   modePillActive: { backgroundColor: colors.cream, borderColor: colors.cream },
   modePillText: { color: colors.muted, fontSize: 13, fontWeight: "600" },
   modePillTextActive: { color: colors.black },
-  searchBox: { height: 52, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingLeft: 16, paddingRight: 8, flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
-  searchIcon: { color: colors.muted, fontSize: 18 },
-  searchInput: { flex: 1, color: colors.cream, fontSize: 16, fontWeight: "500" },
-  locationButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.pink, alignItems: "center", justifyContent: "center" },
-  locationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
-  suggestionsBox: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden", marginBottom: 12 },
-  suggestionGroupTitle: { color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1.2, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, textTransform: "uppercase" },
-  suggestionRow: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.softBorder, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+
+  suggestionsBox: { backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden", maxHeight: 260 },
+  suggestionGroupTitle: { color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.4, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, textTransform: "uppercase" },
+  suggestionRow: { paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.softBorder, flexDirection: "row", alignItems: "center", gap: 10 },
   suggestionTextBlock: { flex: 1, minWidth: 0 },
-  suggestionTitle: { color: colors.cream, fontSize: 15, fontWeight: "600", marginBottom: 2 },
+  suggestionTitle: { color: colors.cream, fontSize: 14, fontWeight: "600", marginBottom: 1 },
   suggestionSubtitle: { color: colors.muted, fontSize: 12 },
-  suggestionArrow: { color: colors.muted, fontSize: 20 },
-  errorText: { color: colors.orange, fontSize: 13, lineHeight: 20, marginBottom: 12 },
-  pillsRow: { marginBottom: 12 },
-  pillsContent: { gap: 8, paddingRight: 4 },
-  filterPill: { height: 36, borderRadius: 9, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  suggestionArrow: { color: colors.muted, fontSize: 18 },
+  errorText: { color: colors.orange, fontSize: 12, lineHeight: 18 },
+
+  pillsContent: { gap: 7, paddingRight: 2 },
+  filterPill: { height: 30, borderRadius: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   filterPillSelected: { backgroundColor: colors.cream, borderColor: colors.cream },
-  filterPillText: { color: colors.muted, fontSize: 14, fontWeight: "600" },
+  filterPillText: { color: colors.muted, fontSize: 13, fontWeight: "600" },
   filterPillTextSelected: { color: colors.black },
-  mapCard: { borderRadius: 20, overflow: "hidden", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, marginBottom: 20, position: "relative" },
-  mapLoadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(7,6,4,0.48)", alignItems: "center", justifyContent: "center", gap: 10 },
-  mapLoadingText: { color: colors.cream, fontSize: 14, fontWeight: "600" },
-  previewWrap: { position: "absolute", left: 12, right: 12, bottom: 14 },
-  previewCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingVertical: 12, paddingHorizontal: 14 },
-  previewMark: { width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  previewMarkText: { fontSize: 18, fontWeight: "700" },
-  previewBody: { flex: 1, minWidth: 0 },
-  previewName: { color: colors.cream, fontSize: 16, fontWeight: "600", marginBottom: 2 },
-  previewMeta: { color: colors.muted, fontSize: 12, marginBottom: 4 },
-  previewCta: { color: colors.pink, fontSize: 12, fontWeight: "700" },
-  previewSignalRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 4 },
-  previewDistanceChip: { height: 22, borderRadius: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
-  previewDistanceText: { color: colors.pink, fontSize: 11, fontWeight: "600" },
-  previewSignalChip: { height: 22, borderRadius: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
-  previewSignalText: { color: colors.muted, fontSize: 11 },
-  previewClose: { width: 28, height: 28, borderRadius: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  previewCloseText: { color: colors.cream, fontSize: 18, lineHeight: 20 },
-  searchAreaButtonWrap: { position: "absolute", top: 14, left: 68, right: 68, alignItems: "center", zIndex: 3 },
-  searchAreaButton: { height: 40, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  searchAreaDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.pink },
-  searchAreaButtonText: { color: colors.cream, fontSize: 13, fontWeight: "600" },
-  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+
+  // Bottom sheet panel
+  bottomPanel: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(23,19,15,0.96)", borderTopLeftRadius: 22, borderTopRightRadius: 22, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 0, zIndex: 10 },
+  panelHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginTop: 10, marginBottom: 2 },
+  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10 },
   sectionTitle: { color: colors.cream, fontSize: 16, fontWeight: "700" },
   sectionCount: { color: colors.muted, fontSize: 13 },
-  placeList: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden", marginBottom: 14 },
-  placeRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.softBorder },
-  placeAvatar: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  placeAvatarText: { fontSize: 16, fontWeight: "700" },
+  panelList: { maxHeight: 230 },
+  placeRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.softBorder },
+  placeAvatar: { width: 36, height: 36, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  placeAvatarText: { fontSize: 15, fontWeight: "700" },
   placeInfo: { flex: 1, minWidth: 0 },
-  placeName: { color: colors.cream, fontSize: 16, fontWeight: "600", marginBottom: 2 },
-  placeSub: { color: colors.muted, fontSize: 13 },
-  placeChevron: { color: colors.muted, fontSize: 20 },
-  emptyCard: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 20, marginBottom: 20 },
-  emptyTitle: { color: colors.cream, fontSize: 18, fontWeight: "700", marginBottom: 14 },
-  emptyButton: { backgroundColor: colors.cream, borderRadius: 10, paddingVertical: 13, alignItems: "center" },
-  emptyButtonText: { color: colors.black, fontSize: 15, fontWeight: "700" },
-  bottomSpace: { height: 118 },
+  placeName: { color: colors.cream, fontSize: 15, fontWeight: "600", marginBottom: 2 },
+  placeSub: { color: colors.muted, fontSize: 12 },
+  placeChevron: { color: colors.muted, fontSize: 18 },
+
+  previewRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  previewAvatar: { width: 44, height: 44, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  previewAvatarText: { fontSize: 18, fontWeight: "700" },
+  previewInfo: { flex: 1, minWidth: 0 },
+  previewName: { color: colors.cream, fontSize: 16, fontWeight: "700", marginBottom: 3 },
+  previewMeta: { color: colors.muted, fontSize: 13 },
+  previewOpenBtn: { height: 36, borderRadius: 9, backgroundColor: colors.pink, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  previewOpenBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  previewCloseBtn: { width: 36, height: 36, borderRadius: 9, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  previewCloseBtnText: { color: colors.cream, fontSize: 20, lineHeight: 22 },
+
+  emptyState: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
+  emptyTitle: { color: colors.muted, fontSize: 15, marginBottom: 14 },
+  emptyButton: { backgroundColor: colors.card, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingVertical: 13, alignItems: "center" },
+  emptyButtonText: { color: colors.cream, fontSize: 15, fontWeight: "600" },
+  panelLoading: { paddingVertical: 20, alignItems: "center" },
 });

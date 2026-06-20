@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +19,7 @@ import {
   type MelloryThemeColors,
   useMelloryTheme,
 } from "@/contexts/mellory-theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   fetchCitySuggestions as fetchGeoapifyCitySuggestions,
   fetchNearbyPlaces as fetchGeoapifyNearbyPlaces,
@@ -754,6 +756,7 @@ function openPlaceDetail(place: DashboardPlace) {
 
 export default function HomeScreen() {
   const { colors } = useMelloryTheme();
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCityLabel, setSelectedCityLabel] = useState("");
   const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
@@ -935,6 +938,7 @@ export default function HomeScreen() {
   }
 
   async function handleUsePosition() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setMessage("");
     setShowSuggestions(false);
     setCitySuggestions([]);
@@ -1190,7 +1194,7 @@ export default function HomeScreen() {
       nestedScrollEnabled
       directionalLockEnabled
     >
-      <View style={styles.safeTop} />
+      <View style={{ height: insets.top + 8 }} />
 
       {/* Header */}
       <View style={styles.header}>
