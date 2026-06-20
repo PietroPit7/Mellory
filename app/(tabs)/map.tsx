@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MelloryMap from "@/components/MelloryMap";
 import { PressableScale } from "@/components/pressable-scale";
-import { melloryThemeVars } from "@/contexts/mellory-theme";
+import { melloryDarkColors } from "@/contexts/mellory-theme";
 import {
   fetchCitySuggestions,
   fetchNearbyPlaces,
@@ -81,7 +81,7 @@ type StoredPlaceIndexItem = {
   updatedAt?: unknown;
 };
 
-const colors = melloryThemeVars;
+const colors = melloryDarkColors;
 
 const PLACES_INDEX_STORAGE_KEY = "mellory:places-index";
 const STATUS_STORAGE_KEYS: Record<PlaceStatus, string> = {
@@ -1089,7 +1089,9 @@ export default function MapScreen() {
       stiffness: 180,
       useNativeDriver: true,
     }).start();
-  }, [previewAnim, previewPlace]);
+    // Only animate when a new place appears, not when enrichment updates the same one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewAnim, previewPlace?.id]);
 
   // Arrivo dalla Home con una zona già scelta: la mappa la apre e la cerca.
   useEffect(() => {
