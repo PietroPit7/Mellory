@@ -1,12 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
+import * as Linking from "expo-linking";
 import { router, useLocalSearchParams } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
   Image,
-  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -17,6 +17,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { PressableScale } from "@/components/pressable-scale";
 import { melloryThemeVars } from "@/contexts/mellory-theme";
+import { openPreferredNavigation } from "@/services/navigation-preferences";
 
 type PlaceStatus = "try" | "favorite" | "visited" | "retry";
 
@@ -622,6 +623,45 @@ function isClosedOpeningHoursValue(value: string) {
   return value.trim().toLowerCase() === "chiuso";
 }
 
+function getOpeningHoursSegments(openingHours: string) {
+  const markers: {
+    index: number;
+    valueStart: number;
+    dayIndexes: number[];
+  }[] = [];
+  const dayMarkerRegex =
+    /(^|[;,]\s*)([A-Za-z\u00C0-\u00FF]{2,9}(?:\s*[-\u2013]\s*[A-Za-z\u00C0-\u00FF]{2,9})?(?:\s*,\s*[A-Za-z\u00C0-\u00FF]{2,9}(?:\s*[-\u2013]\s*[A-Za-z\u00C0-\u00FF]{2,9})?)*)\s+/g;
+
+  let match: RegExpExecArray | null;
+
+  while ((match = dayMarkerRegex.exec(openingHours)) !== null) {
+    const dayIndexes = getDayIndexes(match[2]);
+
+    if (dayIndexes.length === 0) continue;
+
+    markers.push({
+      index: match.index,
+      valueStart: match.index + match[0].length,
+      dayIndexes,
+    });
+  }
+
+  return markers
+    .map((marker, index) => {
+      const nextMarker = markers[index + 1];
+      const rawValue = openingHours
+        .slice(marker.valueStart, nextMarker?.index ?? openingHours.length)
+        .replace(/^[;,]\s*/, "")
+        .trim();
+
+      return {
+        dayIndexes: marker.dayIndexes,
+        value: formatOpeningHoursValue(rawValue),
+      };
+    })
+    .filter((segment) => segment.value.length > 0);
+}
+
 function getOpeningHoursRows(openingHours: string): OpeningHoursRow[] {
   const cleanOpeningHours = openingHours.trim();
 
@@ -638,31 +678,12 @@ function getOpeningHoursRows(openingHours: string): OpeningHoursRow[] {
   const dayValues = WEEK_DAYS.map(() => [] as string[]);
   let hasDayRows = false;
 
-  cleanOpeningHours
-    .split(";")
-    .map((row) => row.trim())
-    .filter(Boolean)
-    .forEach((row) => {
-      const match = row.match(
-        /^([A-Za-zÀ-ÿ]{2,9}(?:\s*[-–]\s*[A-Za-zÀ-ÿ]{2,9})?(?:\s*,\s*[A-Za-zÀ-ÿ]{2,9}(?:\s*[-–]\s*[A-Za-zÀ-ÿ]{2,9})?)*)\s+(.+)$/
-      );
-
-      if (!match) {
-        return;
-      }
-
-      const dayIndexes = getDayIndexes(match[1]);
-      const formattedValue = formatOpeningHoursValue(match[2]);
-
-      if (dayIndexes.length === 0 || !formattedValue) {
-        return;
-      }
-
-      hasDayRows = true;
-      dayIndexes.forEach((dayIndex) => {
-        dayValues[dayIndex].push(formattedValue);
-      });
+  getOpeningHoursSegments(cleanOpeningHours).forEach((segment) => {
+    hasDayRows = true;
+    segment.dayIndexes.forEach((dayIndex) => {
+      dayValues[dayIndex].push(segment.value);
     });
+  });
 
   if (!hasDayRows) return [];
 
@@ -1772,10 +1793,20 @@ export default function PlaceDetailScreen() {
     });
   }
 
-  function openMaps() {
-    Linking.openURL(
-      `https://www.google.com/maps/search/?api=1&query=${mapSearchQuery}`
-    );
+  async function openMaps() {
+    try {
+      await openPreferredNavigation({
+        name: effectiveName,
+        address: effectiveDetail,
+        latitude,
+        longitude,
+      });
+    } catch {
+      Alert.alert(
+        "Percorso non disponibile",
+        "Non riesco ad aprire il percorso da qui."
+      );
+    }
   }
 
   function openWebsite() {

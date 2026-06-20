@@ -26,7 +26,9 @@ import {
 
 type PlaceStatus = "try" | "favorite" | "visited" | "retry";
 
-type CitySuggestion = Awaited<ReturnType<typeof fetchCitySuggestions>>[number];
+type CitySuggestion = Awaited<ReturnType<typeof fetchCitySuggestions>>[number] & {
+  zoom?: number;
+};
 
 type NearbyPlace = Awaited<ReturnType<typeof fetchNearbyPlaces>>[number];
 
@@ -95,6 +97,17 @@ const categories = [
   "Pizzerie",
   "Gelaterie",
   "Pub",
+];
+
+const AREA_SEARCH_PROFILES = [
+  { minZoom: 18, radiusMeters: 120, limit: 35 },
+  { minZoom: 17, radiusMeters: 220, limit: 45 },
+  { minZoom: 16, radiusMeters: 380, limit: 60 },
+  { minZoom: 15, radiusMeters: 700, limit: 80 },
+  { minZoom: 14, radiusMeters: 1200, limit: 100 },
+  { minZoom: 13, radiusMeters: 2200, limit: 130 },
+  { minZoom: 12, radiusMeters: 4200, limit: 160 },
+  { minZoom: 0, radiusMeters: 6500, limit: 180 },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -326,6 +339,23 @@ function matchesCategory(place: MapPlace, selectedCategory: string) {
   return true;
 }
 
+function getPlaceSignals(place: MapPlace) {
+  const signals: string[] = [];
+
+  if (place.openingHours.trim()) signals.push("Orari");
+  if (place.phone.trim()) signals.push("Telefono");
+  if (place.website.trim()) signals.push("Sito");
+
+  return signals.slice(0, 3);
+}
+
+function getAreaSearchProfile(zoom: number) {
+  return (
+    AREA_SEARCH_PROFILES.find((profile) => zoom >= profile.minZoom) ??
+    AREA_SEARCH_PROFILES[AREA_SEARCH_PROFILES.length - 1]
+  );
+}
+
 function getStatusLabel(status: PlaceStatus) {
   if (status === "favorite") return "Preferito";
   if (status === "try") return "Da provare";
@@ -371,7 +401,7 @@ function getMapCenter(places: MapPlace[], selectedCity: CitySuggestion | null) {
     return {
       latitude: selectedCity.latitude,
       longitude: selectedCity.longitude,
-      zoom: 13,
+      zoom: selectedCity.zoom ?? 13,
     };
   }
 
@@ -409,6 +439,7 @@ function getUserLocationSuggestion(
     cityLabel: "La tua posizione",
     detailLabel: "Locali vicini a te",
     kind: "area",
+    zoom: 13,
   };
 }
 
@@ -461,6 +492,10 @@ export default function MapScreen() {
         color: getCategoryColor(place.categoryBase),
       })),
     [visiblePlaces]
+  );
+  const areaSearchProfile = useMemo(
+    () => getAreaSearchProfile(mapRegion?.zoom ?? mapCenter.zoom),
+    [mapCenter.zoom, mapRegion?.zoom]
   );
 
   const pushPlaceDetail = useCallback(
@@ -723,12 +758,13 @@ export default function MapScreen() {
         5
       )}`,
       label: "Questa zona",
-      detail: "Locali intorno alla mappa",
+      detail: "Area selezionata",
       latitude: mapRegion.latitude,
       longitude: mapRegion.longitude,
       cityLabel: "Questa zona",
-      detailLabel: "Locali intorno alla mappa",
+      detailLabel: "Area selezionata",
       kind: "area",
+      zoom: mapRegion.zoom,
     };
 
     setPreviewPlace(null);
@@ -745,7 +781,11 @@ export default function MapScreen() {
     try {
       const places = await fetchNearbyPlaces(
         mapRegion.latitude,
-        mapRegion.longitude
+        mapRegion.longitude,
+        {
+          limit: areaSearchProfile.limit,
+          radiusMeters: areaSearchProfile.radiusMeters,
+        }
       );
       const nextPlaces = places
         .map(nearbyPlaceToMapPlace)
@@ -755,7 +795,7 @@ export default function MapScreen() {
       setLastSearchCenter(mapRegion);
 
       if (nextPlaces.length === 0) {
-        setErrorMessage("Non ho trovato locali qui. Sposta un po' la mappa.");
+        setErrorMessage("Non ho trovato locali in quest'area.");
       }
     } catch {
       setErrorMessage(
@@ -776,6 +816,7 @@ export default function MapScreen() {
       cityLabel: place.name,
       detailLabel: place.detail,
       kind: "area",
+      zoom: 15,
     };
 
     setPreviewPlace(null);
@@ -900,16 +941,28 @@ export default function MapScreen() {
     // cercare la zona inquadrata.
     if (!lastSearchCenter) return true;
 
-    // Basta un piccolo spostamento perché compaia "Cerca in questa zona".
+    const lastAreaSearchProfile = getAreaSearchProfile(lastSearchCenter.zoom);
+
+    if (lastAreaSearchProfile.radiusMeters !== areaSearchProfile.radiusMeters) {
+      return true;
+    }
+
+    const movementThresholdMeters = Math.min(
+      240,
+      Math.max(25, areaSearchProfile.radiusMeters * 0.12)
+    );
+
+    // La soglia segue il raggio: area stretta = movimento minimo, area larga =
+    // evita ricerche ridondanti per piccoli trascinamenti.
     return (
       getDistanceMeters(
         mapRegion.latitude,
         mapRegion.longitude,
         lastSearchCenter.latitude,
         lastSearchCenter.longitude
-      ) > 40
+      ) > movementThresholdMeters
     );
-  }, [isMapLoading, lastSearchCenter, mapRegion, mode, previewPlace]);
+  }, [areaSearchProfile.radiusMeters, isMapLoading, lastSearchCenter, mapRegion, mode, previewPlace]);
 
   const handleMapRegionChange = useCallback((region: MapRegionCenter) => {
     setPreviewPlace(null);
@@ -1264,6 +1317,21 @@ export default function MapScreen() {
                       ? `${previewPlace.category} · ${previewPlace.detail}`
                       : previewPlace.category}
                   </Text>
+
+                  <View style={styles.previewSignalRow}>
+                    <View style={styles.previewDistanceChip}>
+                      <Text style={styles.previewDistanceText}>
+                        {previewPlace.distance}
+                      </Text>
+                    </View>
+
+                    {getPlaceSignals(previewPlace).map((signal) => (
+                      <View key={signal} style={styles.previewSignalChip}>
+                        <Text style={styles.previewSignalText}>{signal}</Text>
+                      </View>
+                    ))}
+                  </View>
+
                   <Text style={styles.previewCta}>Apri scheda ›</Text>
                 </View>
 
@@ -1341,78 +1409,92 @@ export default function MapScreen() {
 
         {visiblePlaces.length > 0 ? (
           <View style={styles.placeList}>
-            {visiblePlaces.map((place) => (
-              <PressableScale
-                key={place.id}
-                style={styles.placeCard}
-                onPress={() => openPlaceDetail(place.id)}
-              >
-                <View style={styles.placeCardTop}>
-                  <View
-                    style={[
-                      styles.placeInitial,
-                      {
-                        backgroundColor: `${getCategoryColor(place.categoryBase)}26`,
-                      },
-                    ]}
-                  >
-                    <Text
+            {visiblePlaces.map((place) => {
+              const signals = getPlaceSignals(place);
+
+              return (
+                <PressableScale
+                  key={place.id}
+                  style={styles.placeCard}
+                  onPress={() => openPlaceDetail(place.id)}
+                >
+                  <View style={styles.placeCardTop}>
+                    <View
                       style={[
-                        styles.placeInitialText,
+                        styles.placeInitial,
                         {
-                          color: getCategoryColor(place.categoryBase),
+                          backgroundColor: `${getCategoryColor(place.categoryBase)}26`,
                         },
                       ]}
                     >
-                      {place.name.trim().charAt(0).toUpperCase() || "M"}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.placeInitialText,
+                          {
+                            color: getCategoryColor(place.categoryBase),
+                          },
+                        ]}
+                      >
+                        {place.name.trim().charAt(0).toUpperCase() || "M"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.placeMain}>
+                      <Text numberOfLines={1} style={styles.placeName}>
+                        {place.name}
+                      </Text>
+
+                      <Text numberOfLines={1} style={styles.placeCategory}>
+                        {place.category}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.placeArrow}>›</Text>
                   </View>
 
-                  <View style={styles.placeMain}>
-                    <Text numberOfLines={1} style={styles.placeName}>
-                      {place.name}
-                    </Text>
+                  <Text numberOfLines={2} style={styles.placeDetail}>
+                    {place.detail}
+                  </Text>
 
-                    <Text numberOfLines={1} style={styles.placeCategory}>
-                      {place.category}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.placeArrow}>›</Text>
-                </View>
-
-                <Text numberOfLines={2} style={styles.placeDetail}>
-                  {place.detail}
-                </Text>
-
-                <View style={styles.placeFooter}>
-                  <Text style={styles.placeDistance}>{place.distance}</Text>
-
-                  {place.statuses.length > 0 ? (
-                    <View style={styles.statusRow}>
-                      {place.statuses.slice(0, 2).map((status) => (
-                        <View
-                          key={status}
-                          style={[
-                            styles.statusChip,
-                            { backgroundColor: `${getStatusColor(status)}26` },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.statusChipText,
-                              { color: getStatusColor(status) },
-                            ]}
-                          >
-                            {getStatusLabel(status)}
-                          </Text>
+                  {signals.length > 0 ? (
+                    <View style={styles.placeSignalRow}>
+                      {signals.map((signal) => (
+                        <View key={signal} style={styles.placeSignalChip}>
+                          <Text style={styles.placeSignalText}>{signal}</Text>
                         </View>
                       ))}
                     </View>
                   ) : null}
-                </View>
-              </PressableScale>
-            ))}
+
+                  <View style={styles.placeFooter}>
+                    <Text style={styles.placeDistance}>{place.distance}</Text>
+
+                    {place.statuses.length > 0 ? (
+                      <View style={styles.statusRow}>
+                        {place.statuses.slice(0, 2).map((status) => (
+                          <View
+                            key={status}
+                            style={[
+                              styles.statusChip,
+                              { backgroundColor: `${getStatusColor(status)}26` },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusChipText,
+                                { color: getStatusColor(status) },
+                              ]}
+                            >
+                              {getStatusLabel(status)}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                </PressableScale>
+              );
+            })}
           </View>
         ) : (
           <View style={styles.emptyCard}>
@@ -1776,6 +1858,40 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: "900",
   },
+  previewSignalRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 6,
+  },
+  previewDistanceChip: {
+    minHeight: 24,
+    borderRadius: 999,
+    backgroundColor: "rgba(216,78,127,0.12)",
+    paddingHorizontal: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewDistanceText: {
+    color: colors.pink,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+  },
+  previewSignalChip: {
+    minHeight: 24,
+    borderRadius: 999,
+    backgroundColor: "rgba(7,6,4,0.07)",
+    paddingHorizontal: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewSignalText: {
+    color: "#6F665C",
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+  },
   previewClose: {
     width: 30,
     height: 30,
@@ -1792,13 +1908,15 @@ const styles = StyleSheet.create({
   },
   searchAreaButtonWrap: {
     position: "absolute",
-    top: 76,
-    left: 0,
-    right: 0,
+    top: 58,
+    left: 68,
+    right: 68,
     alignItems: "center",
+    zIndex: 3,
   },
   searchAreaButton: {
     minHeight: 44,
+    maxWidth: 214,
     borderRadius: 999,
     backgroundColor: colors.paper,
     borderWidth: 1,
@@ -1924,6 +2042,28 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 21,
+  },
+  placeSignalRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 12,
+  },
+  placeSignalChip: {
+    minHeight: 28,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,248,239,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.08)",
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeSignalText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
   },
   placeFooter: {
     flexDirection: "row",

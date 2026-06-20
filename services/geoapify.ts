@@ -14,9 +14,9 @@ const AUTOCOMPLETE_ENDPOINT =
 const PLACES_ENDPOINT = "https://api.geoapify.com/v2/places";
 const CITY_QUERY_RESULT_LIMIT = 12;
 const CITY_SUGGESTION_LIMIT = 4;
-const PLACE_SUGGESTION_LIMIT = 10;
-const PLACE_LIMIT = 120;
-const PLACE_RADIUS_METERS = 6500;
+const PLACE_SUGGESTION_LIMIT = 14;
+const PLACE_LIMIT = 180;
+const PLACE_RADIUS_METERS = 9000;
 
 // OpenStreetMap (Overpass) è la fonte verificata dalla community: la uniamo a
 // Geoapify per avere molti più locali certi nella stessa zona.
@@ -25,7 +25,7 @@ const OVERPASS_ENDPOINTS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.openstreetmap.ru/api/interpreter",
 ];
-const OVERPASS_MAX_RESULTS = 220;
+const OVERPASS_MAX_RESULTS = 340;
 
 // Mellory è una guida gastronomica: solo locali dove si mangia e si beve,
 // niente attrazioni/musei/luoghi turistici.
@@ -33,9 +33,13 @@ const PLACE_CATEGORIES = [
   "catering.restaurant",
   "catering.restaurant.pizza",
   "catering.cafe",
+  "catering.cafe.coffee_shop",
+  "catering.cafe.ice_cream",
   "catering.bar",
   "catering.pub",
   "catering.fast_food",
+  "catering.fast_food.pizza",
+  "catering.food_court",
   "catering.ice_cream",
   "commercial.food_and_drink",
 ].join(",");
@@ -462,8 +466,11 @@ function getOsmCategoryBase(tags: Record<string, string> | undefined) {
   if (amenity === "cafe") return "Caffè";
   if (amenity === "bar" || amenity === "biergarten") return "Bar";
   if (amenity === "pub") return "Pub";
+  if (amenity === "food_court") return "Food court";
   if (amenity === "ice_cream") return "Gelateria";
   if (shop === "bakery") return "Forno";
+  if (shop === "deli") return "Gastronomia";
+  if (shop === "wine") return "Enoteca";
   if (shop === "pastry" || shop === "confectionery") return "Pasticceria";
   if (shop === "ice_cream") return "Gelateria";
   if (shop === "coffee" || shop === "chocolate") return "Caffè";
@@ -551,7 +558,8 @@ function buildNearbyOverpassQuery(
     [out:json][timeout:25];
     (
       nwr(${around})["name"]["amenity"~"^(restaurant|bar|cafe|pub|fast_food|ice_cream|biergarten)$"];
-      nwr(${around})["name"]["shop"~"^(bakery|pastry|confectionery|coffee|chocolate|ice_cream)$"];
+      nwr(${around})["name"]["amenity"="food_court"];
+      nwr(${around})["name"]["shop"~"^(bakery|pastry|confectionery|coffee|chocolate|ice_cream|deli|wine)$"];
     );
     out center tags ${OVERPASS_MAX_RESULTS};
   `;

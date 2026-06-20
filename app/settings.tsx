@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Platform,
@@ -17,6 +17,12 @@ import {
   type MelloryThemePreference,
   useMelloryTheme,
 } from "@/contexts/mellory-theme";
+import {
+  getAvailableNavigationServiceOptions,
+  getPreferredNavigationService,
+  type NavigationService,
+  setPreferredNavigationService,
+} from "@/services/navigation-preferences";
 
 const appearanceOptions: {
   id: MelloryThemePreference;
@@ -41,11 +47,48 @@ export default function SettingsScreen() {
   const [isResetting, setIsResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [backupMessage, setBackupMessage] = useState("");
+  const [navigationService, setNavigationService] =
+    useState<NavigationService>("automatic");
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const availableNavigationOptions = useMemo(
+    () => getAvailableNavigationServiceOptions(),
+    []
+  );
+
+  useEffect(() => {
+    let isActive = true;
+    const availableIds = new Set(
+      availableNavigationOptions.map((option) => option.id)
+    );
+
+    getPreferredNavigationService()
+      .then((service) => {
+        if (!isActive) return;
+
+        const nextService = availableIds.has(service) ? service : "automatic";
+        setNavigationService(nextService);
+
+        if (nextService !== service) {
+          void setPreferredNavigationService(nextService);
+        }
+      })
+      .catch(() => {
+        if (isActive) setNavigationService("automatic");
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [availableNavigationOptions]);
 
   async function saveAppearanceMode(nextMode: MelloryThemePreference) {
     setResetMessage("");
     await setPreference(nextMode);
+  }
+
+  async function saveNavigationService(nextService: NavigationService) {
+    setNavigationService(nextService);
+    await setPreferredNavigationService(nextService);
   }
 
   async function exportData() {
@@ -245,6 +288,46 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionLabel}>NAVIGAZIONE</Text>
+
+        <View style={styles.optionCard}>
+          {availableNavigationOptions.map((option, index) => {
+            const isActive = navigationService === option.id;
+
+            return (
+              <PressableScale
+                key={option.id}
+                style={[
+                  styles.optionRow,
+                  index < availableNavigationOptions.length - 1 &&
+                    styles.optionDivider,
+                ]}
+                onPress={() => saveNavigationService(option.id)}
+              >
+                <Text
+                  style={[
+                    styles.optionIcon,
+                    isActive && styles.optionIconActive,
+                  ]}
+                >
+                  {option.icon}
+                </Text>
+
+                <View style={styles.optionTextBlock}>
+                  <Text style={styles.navigationOptionLabel}>
+                    {option.label}
+                  </Text>
+                  <Text style={styles.optionDetail}>{option.detail}</Text>
+                </View>
+
+                {isActive ? <View style={styles.activeDot} /> : null}
+              </PressableScale>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionLabel}>BACKUP</Text>
 
         <View style={styles.backupRow}>
@@ -387,6 +470,22 @@ function createStyles(colors: MelloryThemeColors) {
       fontSize: 25,
       lineHeight: 30,
       fontWeight: "900",
+    },
+    optionTextBlock: {
+      flex: 1,
+      gap: 4,
+    },
+    navigationOptionLabel: {
+      color: colors.cream,
+      fontSize: 22,
+      lineHeight: 27,
+      fontWeight: "900",
+    },
+    optionDetail: {
+      color: colors.muted,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "800",
     },
     activeDot: {
       width: 12,

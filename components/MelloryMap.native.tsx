@@ -150,6 +150,7 @@ export default function MelloryMap({
         logo={false}
         compass={false}
         attribution
+        attributionPosition={{ top: 14, left: 14 }}
         onDidFailLoadingMap={() => setHasMapError(true)}
         onRegionDidChange={(event) => {
           const [longitude, latitude] = event.nativeEvent.center;
