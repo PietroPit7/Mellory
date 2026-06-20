@@ -950,7 +950,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 48,
     lineHeight: 52,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     letterSpacing: -1.2,
     marginBottom: 10,
@@ -987,7 +987,7 @@ const styles = StyleSheet.create({
   heroMarkText: {
     color: colors.cream,
     fontSize: 21,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
   },
   heroMeta: {
@@ -1000,7 +1000,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 34,
     lineHeight: 39,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     letterSpacing: -0.8,
     marginBottom: 18,
@@ -1106,7 +1106,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 27,
     lineHeight: 32,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
   },
   input: {
@@ -1169,7 +1169,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 34,
     lineHeight: 39,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     letterSpacing: -0.8,
     marginBottom: 4,
@@ -1312,7 +1312,7 @@ const styles = StyleSheet.create({
   },
   placeMarkText: {
     fontSize: 19,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
   },
   placeBody: {
@@ -1382,7 +1382,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 26,
     lineHeight: 31,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 8,
   },

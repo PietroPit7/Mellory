@@ -130,9 +130,9 @@ export default function TabLayout() {
           marginBottom: 2,
         },
         tabBarLabelStyle: {
-          fontSize: 13,
-          fontWeight: "800",
-          letterSpacing: 0.3,
+          fontSize: 11,
+          fontWeight: "700",
+          letterSpacing: 0.2,
           marginTop: 1,
         },
         tabBarItemStyle: {
