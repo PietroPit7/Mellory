@@ -512,7 +512,7 @@ export async function fetchCitySuggestions(query: string) {
 
   if (!response.ok) {
     throw new Error(
-      "Non riesco a caricare i suggerimenti citta da Geoapify. Controlla la chiave API o riprova tra poco."
+      "Non riesco a caricare i suggerimenti città. Riprova tra poco."
     );
   }
 

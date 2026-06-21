@@ -788,7 +788,7 @@ export default function MyMelloryScreen() {
 
             <View style={styles.quickCardAccent}>
               <View style={styles.quickCardGlow} />
-              <Text style={styles.quickIconAccent}>✓</Text>
+              <Text style={styles.quickIconAccent}>✦</Text>
               <Text style={styles.quickValueAccent}>{tryPlaces.length}</Text>
               <Text style={styles.quickLabelAccent}>da provare</Text>
             </View>

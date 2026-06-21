@@ -634,7 +634,8 @@ function formatOpeningHoursValue(value: string) {
 }
 
 function isClosedOpeningHoursValue(value: string) {
-  return value.trim().toLowerCase() === "chiuso";
+  const v = value.trim().toLowerCase();
+  return v === "chiuso" || v === "chiusa";
 }
 
 function getOpeningHoursSegments(openingHours: string) {
