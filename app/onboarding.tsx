@@ -490,8 +490,8 @@ export default function OnboardingScreen() {
         </View>
 
         <PressableScale style={[styles.primaryButton, styles.completionButton]} onPress={enterApp}>
-          <Text style={styles.primaryButtonText}>Entra in Mellory</Text>
-          <Text style={styles.primaryButtonArrow}>→</Text>
+          <Text style={[styles.primaryButtonText, styles.completionButtonText]}>Entra in Mellory</Text>
+          <Text style={[styles.primaryButtonArrow, styles.completionButtonText]}>→</Text>
         </PressableScale>
       </View>
     );
@@ -812,6 +812,9 @@ const styles = StyleSheet.create({
   },
   completionButton: {
     backgroundColor: colors.cream,
+  },
+  completionButtonText: {
+    color: colors.black,
   },
 
   // Lists preview

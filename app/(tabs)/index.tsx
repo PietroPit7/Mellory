@@ -489,8 +489,8 @@ async function fetchOverpassElements(query: string): Promise<OverpassElement[]> 
     OVERPASS_ENDPOINTS.forEach((endpoint) => {
       fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: query,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `data=${encodeURIComponent(query)}`,
       })
         .then((r) => {
           if (!r.ok) throw new Error("not ok");
@@ -531,7 +531,7 @@ async function fetchDashboardData(context: SearchContext) {
     Promise.race([
       fetchOverpassElements(query).catch(() => [] as OverpassElement[]),
       new Promise<OverpassElement[]>((resolve) =>
-        setTimeout(() => resolve([]), 6500)
+        setTimeout(() => resolve([]), 12000)
       ),
     ]),
     fetchGeoapifyNearbyPlaces(context.latitude, context.longitude, {
@@ -928,7 +928,7 @@ export default function HomeScreen() {
       setPlaces(dashboard.places);
 
       if (dashboard.places.length === 0) {
-        setMessage("Ho trovato pochi dati qui. Prova una zona più centrale.");
+        setMessage("Nessun locale trovato. Il server potrebbe essere lento — riprova tra qualche secondo.");
       }
     } catch {
       setMessage(getFriendlyMessage());
@@ -1275,7 +1275,17 @@ export default function HomeScreen() {
       )}
 
       {message.length > 0 && (
-        <Text style={styles.messageText}>{message}</Text>
+        <View style={styles.messageRow}>
+          <Text style={styles.messageText}>{message}</Text>
+          {activeContext && (
+            <PressableScale
+              style={styles.retryButton}
+              onPress={() => loadDashboard(activeContext)}
+            >
+              <Text style={styles.retryButtonText}>Riprova</Text>
+            </PressableScale>
+          )}
+        </View>
       )}
 
       {/* Loading */}
@@ -1649,11 +1659,28 @@ function createStyles(colors: MelloryThemeColors) {
       color: colors.muted,
       fontSize: 13,
     },
+    messageRow: {
+      marginBottom: 12,
+      gap: 10,
+    },
     messageText: {
       color: colors.muted,
       fontSize: 14,
       lineHeight: 20,
-      marginBottom: 12,
+    },
+    retryButton: {
+      alignSelf: "flex-start",
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+    },
+    retryButtonText: {
+      color: colors.cream,
+      fontSize: 13,
+      fontWeight: "700",
     },
     loadingRow: {
       flexDirection: "row",
