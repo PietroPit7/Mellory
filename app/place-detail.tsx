@@ -2612,13 +2612,20 @@ export default function PlaceDetailScreen() {
           <View style={styles.coverOverlay} />
 
           <View style={[styles.coverHeader, { top: insets.top + 8 }]}>
-            <PressableScale style={styles.roundBackButton} onPress={handleBackPress}>
+            <PressableScale
+              style={styles.roundBackButton}
+              onPress={handleBackPress}
+              accessibilityRole="button"
+              accessibilityLabel="Indietro"
+            >
               <Text style={styles.roundBackText}>‹</Text>
             </PressableScale>
 
             <PressableScale
               style={styles.coverPhotoButton}
               onPress={() => openSheet("gallery")}
+              accessibilityRole="button"
+              accessibilityLabel="Gestisci foto"
             >
               <View style={styles.coverPhotoIconFrame}>
                 <View style={styles.coverPhotoIconHorizon} />
@@ -2731,6 +2738,9 @@ export default function PlaceDetailScreen() {
                     },
                   ]}
                   onPress={() => toggleStatus(option.status)}
+                  accessibilityRole="button"
+                  accessibilityLabel={isActive ? `Rimuovi da ${option.title}` : `Aggiungi a ${option.title}`}
+                  accessibilityState={{ selected: isActive }}
                 >
                   <View
                     style={[
@@ -3234,17 +3244,29 @@ export default function PlaceDetailScreen() {
             activeStatuses.includes("favorite") && styles.bottomActionSaved,
           ]}
           onPress={() => toggleStatus("favorite")}
+          accessibilityRole="button"
+          accessibilityLabel={activeStatuses.includes("favorite") ? "Rimuovi dai preferiti" : "Salva come preferito"}
         >
           <Text style={styles.bottomActionText}>
             {activeStatuses.includes("favorite") ? "♥ Salvato" : "♡ Salva"}
           </Text>
         </PressableScale>
 
-        <PressableScale style={styles.bottomAction} onPress={() => openSheet("lists")}>
+        <PressableScale
+          style={styles.bottomAction}
+          onPress={() => openSheet("lists")}
+          accessibilityRole="button"
+          accessibilityLabel="Gestisci liste"
+        >
           <Text style={styles.bottomActionText}>☰ Lista</Text>
         </PressableScale>
 
-        <PressableScale style={styles.bottomActionPrimary} onPress={openMaps}>
+        <PressableScale
+          style={styles.bottomActionPrimary}
+          onPress={openMaps}
+          accessibilityRole="button"
+          accessibilityLabel="Apri navigazione"
+        >
           <Text style={styles.bottomActionPrimaryText}>➤ Naviga</Text>
         </PressableScale>
       </View>
@@ -3393,7 +3415,12 @@ function ActionBox({
   onPress: () => void;
 }) {
   return (
-    <PressableScale style={styles.actionBox} onPress={onPress}>
+    <PressableScale
+      style={styles.actionBox}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
       <Text style={styles.actionIcon}>{symbol}</Text>
       <Text style={styles.actionLabel}>{label}</Text>
     </PressableScale>

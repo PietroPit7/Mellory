@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Platform,
   ScrollView,
   Share,
@@ -66,6 +67,14 @@ export default function SettingsScreen() {
   });
   const [profileSaved, setProfileSaved] = useState(false);
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const screenFade = useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFade.setValue(0);
+      Animated.timing(screenFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    }, [screenFade])
+  );
   const availableNavigationOptions = useMemo(
     () => getAvailableNavigationServiceOptions(),
     []
@@ -275,7 +284,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <Animated.ScrollView style={[styles.screen, { opacity: screenFade }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.safeTop} />
 
       <View style={styles.header}>
@@ -481,7 +490,7 @@ export default function SettingsScreen() {
           Trova sempre il posto giusto per te.
         </Text>
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 

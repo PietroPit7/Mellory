@@ -1247,6 +1247,7 @@ export default function MapScreen() {
           pointerEvents="auto"
           horizontal
           showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
           contentContainerStyle={styles.pillsContent}
           style={styles.pillsRow}
         >

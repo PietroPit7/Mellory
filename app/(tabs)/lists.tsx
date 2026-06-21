@@ -661,6 +661,7 @@ export default function ListsScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
         contentContainerStyle={styles.pillRow}
         style={styles.pillScroll}
       >

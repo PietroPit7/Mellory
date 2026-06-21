@@ -1307,6 +1307,7 @@ export default function HomeScreen() {
                 nestedScrollEnabled
                 directionalLockEnabled
                 showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.pillRow}
                 style={styles.pillScroll}
@@ -1353,6 +1354,7 @@ export default function HomeScreen() {
                   nestedScrollEnabled
                   directionalLockEnabled
                   showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={styles.pillRow}
                   style={styles.pillScroll}
