@@ -1199,10 +1199,24 @@ export default function HomeScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerTopRule} />
-        <Text style={styles.headerKicker}>GUIDA GASTRONOMICA</Text>
-        <Text style={styles.logo}>Mellory</Text>
-        <Text style={styles.headerSubtitle}>Edizione personale · Esplora intorno a te.</Text>
+        <View style={styles.brandBlock}>
+          <Text style={styles.logo}>Mellory</Text>
+          <View style={styles.brandUnderline} />
+          <Text style={styles.brandSubtitle}>
+            La tua guida personale dei posti in cui sei stato bene.
+          </Text>
+        </View>
+      </View>
+
+      {/* Hero */}
+      <View style={styles.hero}>
+        <Text style={styles.overline}>
+          GUIDA GASTRONOMICA · EDIZIONE PERSONALE
+        </Text>
+        <Text style={styles.headline}>
+          Trova sempre{"\n"}il posto{" "}
+          <Text style={styles.headlineAccent}>giusto</Text>.
+        </Text>
       </View>
 
       {/* Search bar */}
@@ -1493,33 +1507,56 @@ function createStyles(colors: MelloryThemeColors) {
       height: 16,
     },
     header: {
-      marginBottom: 20,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      gap: 18,
+      marginBottom: 30,
     },
-    headerTopRule: {
-      height: 1,
-      backgroundColor: colors.yellow,
-      opacity: 0.9,
-      marginBottom: 22,
-    },
-    headerKicker: {
-      color: colors.muted,
-      fontSize: 11,
-      fontWeight: "800",
-      letterSpacing: 3,
-      marginBottom: 6,
+    brandBlock: {
+      flex: 1,
     },
     logo: {
       color: colors.cream,
-      fontSize: 52,
+      fontSize: 46,
+      lineHeight: 50,
       fontWeight: "900",
-      letterSpacing: -1.8,
-      lineHeight: 56,
-      marginBottom: 7,
+      letterSpacing: -1.4,
     },
-    headerSubtitle: {
-      color: colors.textMuted,
-      fontSize: 16,
-      lineHeight: 22,
+    brandUnderline: {
+      width: 38,
+      height: 3,
+      borderRadius: 999,
+      backgroundColor: colors.pink,
+      marginTop: 14,
+      marginBottom: 14,
+    },
+    brandSubtitle: {
+      color: colors.muted,
+      fontSize: 15,
+      lineHeight: 21,
+      fontWeight: "500",
+      maxWidth: 320,
+    },
+    hero: {
+      marginBottom: 36,
+    },
+    overline: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1.6,
+      marginBottom: 14,
+    },
+    headline: {
+      color: colors.cream,
+      fontSize: 34,
+      lineHeight: 39,
+      fontWeight: "900",
+      letterSpacing: -1.5,
+    },
+    headlineAccent: {
+      color: colors.pink,
     },
     searchBox: {
       height: 52,
