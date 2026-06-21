@@ -515,6 +515,7 @@ export default function MapScreen() {
 
   const [previewPlace, setPreviewPlace] = useState<MapPlace | null>(null);
   const [showList, setShowList] = useState(false);
+  const [overlayHeight, setOverlayHeight] = useState(0);
 
   const params = useLocalSearchParams();
   const consumedParamsRef = useRef(false);
@@ -1165,8 +1166,18 @@ export default function MapScreen() {
         </View>
       ) : null}
 
+      {/* Dark shield sized to match the top overlay so controls don't bleed into map tiles */}
+      <View
+        style={[styles.topShield, { height: overlayHeight }]}
+        pointerEvents="none"
+      />
+
       {/* Top floating controls — minimal */}
-      <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+      <View
+        style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}
+        onLayout={(e) => setOverlayHeight(e.nativeEvent.layout.height)}
+        pointerEvents="box-none"
+      >
         {/* Search row */}
         <View pointerEvents="auto" style={styles.searchRow}>
           <View style={styles.searchBox}>
@@ -1460,7 +1471,15 @@ const styles = StyleSheet.create({
   mapDotsCenter: { position: "absolute", top: "42%", left: 0, right: 0, alignItems: "center", zIndex: 6, pointerEvents: "none" },
 
   // ── Top floating overlay ──────────────────────────────────────────────
-  topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, paddingHorizontal: 12, gap: 8 },
+  topShield: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9,
+    backgroundColor: "rgba(7,6,4,0.60)",
+  },
+  topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, paddingHorizontal: 12, paddingBottom: 14, gap: 10 },
 
   searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   searchBox: { flex: 1, height: 46, borderRadius: 23, backgroundColor: "rgba(23,19,15,0.90)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)", paddingLeft: 14, paddingRight: 10, flexDirection: "row", alignItems: "center", gap: 8 },
