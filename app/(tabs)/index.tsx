@@ -1508,7 +1508,7 @@ function createStyles(colors: MelloryThemeColors) {
       justifyContent: "space-between",
       alignItems: "flex-start",
       gap: 18,
-      marginBottom: 30,
+      marginBottom: 16,
     },
     brandBlock: {
       flex: 1,
