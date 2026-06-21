@@ -134,6 +134,10 @@ function getPlaceInitial(name: string) {
   return firstLetter || "M";
 }
 
+function getSafeSavedAt(place: SavedPlace) {
+  return place.savedAt || "";
+}
+
 function getExperienceStorageKey(placeId: string) {
   return `mellory:experience:${placeId}`;
 }
@@ -386,6 +390,12 @@ async function removeStatusFromExperience(
   return nextExperience;
 }
 
+function sortBySavedAtDesc(places: SavedPlace[]) {
+  return [...places].sort((a, b) => {
+    return getSafeSavedAt(b).localeCompare(getSafeSavedAt(a));
+  });
+}
+
 function mergePlacesWithStatuses({
   favoritePlaces,
   tryPlaces,
@@ -471,6 +481,22 @@ export default function MyMelloryScreen() {
   );
 
   const hasPlaces = allPlaces.length > 0 || customLists.length > 0;
+
+  const latestPlaces = sortBySavedAtDesc(allPlaces).slice(0, 5);
+
+  const personalDataCount = allPlaces.filter((place) => {
+    const experience = place.experience;
+
+    if (!experience) return false;
+
+    return (
+      experience.note.trim().length > 0 ||
+      experience.coverImageUri.length > 0 ||
+      experience.galleryImageUris.length > 0 ||
+      experience.badges.length > 0 ||
+      experience.experiences.length > 0
+    );
+  }).length;
 
   useFocusEffect(
     useCallback(() => {
@@ -636,179 +662,527 @@ export default function MyMelloryScreen() {
     await removeStatusReferences(placeId, "retry");
   }
 
-  function renderPlaceRow(
-    place: SavedPlace,
-    status: PlaceStatus,
-    onRemove: () => void,
-    statusColor: string
-  ) {
-    const enrichedPlace = allPlaces.find((item) => item.id === place.id);
-    const experienceSummary = enrichedPlace
-      ? getExperienceSummary(enrichedPlace)
-      : "";
-
-    return (
-      <PressableScale
-        key={place.id}
-        style={styles.placeRow}
-        onPress={() => openPlaceDetail(place, status)}
-      >
-        <View style={[styles.placeAvatar, { backgroundColor: `${statusColor}18` }]}>
-          <Text style={[styles.placeAvatarText, { color: statusColor }]}>
-            {getPlaceInitial(place.name)}
-          </Text>
-        </View>
-
-        <View style={styles.placeInfo}>
-          <Text numberOfLines={1} style={styles.placeName}>
-            {place.name}
-          </Text>
-          <Text numberOfLines={1} style={styles.placeSub}>
-            {place.category}
-            {place.distance ? ` · ${place.distance}` : ""}
-            {experienceSummary ? ` · ${experienceSummary}` : ""}
-          </Text>
-        </View>
-
-        <PressableScale
-          style={styles.removeButton}
-          onPress={(event) => {
-            event.stopPropagation?.();
-            onRemove();
-          }}
-        >
-          <Text style={styles.removeIcon}>×</Text>
-        </PressableScale>
-      </PressableScale>
-    );
-  }
-
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={{ height: insets.top + 8 }} />
+      <View style={{ height: insets.top + 16 }} />
+
+      <View style={styles.topRule} />
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>My Mellory</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.kicker}>ARCHIVIO PERSONALE</Text>
+          <Text style={styles.title}>My Mellory</Text>
+          <Text style={styles.subtitle}>
+            I posti che vuoi ricordare, ritrovare e vivere di nuovo.
+          </Text>
+        </View>
+
         <PressableScale style={styles.settingsButton} onPress={openSettings}>
           <Text style={styles.settingsIcon}>⚙</Text>
         </PressableScale>
       </View>
 
-      {/* Stats */}
-      {hasPlaces && (
-        <Text style={styles.stats}>
-          {favoritePlaces.length} preferiti · {tryPlaces.length} da provare
-          {visitedPlaces.length > 0 ? ` · ${visitedPlaces.length} visitati` : ""}
-          {customLists.length > 0 ? ` · ${customLists.length} liste` : ""}
+      {/* Hero card */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroGlow} />
+
+        <View style={styles.heroTop}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>M</Text>
+          </View>
+
+          <Text style={styles.heroMeta}>EDIZIONE PERSONALE</Text>
+        </View>
+
+        <Text style={styles.heroTitle}>
+          La tua guida,{"\n"}scritta dai tuoi posti.
         </Text>
-      )}
+
+        <Text style={styles.heroText}>
+          Qui restano i locali che hanno senso per te: quelli dove torneresti,
+          quelli da provare e quelli da ricordare al momento giusto.
+        </Text>
+
+        <View style={styles.heroStatsRow}>
+          <View style={styles.heroMiniStat}>
+            <Text style={styles.heroMiniValue}>{favoritePlaces.length}</Text>
+            <Text style={styles.heroMiniLabel}>Preferiti</Text>
+          </View>
+
+          <View style={styles.heroMiniDivider} />
+
+          <View style={styles.heroMiniStat}>
+            <Text style={styles.heroMiniValue}>{tryPlaces.length}</Text>
+            <Text style={styles.heroMiniLabel}>Da provare</Text>
+          </View>
+
+          <View style={styles.heroMiniDivider} />
+
+          <View style={styles.heroMiniStat}>
+            <Text style={styles.heroMiniValue}>{totalSaved}</Text>
+            <Text style={styles.heroMiniLabel}>Totali</Text>
+          </View>
+        </View>
+      </View>
 
       {/* Empty state */}
       {!hasPlaces && (
         <View style={styles.emptyCard}>
+          <View style={styles.emptyIconWrap}>
+            <Text style={styles.emptyIcon}>✦</Text>
+          </View>
+
+          <Text style={styles.emptyTitle}>Il tuo archivio è pronto.</Text>
           <Text style={styles.emptyText}>
-            Apri la mappa, esplora una città e tocca ♡ per salvare un preferito
-            o + per aggiungere un posto da provare.
+            Apri la mappa, esplora una città o usa la tua posizione. Tocca ♡ per
+            salvare un preferito oppure + per aggiungere un posto da provare.
           </Text>
+
           <PressableScale style={styles.emptyButton} onPress={openMap}>
             <Text style={styles.emptyButtonText}>Apri la mappa</Text>
           </PressableScale>
         </View>
       )}
 
+      {/* Quick stats panel */}
+      {hasPlaces && (
+        <View style={styles.quickPanel}>
+          <Text style={styles.quickKicker}>IL TUO STATO</Text>
+
+          <View style={styles.quickRow}>
+            <View style={styles.quickCard}>
+              <Text style={styles.quickIcon}>♥</Text>
+              <Text style={styles.quickValue}>{favoritePlaces.length}</Text>
+              <Text style={styles.quickLabel}>dove torneresti</Text>
+            </View>
+
+            <View style={styles.quickCardAccent}>
+              <Text style={styles.quickIconAccent}>✓</Text>
+              <Text style={styles.quickValueAccent}>{tryPlaces.length}</Text>
+              <Text style={styles.quickLabelAccent}>da provare</Text>
+            </View>
+          </View>
+
+          {(visitedPlaces.length > 0 ||
+            retryPlaces.length > 0 ||
+            customLists.length > 0 ||
+            personalDataCount > 0) && (
+            <View style={styles.extraQuickRow}>
+              <View style={styles.extraQuickCard}>
+                <Text style={styles.extraQuickValue}>{visitedPlaces.length}</Text>
+                <Text style={styles.extraQuickLabel}>visitati</Text>
+              </View>
+
+              <View style={styles.extraQuickCard}>
+                <Text style={styles.extraQuickValue}>{retryPlaces.length}</Text>
+                <Text style={styles.extraQuickLabel}>da rivalutare</Text>
+              </View>
+
+              <View style={styles.extraQuickCard}>
+                <Text style={styles.extraQuickValue}>{customLists.length}</Text>
+                <Text style={styles.extraQuickLabel}>liste</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Latest places carousel */}
+      {latestPlaces.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.overline}>ULTIMI SALVATAGGI</Text>
+              <Text style={styles.sectionTitle}>Appena aggiunti</Text>
+            </View>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.latestRow}
+          >
+            {latestPlaces.map((place, index) => {
+              const status = getPlaceStatus(place);
+
+              return (
+                <PressableScale
+                  key={`${place.id}-${status}-${index}`}
+                  style={styles.latestCard}
+                  onPress={() => openPlaceDetail(place, status)}
+                >
+                  <View style={styles.latestMark}>
+                    <Text style={styles.latestMarkText}>
+                      {getPlaceInitial(place.name)}
+                    </Text>
+                  </View>
+
+                  <Text numberOfLines={2} style={styles.latestName}>
+                    {place.name}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.latestCategory}>
+                    {place.category}
+                  </Text>
+
+                  <Text style={styles.latestDistance}>{place.distance}</Text>
+                </PressableScale>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {/* Favorites */}
       {favoritePlaces.length > 0 && (
-        <>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Preferiti</Text>
-            <Text style={styles.sectionCount}>{favoritePlaces.length}</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderText}>
+              <Text style={styles.overline}>PREFERITI</Text>
+              <Text style={styles.sectionTitle}>Dove torneresti subito</Text>
+            </View>
+
+            <View style={styles.countPill}>
+              <Text style={styles.countPillText}>{favoritePlaces.length}</Text>
+            </View>
           </View>
-          <View style={styles.placeList}>
-            {favoritePlaces.map((place) =>
-              renderPlaceRow(place, "favorite", () => removeFavorite(place.id), colors.pink)
-            )}
-          </View>
-        </>
+
+          {favoritePlaces.map((place) => {
+            const enrichedPlace = allPlaces.find((item) => item.id === place.id);
+            const experienceSummary = enrichedPlace
+              ? getExperienceSummary(enrichedPlace)
+              : "";
+
+            return (
+              <PressableScale
+                key={place.id}
+                style={styles.placeCard}
+                onPress={() => openPlaceDetail(place, "favorite")}
+              >
+                <View style={styles.placeAccent} />
+
+                <View style={styles.placeMark}>
+                  <Text style={styles.placeMarkText}>
+                    {getPlaceInitial(place.name)}
+                  </Text>
+                </View>
+
+                <View style={styles.placeBody}>
+                  <Text numberOfLines={1} style={styles.placeName}>
+                    {place.name}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.placeCategory}>
+                    {place.category}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.placeDetail}>
+                    {place.detail}
+                  </Text>
+
+                  {experienceSummary.length > 0 && (
+                    <Text numberOfLines={1} style={styles.placeExtraDetail}>
+                      {experienceSummary}
+                    </Text>
+                  )}
+
+                  <View style={styles.placeFooter}>
+                    <Text style={styles.placeDistance}>{place.distance}</Text>
+                    <Text style={styles.placeTag}>♥ Preferito</Text>
+                  </View>
+                </View>
+
+                <PressableScale
+                  style={styles.removeButton}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    void removeFavorite(place.id);
+                  }}
+                >
+                  <Text style={styles.removeIcon}>×</Text>
+                </PressableScale>
+              </PressableScale>
+            );
+          })}
+        </View>
       )}
 
       {/* Try */}
       {tryPlaces.length > 0 && (
-        <>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Da provare</Text>
-            <Text style={styles.sectionCount}>{tryPlaces.length}</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderText}>
+              <Text style={styles.overline}>DA PROVARE</Text>
+              <Text style={styles.sectionTitle}>La prossima uscita</Text>
+            </View>
+
+            <View style={styles.countPillPink}>
+              <Text style={styles.countPillTextPink}>{tryPlaces.length}</Text>
+            </View>
           </View>
-          <View style={styles.placeList}>
-            {tryPlaces.map((place) =>
-              renderPlaceRow(place, "try", () => removeTry(place.id), colors.yellow)
-            )}
-          </View>
-        </>
+
+          {tryPlaces.map((place) => {
+            const enrichedPlace = allPlaces.find((item) => item.id === place.id);
+            const experienceSummary = enrichedPlace
+              ? getExperienceSummary(enrichedPlace)
+              : "";
+
+            return (
+              <PressableScale
+                key={place.id}
+                style={styles.placeCard}
+                onPress={() => openPlaceDetail(place, "try")}
+              >
+                <View style={styles.placeAccentPink} />
+
+                <View style={styles.placeMarkSecondary}>
+                  <Text style={styles.placeMarkText}>
+                    {getPlaceInitial(place.name)}
+                  </Text>
+                </View>
+
+                <View style={styles.placeBody}>
+                  <Text numberOfLines={1} style={styles.placeName}>
+                    {place.name}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.placeCategory}>
+                    {place.category}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.placeDetail}>
+                    {place.detail}
+                  </Text>
+
+                  {experienceSummary.length > 0 && (
+                    <Text numberOfLines={1} style={styles.placeExtraDetail}>
+                      {experienceSummary}
+                    </Text>
+                  )}
+
+                  <View style={styles.placeFooter}>
+                    <Text style={styles.placeDistance}>{place.distance}</Text>
+                    <Text style={styles.placeTagPink}>✓ Da provare</Text>
+                  </View>
+                </View>
+
+                <PressableScale
+                  style={styles.removeButton}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    void removeTry(place.id);
+                  }}
+                >
+                  <Text style={styles.removeIcon}>×</Text>
+                </PressableScale>
+              </PressableScale>
+            );
+          })}
+        </View>
       )}
 
       {/* Visited */}
       {visitedPlaces.length > 0 && (
-        <>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Visitati</Text>
-            <Text style={styles.sectionCount}>{visitedPlaces.length}</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderText}>
+              <Text style={styles.overline}>VISITATI</Text>
+              <Text style={styles.sectionTitle}>Posti già vissuti</Text>
+            </View>
+
+            <View style={styles.countPillGreen}>
+              <Text style={styles.countPillTextGreen}>{visitedPlaces.length}</Text>
+            </View>
           </View>
-          <View style={styles.placeList}>
-            {visitedPlaces.map((place) =>
-              renderPlaceRow(place, "visited", () => removeVisited(place.id), colors.green)
-            )}
-          </View>
-        </>
+
+          {visitedPlaces.map((place) => {
+            const enrichedPlace = allPlaces.find((item) => item.id === place.id);
+            const experienceSummary = enrichedPlace
+              ? getExperienceSummary(enrichedPlace)
+              : "";
+
+            return (
+              <PressableScale
+                key={place.id}
+                style={styles.placeCard}
+                onPress={() => openPlaceDetail(place, "visited")}
+              >
+                <View style={styles.placeAccentGreen} />
+
+                <View style={styles.placeMarkMuted}>
+                  <Text style={styles.placeMarkText}>
+                    {getPlaceInitial(place.name)}
+                  </Text>
+                </View>
+
+                <View style={styles.placeBody}>
+                  <Text numberOfLines={1} style={styles.placeName}>
+                    {place.name}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.placeCategory}>
+                    {place.category}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.placeDetail}>
+                    {place.detail}
+                  </Text>
+
+                  {experienceSummary.length > 0 && (
+                    <Text numberOfLines={1} style={styles.placeExtraDetail}>
+                      {experienceSummary}
+                    </Text>
+                  )}
+
+                  <View style={styles.placeFooter}>
+                    <Text style={styles.placeDistance}>{place.distance}</Text>
+                    <Text style={styles.placeTagGreen}>✓ Visitato</Text>
+                  </View>
+                </View>
+
+                <PressableScale
+                  style={styles.removeButton}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    void removeVisited(place.id);
+                  }}
+                >
+                  <Text style={styles.removeIcon}>×</Text>
+                </PressableScale>
+              </PressableScale>
+            );
+          })}
+        </View>
       )}
 
       {/* Retry */}
       {retryPlaces.length > 0 && (
-        <>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Da rivalutare</Text>
-            <Text style={styles.sectionCount}>{retryPlaces.length}</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderText}>
+              <Text style={styles.overline}>DA RIVALUTARE</Text>
+              <Text style={styles.sectionTitle}>Da riprovare con calma</Text>
+            </View>
+
+            <View style={styles.countPillOrange}>
+              <Text style={styles.countPillTextOrange}>{retryPlaces.length}</Text>
+            </View>
           </View>
-          <View style={styles.placeList}>
-            {retryPlaces.map((place) =>
-              renderPlaceRow(place, "retry", () => removeRetry(place.id), colors.orange)
-            )}
-          </View>
-        </>
+
+          {retryPlaces.map((place) => {
+            const enrichedPlace = allPlaces.find((item) => item.id === place.id);
+            const experienceSummary = enrichedPlace
+              ? getExperienceSummary(enrichedPlace)
+              : "";
+
+            return (
+              <PressableScale
+                key={place.id}
+                style={styles.placeCard}
+                onPress={() => openPlaceDetail(place, "retry")}
+              >
+                <View style={styles.placeAccentOrange} />
+
+                <View style={styles.placeMarkMuted}>
+                  <Text style={styles.placeMarkText}>
+                    {getPlaceInitial(place.name)}
+                  </Text>
+                </View>
+
+                <View style={styles.placeBody}>
+                  <Text numberOfLines={1} style={styles.placeName}>
+                    {place.name}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.placeCategory}>
+                    {place.category}
+                  </Text>
+
+                  <Text numberOfLines={1} style={styles.placeDetail}>
+                    {place.detail}
+                  </Text>
+
+                  {experienceSummary.length > 0 && (
+                    <Text numberOfLines={1} style={styles.placeExtraDetail}>
+                      {experienceSummary}
+                    </Text>
+                  )}
+
+                  <View style={styles.placeFooter}>
+                    <Text style={styles.placeDistance}>{place.distance}</Text>
+                    <Text style={styles.placeTagOrange}>↻ Da rivalutare</Text>
+                  </View>
+                </View>
+
+                <PressableScale
+                  style={styles.removeButton}
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    void removeRetry(place.id);
+                  }}
+                >
+                  <Text style={styles.removeIcon}>×</Text>
+                </PressableScale>
+              </PressableScale>
+            );
+          })}
+        </View>
       )}
 
       {/* Custom lists */}
       {customLists.length > 0 && (
-        <>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Le tue raccolte</Text>
-            <PressableScale onPress={openLists}>
-              <Text style={styles.sectionLink}>Gestisci ›</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderText}>
+              <Text style={styles.overline}>LISTE PERSONALIZZATE</Text>
+              <Text style={styles.sectionTitle}>Le tue raccolte</Text>
+            </View>
+
+            <PressableScale style={styles.openListsButton} onPress={openLists}>
+              <Text style={styles.openListsButtonText}>Apri</Text>
             </PressableScale>
           </View>
-          <View style={styles.placeList}>
-            {customLists.map((list) => (
-              <PressableScale
-                key={list.id}
-                style={styles.customListRow}
-                onPress={openLists}
-              >
-                <View
-                  style={[styles.customListDot, { backgroundColor: list.color }]}
-                />
-                <View style={styles.placeInfo}>
-                  <Text numberOfLines={1} style={styles.placeName}>
-                    {list.title}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.placeSub}>
-                    {getListCountLabel(list.placeIds.length)}
-                  </Text>
-                </View>
-                <Text style={styles.placeChevron}>›</Text>
-              </PressableScale>
-            ))}
-          </View>
-        </>
+
+          {customLists.map((list) => (
+            <PressableScale key={list.id} style={styles.customListCard} onPress={openLists}>
+              <View
+                style={[
+                  styles.customListAccent,
+                  { backgroundColor: list.color },
+                ]}
+              />
+
+              <View style={styles.customListBody}>
+                <Text numberOfLines={1} style={styles.customListTitle}>
+                  {list.title}
+                </Text>
+
+                <Text numberOfLines={2} style={styles.customListText}>
+                  {list.description || getListCountLabel(list.placeIds.length)}
+                </Text>
+
+                <Text style={styles.customListMeta}>
+                  {getListCountLabel(list.placeIds.length)}
+                </Text>
+              </View>
+
+              <Text style={styles.customListArrow}>›</Text>
+            </PressableScale>
+          ))}
+        </View>
+      )}
+
+      {/* Bottom editorial card */}
+      {hasPlaces && (
+        <View style={styles.bottomCard}>
+          <Text style={styles.bottomKicker}>LA SCHEDA PERSONALE</Text>
+          <Text style={styles.bottomTitle}>Ogni posto ha una storia.</Text>
+          <Text style={styles.bottomText}>
+            Tocca un locale salvato per aprire note, voto personale, ricordi,
+            foto, badge e diario esperienze.
+          </Text>
+        </View>
       )}
 
       <View style={styles.bottomSpace} />
@@ -818,173 +1192,647 @@ export default function MyMelloryScreen() {
 
 function createStyles(colors: MelloryThemeColors) {
   return StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.black,
-  },
-  content: {
-    paddingHorizontal: 20,
-  },
-  safeTop: {
-    height: 16,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  title: {
-    color: colors.cream,
-    fontSize: 26,
-    fontWeight: "800",
-    letterSpacing: -0.8,
-  },
-  settingsButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  settingsIcon: {
-    color: colors.cream,
-    fontSize: 17,
-    lineHeight: 19,
-  },
-  stats: {
-    color: colors.muted,
-    fontSize: 14,
-    marginBottom: 20,
-  },
-  emptyCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    marginTop: 14,
-    marginBottom: 20,
-  },
-  emptyText: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  emptyButton: {
-    backgroundColor: colors.cream,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  emptyButtonText: {
-    color: colors.black,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  sectionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    color: colors.cream,
-    fontSize: 20,
-    fontWeight: "700",
-    letterSpacing: -0.4,
-  },
-  sectionCount: {
-    color: colors.muted,
-    fontSize: 14,
-  },
-  sectionLink: {
-    color: colors.pink,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  placeList: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-    marginBottom: 14,
-  },
-  placeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.softBorder,
-  },
-  placeAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  placeAvatarText: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  placeInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  placeName: {
-    color: colors.cream,
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  placeSub: {
-    color: colors.muted,
-    fontSize: 13,
-  },
-  placeChevron: {
-    color: colors.muted,
-    fontSize: 20,
-  },
-  removeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  removeIcon: {
-    color: colors.muted,
-    fontSize: 20,
-    lineHeight: 22,
-  },
-  customListRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.softBorder,
-  },
-  customListDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    flexShrink: 0,
-  },
-  bottomSpace: {
-    height: 118,
-  },
+    screen: {
+      flex: 1,
+      backgroundColor: colors.black,
+    },
+    content: {
+      paddingHorizontal: 22,
+    },
+    topRule: {
+      height: 1,
+      backgroundColor: colors.yellow,
+      opacity: 0.95,
+      marginBottom: 28,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 16,
+      marginBottom: 26,
+    },
+    headerText: {
+      flex: 1,
+    },
+    kicker: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+      marginBottom: 8,
+    },
+    title: {
+      color: colors.cream,
+      fontSize: 52,
+      lineHeight: 56,
+      fontWeight: "900",
+      letterSpacing: -1.8,
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontSize: 19,
+      lineHeight: 26,
+      marginTop: 7,
+      maxWidth: 315,
+    },
+    settingsButton: {
+      width: 58,
+      height: 58,
+      borderRadius: 999,
+      backgroundColor: colors.softBorder,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 4,
+    },
+    settingsIcon: {
+      color: colors.cream,
+      fontSize: 25,
+      lineHeight: 28,
+      fontWeight: "700",
+    },
+    heroCard: {
+      backgroundColor: colors.card,
+      borderRadius: 34,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 24,
+      marginBottom: 18,
+      overflow: "hidden",
+    },
+    heroGlow: {
+      position: "absolute",
+      right: -55,
+      top: -70,
+      width: 180,
+      height: 180,
+      borderRadius: 999,
+      backgroundColor: `${colors.pink}1A`,
+    },
+    heroTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 28,
+    },
+    heroBadge: {
+      width: 52,
+      height: 52,
+      borderRadius: 999,
+      backgroundColor: colors.paper,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heroBadgeText: {
+      color: colors.paperText,
+      fontSize: 28,
+      fontWeight: "900",
+    },
+    heroMeta: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+    },
+    heroTitle: {
+      color: colors.cream,
+      fontSize: 39,
+      lineHeight: 43,
+      fontWeight: "900",
+      letterSpacing: -1.1,
+      marginBottom: 13,
+    },
+    heroText: {
+      color: colors.textMuted,
+      fontSize: 16,
+      lineHeight: 25,
+      maxWidth: 310,
+    },
+    heroStatsRow: {
+      minHeight: 86,
+      borderRadius: 26,
+      backgroundColor: colors.softBorder,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 6,
+    },
+    heroMiniStat: {
+      flex: 1,
+      alignItems: "center",
+    },
+    heroMiniValue: {
+      color: colors.cream,
+      fontSize: 30,
+      lineHeight: 34,
+      fontWeight: "900",
+    },
+    heroMiniLabel: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      marginTop: 4,
+    },
+    heroMiniDivider: {
+      width: 1,
+      height: 38,
+      backgroundColor: colors.border,
+    },
+    emptyCard: {
+      backgroundColor: colors.paper,
+      borderRadius: 32,
+      padding: 24,
+      marginBottom: 18,
+    },
+    emptyIconWrap: {
+      width: 52,
+      height: 52,
+      borderRadius: 999,
+      backgroundColor: `${colors.pink}14`,
+      borderWidth: 1,
+      borderColor: `${colors.pink}29`,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 22,
+    },
+    emptyIcon: {
+      color: colors.pink,
+      fontSize: 25,
+      fontWeight: "900",
+    },
+    emptyTitle: {
+      color: colors.paperText,
+      fontSize: 32,
+      lineHeight: 37,
+      fontWeight: "900",
+      marginBottom: 10,
+    },
+    emptyText: {
+      color: colors.paperText,
+      fontSize: 16,
+      lineHeight: 25,
+    },
+    emptyButton: {
+      minHeight: 52,
+      borderRadius: 999,
+      backgroundColor: colors.black,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 20,
+    },
+    emptyButtonText: {
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "900",
+    },
+    quickPanel: {
+      marginBottom: 24,
+    },
+    quickKicker: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+      marginBottom: 14,
+    },
+    quickRow: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    quickCard: {
+      flex: 1,
+      minHeight: 138,
+      borderRadius: 28,
+      backgroundColor: colors.paper,
+      padding: 18,
+      justifyContent: "space-between",
+    },
+    quickCardAccent: {
+      flex: 1,
+      minHeight: 138,
+      borderRadius: 28,
+      backgroundColor: colors.pink,
+      padding: 18,
+      justifyContent: "space-between",
+    },
+    quickIcon: {
+      color: colors.pink,
+      fontSize: 28,
+      fontWeight: "900",
+    },
+    quickIconAccent: {
+      color: colors.cream,
+      fontSize: 27,
+      fontWeight: "900",
+    },
+    quickValue: {
+      color: colors.paperText,
+      fontSize: 39,
+      lineHeight: 42,
+      fontWeight: "900",
+    },
+    quickValueAccent: {
+      color: colors.cream,
+      fontSize: 39,
+      lineHeight: 42,
+      fontWeight: "900",
+    },
+    quickLabel: {
+      color: colors.paperText,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: "900",
+    },
+    quickLabelAccent: {
+      color: colors.textMuted,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: "900",
+    },
+    extraQuickRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 12,
+    },
+    extraQuickCard: {
+      flex: 1,
+      minHeight: 82,
+      borderRadius: 22,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      justifyContent: "space-between",
+    },
+    extraQuickValue: {
+      color: colors.cream,
+      fontSize: 25,
+      lineHeight: 29,
+      fontWeight: "900",
+    },
+    extraQuickLabel: {
+      color: colors.muted,
+      fontSize: 11,
+      lineHeight: 16,
+      fontWeight: "900",
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      gap: 12,
+      marginBottom: 14,
+    },
+    sectionHeaderText: {
+      flex: 1,
+    },
+    overline: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+      marginBottom: 8,
+    },
+    sectionTitle: {
+      color: colors.cream,
+      fontSize: 30,
+      lineHeight: 35,
+      fontWeight: "900",
+      letterSpacing: -0.8,
+    },
+    countPill: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: colors.paper,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countPillPink: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: colors.pink,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countPillGreen: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: colors.green,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countPillOrange: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: colors.orange,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countPillText: {
+      color: colors.paperText,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    countPillTextPink: {
+      color: colors.cream,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    countPillTextGreen: {
+      color: colors.cream,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    countPillTextOrange: {
+      color: colors.cream,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    latestRow: {
+      gap: 12,
+      paddingRight: 22,
+    },
+    latestCard: {
+      width: 178,
+      minHeight: 196,
+      borderRadius: 30,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 18,
+      justifyContent: "space-between",
+    },
+    latestMark: {
+      width: 50,
+      height: 50,
+      borderRadius: 999,
+      backgroundColor: `${colors.pink}14`,
+      borderWidth: 1,
+      borderColor: `${colors.pink}2E`,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    latestMarkText: {
+      color: colors.pink,
+      fontSize: 25,
+      fontWeight: "900",
+    },
+    latestName: {
+      color: colors.cream,
+      fontSize: 22,
+      lineHeight: 26,
+      fontWeight: "900",
+      marginTop: 18,
+    },
+    latestCategory: {
+      color: colors.textMuted,
+      fontSize: 14,
+      fontWeight: "700",
+      marginTop: 8,
+    },
+    latestDistance: {
+      color: colors.pink,
+      fontSize: 13,
+      fontWeight: "900",
+      marginTop: 10,
+    },
+    placeCard: {
+      minHeight: 138,
+      borderRadius: 30,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 12,
+      flexDirection: "row",
+      overflow: "hidden",
+    },
+    placeAccent: {
+      width: 4,
+      backgroundColor: colors.paper,
+    },
+    placeAccentPink: {
+      width: 4,
+      backgroundColor: colors.pink,
+    },
+    placeAccentGreen: {
+      width: 4,
+      backgroundColor: colors.green,
+    },
+    placeAccentOrange: {
+      width: 4,
+      backgroundColor: colors.orange,
+    },
+    placeMark: {
+      width: 74,
+      backgroundColor: colors.card2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    placeMarkSecondary: {
+      width: 74,
+      backgroundColor: `${colors.pink}12`,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    placeMarkMuted: {
+      width: 74,
+      backgroundColor: colors.softBorder,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    placeMarkText: {
+      color: colors.pink,
+      fontSize: 34,
+      fontWeight: "900",
+    },
+    placeBody: {
+      flex: 1,
+      paddingVertical: 17,
+      paddingHorizontal: 15,
+      justifyContent: "center",
+    },
+    placeName: {
+      color: colors.cream,
+      fontSize: 22,
+      lineHeight: 26,
+      fontWeight: "900",
+      marginBottom: 7,
+    },
+    placeCategory: {
+      color: colors.textMuted,
+      fontSize: 15,
+      marginBottom: 8,
+    },
+    placeDetail: {
+      color: colors.muted,
+      fontSize: 14,
+      fontWeight: "700",
+      marginBottom: 11,
+    },
+    placeExtraDetail: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      marginTop: -5,
+      marginBottom: 10,
+    },
+    placeFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    placeDistance: {
+      color: colors.pink,
+      fontSize: 13,
+      fontWeight: "900",
+    },
+    placeTag: {
+      color: colors.paperText,
+      backgroundColor: colors.paper,
+      borderRadius: 999,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      fontSize: 11,
+      fontWeight: "900",
+      overflow: "hidden",
+    },
+    placeTagPink: {
+      color: colors.cream,
+      backgroundColor: colors.pink,
+      borderRadius: 999,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      fontSize: 11,
+      fontWeight: "900",
+      overflow: "hidden",
+    },
+    placeTagGreen: {
+      color: colors.cream,
+      backgroundColor: colors.green,
+      borderRadius: 999,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      fontSize: 11,
+      fontWeight: "900",
+      overflow: "hidden",
+    },
+    placeTagOrange: {
+      color: colors.cream,
+      backgroundColor: colors.orange,
+      borderRadius: 999,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      fontSize: 11,
+      fontWeight: "900",
+      overflow: "hidden",
+    },
+    removeButton: {
+      width: 46,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    removeIcon: {
+      color: colors.muted,
+      fontSize: 28,
+      lineHeight: 30,
+      fontWeight: "700",
+    },
+    openListsButton: {
+      minHeight: 42,
+      borderRadius: 999,
+      backgroundColor: colors.pink,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    openListsButtonText: {
+      color: colors.cream,
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    customListCard: {
+      minHeight: 112,
+      borderRadius: 30,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 12,
+      flexDirection: "row",
+      overflow: "hidden",
+    },
+    customListAccent: {
+      width: 7,
+    },
+    customListBody: {
+      flex: 1,
+      paddingVertical: 18,
+      paddingHorizontal: 17,
+      justifyContent: "center",
+    },
+    customListTitle: {
+      color: colors.cream,
+      fontSize: 24,
+      lineHeight: 29,
+      fontWeight: "900",
+      marginBottom: 6,
+    },
+    customListText: {
+      color: colors.textMuted,
+      fontSize: 14,
+      lineHeight: 21,
+      marginBottom: 8,
+    },
+    customListMeta: {
+      color: colors.pink,
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    customListArrow: {
+      width: 42,
+      color: colors.muted,
+      fontSize: 34,
+      lineHeight: 112,
+      textAlign: "center",
+    },
+    bottomCard: {
+      backgroundColor: colors.paper,
+      borderRadius: 32,
+      padding: 24,
+      marginTop: 2,
+      marginBottom: 0,
+    },
+    bottomKicker: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+      marginBottom: 14,
+    },
+    bottomTitle: {
+      color: colors.paperText,
+      fontSize: 32,
+      lineHeight: 37,
+      fontWeight: "900",
+      marginBottom: 10,
+    },
+    bottomText: {
+      color: colors.paperText,
+      fontSize: 16,
+      lineHeight: 25,
+    },
+    bottomSpace: {
+      height: 118,
+    },
   });
 }
