@@ -4,7 +4,6 @@ import * as Location from "expo-location";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Keyboard,
   ScrollView,
@@ -1164,25 +1163,18 @@ export default function MapScreen() {
               onSubmitEditing={handleSearchPress}
               style={styles.searchInput}
             />
-            {(isSuggesting || isSearchingPlaces) && !isLocatingUser ? (
-              <ActivityIndicator color={colors.pink} size="small" />
-            ) : null}
           </View>
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Usa la mia posizione"
-            style={[styles.locationButton, (isLocatingUser || isSearchingPlaces) && { opacity: 0.6 }]}
+            style={[styles.locationButton, (isLocatingUser || isSearchingPlaces) && { opacity: 0.5 }]}
             onPress={() => {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               void searchPlacesAroundUser();
             }}
             disabled={isLocatingUser || isSearchingPlaces}
           >
-            {isLocatingUser ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <View style={styles.locationDot} />
-            )}
+            <View style={styles.locationDot} />
           </PressableScale>
           <PressableScale
             style={[styles.savedToggle, mode === "saved" && styles.savedToggleActive]}

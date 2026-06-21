@@ -695,30 +695,34 @@ async function fetchOverpassNearby(
   const query = buildNearbyOverpassQuery(latitude, longitude, radiusMeters);
   const origin = { latitude, longitude };
 
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        },
-        body: `data=${encodeURIComponent(query)}`,
+  const tryEndpoint = (endpoint: string): Promise<NearbyPlace[]> =>
+    fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("not ok");
+        return r.json() as Promise<{ elements?: OverpassElement[] }>;
+      })
+      .then((data) => {
+        const elements = Array.isArray(data.elements) ? data.elements : [];
+        return elements
+          .map((el) => osmElementToNearbyPlace(el, origin))
+          .filter((p): p is NearbyPlace => p !== null);
       });
 
-      if (!response.ok) continue;
-
-      const data = (await response.json()) as { elements?: OverpassElement[] };
-      const elements = Array.isArray(data.elements) ? data.elements : [];
-
-      return elements
-        .map((element) => osmElementToNearbyPlace(element, origin))
-        .filter((place): place is NearbyPlace => place !== null);
-    } catch {
-      // Prova l'endpoint Overpass successivo senza interrompere il flusso.
-    }
-  }
-
-  return [];
+  // Race tutti e tre gli endpoint in parallelo: vince il primo che risponde.
+  return new Promise<NearbyPlace[]>((resolve) => {
+    let rejected = 0;
+    OVERPASS_ENDPOINTS.forEach((ep) => {
+      tryEndpoint(ep)
+        .then(resolve)
+        .catch(() => {
+          if (++rejected === OVERPASS_ENDPOINTS.length) resolve([]);
+        });
+    });
+  });
 }
 
 async function fetchGeoapifyNearby(
@@ -796,7 +800,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T) {
   ]);
 }
 
-const OVERPASS_TIMEOUT_MS = 6500;
+const OVERPASS_TIMEOUT_MS = 20000;
 
 export async function fetchNearbyPlaces(
   latitude: number,
