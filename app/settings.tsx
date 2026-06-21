@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -88,6 +89,7 @@ export default function SettingsScreen() {
   async function saveProfile() {
     try {
       await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2000);
     } catch {
@@ -122,11 +124,13 @@ export default function SettingsScreen() {
   }, [availableNavigationOptions]);
 
   async function saveAppearanceMode(nextMode: MelloryThemePreference) {
+    void Haptics.selectionAsync();
     setResetMessage("");
     await setPreference(nextMode);
   }
 
   async function saveNavigationService(nextService: NavigationService) {
+    void Haptics.selectionAsync();
     setNavigationService(nextService);
     await setPreferredNavigationService(nextService);
   }

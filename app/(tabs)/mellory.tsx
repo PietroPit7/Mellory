@@ -1,8 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Animated, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PressableScale } from "@/components/pressable-scale";
@@ -454,6 +454,16 @@ export default function MyMelloryScreen() {
   const { colors } = useMelloryTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const screenFade = useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFade.setValue(0);
+      Animated.timing(screenFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    }, [screenFade])
+  );
+
   const [favoritePlaces, setFavoritePlaces] = useState<SavedPlace[]>([]);
   const [tryPlaces, setTryPlaces] = useState<SavedPlace[]>([]);
   const [visitedPlaces, setVisitedPlaces] = useState<SavedPlace[]>([]);
@@ -668,6 +678,7 @@ export default function MyMelloryScreen() {
   }
 
   return (
+    <Animated.View style={{ flex: 1, opacity: screenFade }}>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={{ height: insets.top + 16 }} />
 
@@ -683,7 +694,7 @@ export default function MyMelloryScreen() {
           </Text>
         </View>
 
-        <PressableScale style={styles.settingsButton} onPress={openSettings}>
+        <PressableScale style={styles.settingsButton} onPress={openSettings} accessibilityLabel="Impostazioni" accessibilityRole="button">
           <View style={styles.sliderIcon}>
             <View style={styles.sliderRow}>
               <View style={styles.sliderKnob} />
@@ -918,6 +929,8 @@ export default function MyMelloryScreen() {
                     event.stopPropagation?.();
                     void removeFavorite(place.id);
                   }}
+                  accessibilityLabel="Rimuovi"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeIcon}>×</Text>
                 </PressableScale>
@@ -992,6 +1005,8 @@ export default function MyMelloryScreen() {
                     event.stopPropagation?.();
                     void removeTry(place.id);
                   }}
+                  accessibilityLabel="Rimuovi"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeIcon}>×</Text>
                 </PressableScale>
@@ -1066,6 +1081,8 @@ export default function MyMelloryScreen() {
                     event.stopPropagation?.();
                     void removeVisited(place.id);
                   }}
+                  accessibilityLabel="Rimuovi"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeIcon}>×</Text>
                 </PressableScale>
@@ -1140,6 +1157,8 @@ export default function MyMelloryScreen() {
                     event.stopPropagation?.();
                     void removeRetry(place.id);
                   }}
+                  accessibilityLabel="Rimuovi"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeIcon}>×</Text>
                 </PressableScale>
@@ -1206,6 +1225,7 @@ export default function MyMelloryScreen() {
 
       <View style={styles.bottomSpace} />
     </ScrollView>
+    </Animated.View>
   );
 }
 

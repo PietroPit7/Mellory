@@ -483,31 +483,32 @@ async function fetchCitySuggestions(query: string): Promise<CitySuggestion[]> {
   }
 }
 
-async function fetchOverpassElements(query: string) {
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const response = await fetch(endpoint, {
+async function fetchOverpassElements(query: string): Promise<OverpassElement[]> {
+  return new Promise<OverpassElement[]>((resolve, reject) => {
+    let rejected = 0;
+    OVERPASS_ENDPOINTS.forEach((endpoint) => {
+      fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=UTF-8",
-        },
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: query,
-      });
-
-      if (!response.ok) continue;
-
-      const data = await response.json();
-      const elements = Array.isArray(data.elements)
-        ? (data.elements as OverpassElement[])
-        : [];
-
-      return elements;
-    } catch {
-      // Prova il prossimo endpoint senza mostrare errori tecnici in app.
-    }
-  }
-
-  throw new Error(getFriendlyMessage());
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error("not ok");
+          return r.json() as Promise<{ elements?: unknown[] }>;
+        })
+        .then((data) => {
+          const elements = Array.isArray(data.elements)
+            ? (data.elements as OverpassElement[])
+            : [];
+          resolve(elements);
+        })
+        .catch(() => {
+          rejected += 1;
+          if (rejected === OVERPASS_ENDPOINTS.length)
+            reject(new Error(getFriendlyMessage()));
+        });
+    });
+  });
 }
 
 async function fetchDashboardData(context: SearchContext) {

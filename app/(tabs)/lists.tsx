@@ -1,10 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Alert,
+  Animated,
   Platform,
   ScrollView,
   StyleSheet,
@@ -292,6 +293,16 @@ export default function ListsScreen() {
     () => [colors.pink, colors.gold, colors.green, colors.orange, colors.blue],
     [colors]
   );
+
+  const screenFade = useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFade.setValue(0);
+      Animated.timing(screenFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    }, [screenFade])
+  );
+
   const [favoritePlaces, setFavoritePlaces] = useState<SavedPlace[]>([]);
   const [tryPlaces, setTryPlaces] = useState<SavedPlace[]>([]);
   const [visitedPlaces, setVisitedPlaces] = useState<SavedPlace[]>([]);
@@ -633,6 +644,7 @@ export default function ListsScreen() {
   }
 
   return (
+    <Animated.View style={{ flex: 1, opacity: screenFade }}>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={{ height: insets.top + 8 }} />
 
@@ -873,6 +885,7 @@ export default function ListsScreen() {
 
       <View style={styles.bottomSpace} />
     </ScrollView>
+    </Animated.View>
   );
 }
 

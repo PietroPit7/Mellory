@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
 import { router, useLocalSearchParams } from "expo-router";
@@ -1528,6 +1529,7 @@ export default function PlaceDetailScreen() {
   }
 
   function openSheet(sheet: SheetType) {
+    void Haptics.selectionAsync();
     if (sheet === "note") {
       setDraftNote(experience.note);
     }
@@ -1562,6 +1564,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function toggleStatus(status: PlaceStatus) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const isActive = activeStatuses.includes(status);
 
     const nextStatuses = isActive
@@ -1575,6 +1578,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function toggleBadge(badge: string) {
+    void Haptics.selectionAsync();
     const isActive = experience.badges.includes(badge);
 
     await saveExperience({
@@ -1586,6 +1590,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function toggleCustomList(listId: string) {
+    void Haptics.selectionAsync();
     const nextLists = customLists.map((list) => {
       if (list.id !== listId) return list;
 
@@ -1607,6 +1612,7 @@ export default function PlaceDetailScreen() {
 
     if (!title) return;
 
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const newList: CustomList = {
       id: createId(),
       title,
@@ -1624,6 +1630,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function updateScore(key: ScoreKey, value: number) {
+    void Haptics.selectionAsync();
     await saveExperience({
       ...experience,
       scores: {
@@ -1634,6 +1641,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function saveNote() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await saveExperience({
       ...experience,
       note: draftNote,
@@ -1643,6 +1651,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function savePersonalDetails() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await saveExperience({
       ...experience,
       personalDetails: {
@@ -1666,6 +1675,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function saveHours() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const trimmedDays = draftHoursByDay.map((day) => day.trim());
 
     await saveExperience({
@@ -1681,6 +1691,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function saveExperienceEntry() {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const entry: ExperienceEntry = {
       id: createId(),
       occasion: draftOccasion.trim(),
@@ -1709,6 +1720,7 @@ export default function PlaceDetailScreen() {
 
     if (!label) return;
 
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const newBadge: CustomBadge = {
       id: createId(),
       label,
@@ -1735,6 +1747,7 @@ export default function PlaceDetailScreen() {
 
     if (!title) return;
 
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const newRecognition: EditorialRecognition = {
       id: createId(),
       title,
