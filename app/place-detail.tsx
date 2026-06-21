@@ -8,7 +8,9 @@ import {
   Alert,
   Animated,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -3232,16 +3234,19 @@ export default function PlaceDetailScreen() {
         <View style={styles.modalBackdrop}>
           <PressableScale style={styles.modalBackdropPressable} onPress={closeSheet} />
 
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            <View style={styles.sheet}>
+              <View style={styles.sheetHandle} />
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.sheetContent}
-            >
-              {renderSheetContent()}
-            </ScrollView>
-          </View>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.sheetContent}
+              >
+                {renderSheetContent()}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>

@@ -645,7 +645,7 @@ export default function ListsScreen() {
 
   return (
     <Animated.View style={{ flex: 1, opacity: screenFade }}>
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={{ height: insets.top + 8 }} />
 
       {/* Header */}

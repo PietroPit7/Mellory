@@ -1373,7 +1373,7 @@ export default function MapScreen() {
               <Text style={styles.sheetCloseBtnText}>×</Text>
             </PressableScale>
           </View>
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.sheetList}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.sheetList}>
             {visiblePlaces.map((place) => {
               const catColor = getCategoryColor(place.categoryBase);
               const hasStatus = place.statuses.length > 0;

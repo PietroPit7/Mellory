@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 
 import {
   MelloryThemeProvider,
@@ -10,6 +10,21 @@ import {
 } from "@/contexts/mellory-theme";
 
 import { ONBOARDING_KEY } from "./onboarding";
+
+function WebGlobalStyles() {
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    const el = document.createElement("style");
+    el.textContent = [
+      "html, body { margin: 0; padding: 0; overflow: hidden; overscroll-behavior: none; }",
+      "* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; user-select: none; -webkit-user-select: none; }",
+      "input, textarea, [contenteditable] { outline: none !important; user-select: text; -webkit-user-select: text; }",
+    ].join("\n");
+    document.head.appendChild(el);
+    return () => { document.head.removeChild(el); };
+  }, []);
+  return null;
+}
 
 function RootNavigator() {
   const { colors, resolvedTheme } = useMelloryTheme();
@@ -30,6 +45,7 @@ function RootNavigator() {
 
   return (
     <>
+      <WebGlobalStyles />
       <Stack
         screenOptions={{
           headerShown: false,

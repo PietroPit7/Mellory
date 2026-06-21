@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 import {
   Animated,
   Pressable,
@@ -30,14 +30,14 @@ export function PressableScale({
 }: PressableScaleProps) {
   const scale = useRef(new Animated.Value(1)).current;
 
-  const animateTo = (toValue: number, bounciness: number) => {
+  const animateTo = useCallback((toValue: number, bounciness: number) => {
     Animated.spring(scale, {
       toValue,
       useNativeDriver: true,
       speed: 50,
       bounciness,
     }).start();
-  };
+  }, [scale]);
 
   return (
     <AnimatedPressable
