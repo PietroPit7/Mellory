@@ -1285,73 +1285,101 @@ export default function MapScreen() {
         {previewPlace ? (
           <Animated.View
             style={[
-              styles.previewRow,
+              styles.previewCard,
               {
                 opacity: previewAnim,
-                transform: [{ translateY: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+                transform: [
+                  { translateY: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
+                  { scale: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
+                ],
               },
             ]}
           >
-            <View style={[styles.previewAvatar, { backgroundColor: `${getCategoryColor(previewPlace.categoryBase)}26` }]}>
-              <Text style={[styles.previewAvatarText, { color: getCategoryColor(previewPlace.categoryBase) }]}>
-                {previewPlace.name.trim().charAt(0).toUpperCase() || "M"}
-              </Text>
+            <View style={[styles.previewAccentBar, { backgroundColor: getCategoryColor(previewPlace.categoryBase) }]} />
+            <View style={styles.previewContent}>
+              <View style={styles.previewTop}>
+                <View style={[styles.previewAvatar, { backgroundColor: `${getCategoryColor(previewPlace.categoryBase)}22` }]}>
+                  <Text style={[styles.previewAvatarText, { color: getCategoryColor(previewPlace.categoryBase) }]}>
+                    {previewPlace.name.trim().charAt(0).toUpperCase() || "M"}
+                  </Text>
+                </View>
+                <View style={styles.previewInfo}>
+                  <Text style={styles.previewCategory}>{previewPlace.category}</Text>
+                  <Text numberOfLines={1} style={styles.previewName}>{previewPlace.name}</Text>
+                  {previewPlace.detail ? (
+                    <Text numberOfLines={1} style={styles.previewMeta}>{previewPlace.detail}</Text>
+                  ) : null}
+                </View>
+                <PressableScale style={styles.previewCloseBtn} onPress={() => setPreviewPlace(null)}>
+                  <Text style={styles.previewCloseBtnText}>×</Text>
+                </PressableScale>
+              </View>
+              <PressableScale
+                style={styles.previewOpenBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  const place = previewPlace;
+                  setPreviewPlace(null);
+                  pushPlaceDetail(place);
+                }}
+              >
+                <Text style={styles.previewOpenBtnText}>Apri scheda completa</Text>
+                <Text style={styles.previewOpenBtnArrow}>›</Text>
+              </PressableScale>
             </View>
-            <View style={styles.previewInfo}>
-              <Text numberOfLines={1} style={styles.previewName}>{previewPlace.name}</Text>
-              <Text numberOfLines={1} style={styles.previewMeta}>
-                {previewPlace.detail
-                  ? `${previewPlace.category} · ${previewPlace.detail}`
-                  : previewPlace.category}
-                {previewPlace.distance ? ` · ${previewPlace.distance}` : ""}
-              </Text>
-            </View>
-            <PressableScale
-              style={styles.previewOpenBtn}
-              onPress={() => {
-                const place = previewPlace;
-                setPreviewPlace(null);
-                pushPlaceDetail(place);
-              }}
-            >
-              <Text style={styles.previewOpenBtnText}>Apri ›</Text>
-            </PressableScale>
-            <PressableScale style={styles.previewCloseBtn} onPress={() => setPreviewPlace(null)}>
-              <Text style={styles.previewCloseBtnText}>×</Text>
-            </PressableScale>
           </Animated.View>
         ) : visiblePlaces.length > 0 ? (
           <>
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>
-                {mode === "saved" ? "I tuoi luoghi" : selectedCity ? selectedCity.cityLabel : "In zona"}
-              </Text>
-              <Text style={styles.sectionCount}>
-                {visiblePlaces.length} {visiblePlaces.length === 1 ? "posto" : "posti"}
-              </Text>
+              <View>
+                <Text style={styles.sectionKicker}>
+                  {mode === "saved" ? "SALVATI" : selectedCity ? selectedCity.cityLabel.toUpperCase() : "IN ZONA"}
+                </Text>
+                <Text style={styles.sectionTitle}>
+                  {mode === "saved" ? "I tuoi luoghi" : "Locali trovati"}
+                </Text>
+              </View>
+              <View style={styles.sectionCountBadge}>
+                <Text style={styles.sectionCount}>
+                  {visiblePlaces.length}
+                </Text>
+              </View>
             </View>
             <ScrollView style={styles.panelList} showsVerticalScrollIndicator={false}>
-              {visiblePlaces.map((place) => (
-                <PressableScale
-                  key={place.id}
-                  style={styles.placeRow}
-                  onPress={() => openPlaceDetail(place.id)}
-                >
-                  <View style={[styles.placeAvatar, { backgroundColor: `${getCategoryColor(place.categoryBase)}18` }]}>
-                    <Text style={[styles.placeAvatarText, { color: getCategoryColor(place.categoryBase) }]}>
-                      {place.name.trim().charAt(0).toUpperCase() || "M"}
-                    </Text>
-                  </View>
-                  <View style={styles.placeInfo}>
-                    <Text numberOfLines={1} style={styles.placeName}>{place.name}</Text>
-                    <Text numberOfLines={1} style={styles.placeSub}>
-                      {place.category}{place.distance ? ` · ${place.distance}` : ""}
-                      {place.statuses.length > 0 ? ` · ${getStatusLabel(place.statuses[0])}` : ""}
-                    </Text>
-                  </View>
-                  <Text style={styles.placeChevron}>›</Text>
-                </PressableScale>
-              ))}
+              {visiblePlaces.map((place) => {
+                const catColor = getCategoryColor(place.categoryBase);
+                const hasStatus = place.statuses.length > 0;
+                const statusColor = hasStatus ? getStatusColor(place.statuses[0]) : null;
+                return (
+                  <PressableScale
+                    key={place.id}
+                    style={styles.placeRow}
+                    onPress={() => openPlaceDetail(place.id)}
+                  >
+                    <View style={[styles.placeAccent, { backgroundColor: catColor }]} />
+                    <View style={[styles.placeAvatar, { backgroundColor: `${catColor}18` }]}>
+                      <Text style={[styles.placeAvatarText, { color: catColor }]}>
+                        {place.name.trim().charAt(0).toUpperCase() || "M"}
+                      </Text>
+                    </View>
+                    <View style={styles.placeInfo}>
+                      <Text numberOfLines={1} style={styles.placeName}>{place.name}</Text>
+                      <Text numberOfLines={1} style={styles.placeSub}>
+                        {place.category}{place.distance ? ` · ${place.distance}` : ""}
+                      </Text>
+                    </View>
+                    {hasStatus && statusColor ? (
+                      <View style={[styles.statusPill, { backgroundColor: `${statusColor}1A` }]}>
+                        <Text style={[styles.statusPillText, { color: statusColor }]}>
+                          {getStatusLabel(place.statuses[0])}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.placeChevron}>›</Text>
+                    )}
+                  </PressableScale>
+                );
+              })}
             </ScrollView>
           </>
         ) : !isMapLoading ? (
@@ -1407,30 +1435,40 @@ const styles = StyleSheet.create({
   filterPillTextSelected: { color: colors.black },
 
   // Bottom sheet panel
-  bottomPanel: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(23,19,15,0.96)", borderTopLeftRadius: 22, borderTopRightRadius: 22, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 0, zIndex: 10 },
+  bottomPanel: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(23,19,15,0.97)", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 0, zIndex: 10 },
   panelHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginTop: 10, marginBottom: 2 },
-  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10 },
-  sectionTitle: { color: colors.cream, fontSize: 16, fontWeight: "700" },
-  sectionCount: { color: colors.muted, fontSize: 13 },
-  panelList: { maxHeight: 230 },
-  placeRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.softBorder },
-  placeAvatar: { width: 36, height: 36, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  placeAvatarText: { fontSize: 15, fontWeight: "700" },
+  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
+  sectionKicker: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 2 },
+  sectionTitle: { color: colors.cream, fontSize: 18, fontWeight: "800", letterSpacing: -0.4 },
+  sectionCountBadge: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  sectionCount: { color: colors.cream, fontSize: 15, fontWeight: "700" },
+  panelList: { maxHeight: 250 },
+  placeRow: { flexDirection: "row", alignItems: "center", paddingLeft: 0, paddingRight: 16, paddingVertical: 14, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.softBorder },
+  placeAccent: { width: 3, height: "100%", borderRadius: 99, marginLeft: 16, flexShrink: 0 },
+  placeAvatar: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  placeAvatarText: { fontSize: 14, fontWeight: "800" },
   placeInfo: { flex: 1, minWidth: 0 },
-  placeName: { color: colors.cream, fontSize: 15, fontWeight: "600", marginBottom: 2 },
+  placeName: { color: colors.cream, fontSize: 15, fontWeight: "700", marginBottom: 2, letterSpacing: -0.2 },
   placeSub: { color: colors.muted, fontSize: 12 },
   placeChevron: { color: colors.muted, fontSize: 18 },
+  statusPill: { borderRadius: 7, paddingHorizontal: 9, paddingVertical: 4 },
+  statusPillText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
 
-  previewRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  previewAvatar: { width: 44, height: 44, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  previewAvatarText: { fontSize: 18, fontWeight: "700" },
-  previewInfo: { flex: 1, minWidth: 0 },
-  previewName: { color: colors.cream, fontSize: 16, fontWeight: "700", marginBottom: 3 },
-  previewMeta: { color: colors.muted, fontSize: 13 },
-  previewOpenBtn: { height: 36, borderRadius: 9, backgroundColor: colors.pink, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
-  previewOpenBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  previewCloseBtn: { width: 36, height: 36, borderRadius: 9, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  previewCloseBtnText: { color: colors.cream, fontSize: 20, lineHeight: 22 },
+  previewCard: { marginHorizontal: 12, marginBottom: 8, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.softBorder, overflow: "hidden" },
+  previewAccentBar: { height: 3, width: "100%" },
+  previewContent: { padding: 14 },
+  previewTop: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 14 },
+  previewAvatar: { width: 48, height: 48, borderRadius: 13, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  previewAvatarText: { fontSize: 20, fontWeight: "800" },
+  previewInfo: { flex: 1, minWidth: 0, paddingTop: 2 },
+  previewCategory: { color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 },
+  previewName: { color: colors.cream, fontSize: 18, fontWeight: "800", letterSpacing: -0.4, marginBottom: 2 },
+  previewMeta: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
+  previewOpenBtn: { height: 46, borderRadius: 12, backgroundColor: colors.pink, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  previewOpenBtnText: { color: "#fff", fontSize: 14, fontWeight: "800", letterSpacing: -0.2 },
+  previewOpenBtnArrow: { color: "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 24, fontWeight: "400" },
+  previewCloseBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
+  previewCloseBtnText: { color: colors.muted, fontSize: 18, lineHeight: 20 },
 
   emptyState: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
   emptyTitle: { color: colors.muted, fontSize: 15, marginBottom: 14 },

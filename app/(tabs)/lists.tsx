@@ -627,9 +627,10 @@ export default function ListsScreen() {
 
       {/* Header */}
       <View style={styles.header}>
+        <Text style={styles.kicker}>LE TUE RACCOLTE</Text>
         <Text style={styles.title}>Liste</Text>
         <Text style={styles.stats}>
-          {totalPlaces} locali · {collections.length} raccolte
+          {totalPlaces} {totalPlaces === 1 ? "locale" : "locali"} · {collections.length} {collections.length === 1 ? "raccolta" : "raccolte"}
         </Text>
       </View>
 
@@ -755,6 +756,7 @@ export default function ListsScreen() {
                     style={styles.placeRow}
                     onPress={() => openPlaceDetail(place)}
                   >
+                    <View style={[styles.placeAccentBar, { backgroundColor: statusColor }]} />
                     <View
                       style={[
                         styles.placeAvatar,
@@ -873,17 +875,25 @@ function createStyles(colors: MelloryThemeColors) {
     height: 16,
   },
   header: {
-    marginBottom: 18,
+    marginBottom: 20,
+  },
+  kicker: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 2.5,
+    marginBottom: 6,
   },
   title: {
     color: colors.cream,
-    fontSize: 26,
-    fontWeight: "800",
-    letterSpacing: -0.8,
-    marginBottom: 4,
+    fontSize: 38,
+    fontWeight: "900",
+    letterSpacing: -1.2,
+    lineHeight: 42,
+    marginBottom: 5,
   },
   stats: {
-    color: colors.muted,
+    color: colors.textMuted,
     fontSize: 14,
   },
   pillScroll: {
@@ -1018,7 +1028,7 @@ function createStyles(colors: MelloryThemeColors) {
   },
   placeList: {
     backgroundColor: colors.card,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: "hidden",
@@ -1027,11 +1037,19 @@ function createStyles(colors: MelloryThemeColors) {
   placeRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingLeft: 0,
+    paddingRight: 16,
     paddingVertical: 14,
     gap: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.softBorder,
+  },
+  placeAccentBar: {
+    width: 3,
+    height: "100%",
+    borderRadius: 99,
+    marginLeft: 16,
+    flexShrink: 0,
   },
   placeAvatar: {
     width: 38,

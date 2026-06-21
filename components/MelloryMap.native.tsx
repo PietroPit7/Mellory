@@ -142,29 +142,28 @@ export default function MelloryMap({
           });
         }}
       >
-        {markers.map((marker) => (
-          <Marker
-            key={`${marker.id}-${marker.latitude}-${marker.longitude}`}
-            coordinate={{
-              latitude: marker.latitude,
-              longitude: marker.longitude,
-            }}
-            onPress={() => onMarkerPress(marker.id)}
-          >
-            <View
-              style={[
-                styles.marker,
-                { backgroundColor: marker.color || colors.pink },
-              ]}
+        {markers.map((marker) => {
+          const markerColor = marker.color || colors.pink;
+          const letter = marker.name.trim().charAt(0).toUpperCase() || "M";
+          return (
+            <Marker
+              key={`${marker.id}-${marker.latitude}-${marker.longitude}`}
+              coordinate={{
+                latitude: marker.latitude,
+                longitude: marker.longitude,
+              }}
+              anchor={{ x: 0.5, y: 1 }}
+              onPress={() => onMarkerPress(marker.id)}
             >
-              <View style={styles.markerInner}>
-                <Text style={styles.markerInitial}>
-                  {marker.name.trim().charAt(0).toUpperCase() || "M"}
-                </Text>
+              <View style={styles.markerContainer}>
+                <View style={[styles.markerBubble, { backgroundColor: markerColor }]}>
+                  <Text style={styles.markerInitial}>{letter}</Text>
+                </View>
+                <View style={[styles.markerTail, { backgroundColor: markerColor }]} />
               </View>
-            </View>
-          </Marker>
-        ))}
+            </Marker>
+          );
+        })}
       </MapView>
 
       {/* Layer + zoom controls — floated above the map */}
@@ -316,26 +315,29 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "rgba(255,248,239,0.14)",
   },
-  marker: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    borderWidth: 3,
-    borderColor: colors.paper,
+  markerContainer: {
+    alignItems: "center",
+  },
+  markerBubble: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2.5,
+    borderColor: "rgba(255,255,255,0.9)",
     alignItems: "center",
     justifyContent: "center",
   },
-  markerInner: {
-    width: 24,
-    height: 24,
-    borderRadius: 999,
-    backgroundColor: colors.paper,
-    alignItems: "center",
-    justifyContent: "center",
+  markerTail: {
+    width: 9,
+    height: 9,
+    marginTop: -4.5,
+    transform: [{ rotate: "45deg" }],
+    borderBottomRightRadius: 2,
   },
   markerInitial: {
-    color: colors.paperText,
-    fontSize: 12,
+    color: "#fff",
+    fontSize: 14,
     fontWeight: "900",
+    letterSpacing: -0.3,
   },
 });
