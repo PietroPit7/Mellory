@@ -1199,13 +1199,10 @@ export default function HomeScreen() {
 
       {/* Header */}
       <View style={styles.header}>
+        <View style={styles.headerTopRule} />
+        <Text style={styles.headerKicker}>GUIDA GASTRONOMICA</Text>
         <Text style={styles.logo}>Mellory</Text>
-        <PressableScale
-          style={styles.settingsButton}
-          onPress={() => router.push("/settings" as never)}
-        >
-          <Text style={styles.settingsIcon}>⚙</Text>
-        </PressableScale>
+        <Text style={styles.headerSubtitle}>Edizione personale · Esplora intorno a te.</Text>
       </View>
 
       {/* Search bar */}
@@ -1496,31 +1493,33 @@ function createStyles(colors: MelloryThemeColors) {
       height: 16,
     },
     header: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 18,
+      marginBottom: 20,
+    },
+    headerTopRule: {
+      height: 1,
+      backgroundColor: colors.yellow,
+      opacity: 0.9,
+      marginBottom: 22,
+    },
+    headerKicker: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 3,
+      marginBottom: 6,
     },
     logo: {
       color: colors.cream,
-      fontSize: 26,
-      fontWeight: "800",
-      letterSpacing: -0.8,
+      fontSize: 52,
+      fontWeight: "900",
+      letterSpacing: -1.8,
+      lineHeight: 56,
+      marginBottom: 7,
     },
-    settingsButton: {
-      width: 38,
-      height: 38,
-      borderRadius: 10,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    settingsIcon: {
-      color: colors.cream,
-      fontSize: 17,
-      lineHeight: 19,
+    headerSubtitle: {
+      color: colors.textMuted,
+      fontSize: 16,
+      lineHeight: 22,
     },
     searchBox: {
       height: 52,
