@@ -4,7 +4,6 @@ import * as Location from "expo-location";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Keyboard,
   ScrollView,
@@ -475,7 +474,7 @@ async function fetchLocationLabel(latitude: number, longitude: number) {
 async function fetchCitySuggestions(query: string): Promise<CitySuggestion[]> {
   const cleanedQuery = query.trim();
 
-  if (cleanedQuery.length < 3 || !hasGeoapifyApiKey()) return [];
+  if (cleanedQuery.length < 3) return [];
 
   try {
     return await fetchGeoapifyCitySuggestions(cleanedQuery);
@@ -1249,7 +1248,7 @@ export default function HomeScreen() {
         />
 
         {isSuggesting && !isLoading ? (
-          <ActivityIndicator size="small" color={colors.pink} />
+          <View style={styles.suggestingDot} />
         ) : null}
 
         <PressableScale
@@ -1279,7 +1278,10 @@ export default function HomeScreen() {
       {/* Loading */}
       {isLoading && (
         <View style={styles.loadingRow}>
-          <ActivityIndicator color={colors.pink} />
+          <Animated.View style={[styles.loadingDot, {
+            opacity: loadingPulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
+            transform: [{ scale: loadingPulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1.1] }) }],
+          }]} />
           <Text style={styles.loadingText}>Preparo la selezione…</Text>
         </View>
       )}
@@ -1653,6 +1655,19 @@ function createStyles(colors: MelloryThemeColors) {
       alignItems: "center",
       gap: 12,
       paddingVertical: 28,
+    },
+    loadingDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.pink,
+    },
+    suggestingDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: colors.pink,
+      opacity: 0.7,
     },
     loadingText: {
       color: colors.muted,

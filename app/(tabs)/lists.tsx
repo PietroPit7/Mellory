@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -470,6 +471,8 @@ export default function ListsScreen() {
 
     if (!title) return;
 
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
     const newList: CustomList = {
       id: createId(),
       title,
@@ -490,6 +493,8 @@ export default function ListsScreen() {
 
   async function removePlaceFromCustomList(placeId: string) {
     if (selectedCollection?.kind !== "custom") return;
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const nextLists = customLists.map((list) => {
       if (list.id !== selectedCollection.customListId) return list;
@@ -529,6 +534,8 @@ export default function ListsScreen() {
       return;
     }
 
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     const nextLists = customLists.map((list) =>
       list.id === renamingListId ? { ...list, title } : list
     );
@@ -539,6 +546,8 @@ export default function ListsScreen() {
 
   async function moveSelectedList(direction: -1 | 1) {
     if (selectedCollection?.kind !== "custom") return;
+
+    void Haptics.selectionAsync();
 
     const index = customLists.findIndex(
       (list) => list.id === selectedCollection.customListId
@@ -560,6 +569,8 @@ export default function ListsScreen() {
 
   async function performDeleteSelectedList() {
     if (selectedCollection?.kind !== "custom") return;
+
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
     const selectedListId = selectedCollection.customListId;
     const nextLists = customLists.filter((list) => list.id !== selectedListId);
@@ -653,7 +664,10 @@ export default function ListsScreen() {
                   borderColor: collection.color,
                 },
               ]}
-              onPress={() => setSelectedCollectionId(collection.id)}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                setSelectedCollectionId(collection.id);
+              }}
             >
               <Text
                 style={[

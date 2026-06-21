@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
@@ -627,6 +628,7 @@ export default function MyMelloryScreen() {
   }
 
   async function removeFavorite(placeId: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextFavoritePlaces = favoritePlaces.filter(
       (place) => place.id !== placeId
     );
@@ -637,6 +639,7 @@ export default function MyMelloryScreen() {
   }
 
   async function removeTry(placeId: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextTryPlaces = tryPlaces.filter((place) => place.id !== placeId);
 
     setTryPlaces(nextTryPlaces);
@@ -645,6 +648,7 @@ export default function MyMelloryScreen() {
   }
 
   async function removeVisited(placeId: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextVisitedPlaces = visitedPlaces.filter(
       (place) => place.id !== placeId
     );
@@ -655,6 +659,7 @@ export default function MyMelloryScreen() {
   }
 
   async function removeRetry(placeId: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextRetryPlaces = retryPlaces.filter((place) => place.id !== placeId);
 
     setRetryPlaces(nextRetryPlaces);
