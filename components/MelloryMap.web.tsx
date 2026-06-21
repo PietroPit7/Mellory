@@ -192,10 +192,10 @@ export default function MelloryMap({
       return;
     }
 
-    // Attribution is required by OSM/CARTO licence — kept compact in top-left.
+    // Attribution is required by OSM/CARTO licence — compact, bottom-right (covered by tab bar).
     mapRef.current.addControl(
       new maplibregl.AttributionControl({ compact: true }),
-      "top-left"
+      "bottom-right"
     );
     const cleanupAttributionGuard = setupAttributionControlGuard(containerRef.current);
 
