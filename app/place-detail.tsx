@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "@/components/pressable-scale";
 import {
   melloryDarkColors,
@@ -1101,6 +1102,7 @@ async function readGlobalStatuses(placeId: string) {
 
 export default function PlaceDetailScreen() {
   const { colors } = useMelloryTheme();
+  const insets = useSafeAreaInsets();
   const listOptions = useMemo(() => makeListOptions(colors), [colors]);
   const standardBadges = useMemo(() => makeStandardBadges(colors), [colors]);
   const customListColors = useMemo(() => makeCustomListColors(colors), [colors]);
@@ -2551,7 +2553,7 @@ export default function PlaceDetailScreen() {
   return (
     <View style={styles.root}>
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <View style={styles.safeTop} />
+        <View style={{ height: insets.top + 8 }} />
 
         <View style={styles.coverCard}>
           {hasCover ? (
@@ -2569,7 +2571,7 @@ export default function PlaceDetailScreen() {
 
           <View style={styles.coverOverlay} />
 
-          <View style={styles.coverHeader}>
+          <View style={[styles.coverHeader, { top: insets.top + 8 }]}>
             <PressableScale style={styles.roundBackButton} onPress={handleBackPress}>
               <Text style={styles.roundBackText}>‹</Text>
             </PressableScale>
@@ -2723,7 +2725,7 @@ export default function PlaceDetailScreen() {
 
           <View style={styles.stateBadgePanel}>
             <View style={styles.stateBadgeHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.stateBadgeKicker}>BADGE DEL POSTO</Text>
                 <Text style={styles.stateBadgeTitle}>
                   {experience.badges.length > 0
@@ -2785,7 +2787,7 @@ export default function PlaceDetailScreen() {
 
           <View style={styles.customListsPanel}>
             <View style={styles.stateBadgeHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.stateBadgeKicker}>LISTE PERSONALIZZATE</Text>
                 <Text style={styles.stateBadgeTitle}>
                   {customListsForPlace.length > 0
@@ -3182,10 +3184,10 @@ export default function PlaceDetailScreen() {
           </Section>
         </View>
 
-        <View style={styles.bottomSpace} />
+        <View style={{ height: insets.bottom + 90 }} />
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { bottom: insets.bottom + 12 }]}>
         <PressableScale
           style={[
             styles.bottomAction,
@@ -3389,7 +3391,7 @@ function SheetHeader({
 }) {
   return (
     <View style={styles.sheetHeader}>
-      <Text style={styles.sheetTitle}>{title}</Text>
+      <Text style={styles.sheetTitle} numberOfLines={2}>{title}</Text>
 
       <PressableScale onPress={onClose}>
         <Text style={styles.sheetClose}>×</Text>
@@ -3599,11 +3601,11 @@ const styles = StyleSheet.create({
   },
   placeTitle: {
     color: colors.cream,
-    fontSize: 44,
-    lineHeight: 48,
+    fontSize: 36,
+    lineHeight: 40,
     fontFamily: undefined,
     fontWeight: "900",
-    letterSpacing: -1.2,
+    letterSpacing: -0.9,
     marginBottom: 8,
   },
   placeAddress: {
@@ -3676,8 +3678,8 @@ const styles = StyleSheet.create({
   },
   recapTitle: {
     color: colors.cream,
-    fontSize: 27,
-    lineHeight: 32,
+    fontSize: 22,
+    lineHeight: 27,
     fontFamily: undefined,
     fontWeight: "900",
     letterSpacing: -0.4,
@@ -3843,10 +3845,11 @@ const styles = StyleSheet.create({
   },
   stateBadgeTitle: {
     color: colors.cream,
-    fontSize: 24,
-    lineHeight: 29,
+    fontSize: 17,
+    lineHeight: 23,
     fontFamily: undefined,
-    fontWeight: "900",
+    fontWeight: "800",
+    letterSpacing: -0.2,
   },
   stateBadgeButton: {
     minHeight: 38,
@@ -4540,11 +4543,13 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   sheetTitle: {
+    flex: 1,
     color: colors.cream,
-    fontSize: 28,
-    lineHeight: 33,
+    fontSize: 22,
+    lineHeight: 28,
     fontFamily: undefined,
     fontWeight: "900",
+    paddingRight: 12,
   },
   sheetClose: {
     color: colors.cream,
