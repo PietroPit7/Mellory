@@ -23,7 +23,6 @@ import {
   fetchNearbyPlaces,
   fetchPlaceSuggestions,
   hasPreciseCitySuggestion,
-  hasGeoapifyApiKey,
 } from "@/services/geoapify";
 
 type PlaceStatus = "try" | "favorite" | "visited" | "retry";
@@ -633,13 +632,6 @@ export default function MapScreen() {
         return;
       }
 
-      if (!hasGeoapifyApiKey()) {
-        setErrorMessage(
-          "La ricerca non è disponibile in questo momento. Riprova tra poco."
-        );
-        return;
-      }
-
       setIsSuggesting(true);
 
       try {
@@ -686,13 +678,6 @@ export default function MapScreen() {
   }, [lastSearchCenter, mapRegion, searchQuery, selectedCity, selectedSearchLabel]);
 
   async function searchPlacesAroundCity(city: CitySuggestion) {
-    if (!hasGeoapifyApiKey()) {
-      setErrorMessage(
-        "La ricerca non è disponibile in questo momento. Riprova tra poco."
-      );
-      return;
-    }
-
     setPreviewPlace(null);
     setMode("search");
     setSelectedCity(city);
@@ -733,13 +718,6 @@ export default function MapScreen() {
   }
 
   async function searchPlacesAroundUser() {
-    if (!hasGeoapifyApiKey()) {
-      setErrorMessage(
-        "La ricerca non è disponibile in questo momento. Riprova tra poco."
-      );
-      return;
-    }
-
     setPreviewPlace(null);
     setMode("search");
     setSelectedCategory("Tutti");
@@ -799,13 +777,6 @@ export default function MapScreen() {
 
   async function searchPlacesAroundMapRegion() {
     if (!mapRegion) return;
-
-    if (!hasGeoapifyApiKey()) {
-      setErrorMessage(
-        "La ricerca non è disponibile in questo momento. Riprova tra poco."
-      );
-      return;
-    }
 
     const areaSuggestion: CitySuggestion = {
       id: `map-area-${mapRegion.latitude.toFixed(5)}-${mapRegion.longitude.toFixed(
@@ -919,13 +890,6 @@ export default function MapScreen() {
 
     if (citySuggestions.length > 0) {
       await searchPlacesAroundCity(citySuggestions[0]);
-      return;
-    }
-
-    if (!hasGeoapifyApiKey()) {
-      setErrorMessage(
-        "La ricerca non è disponibile in questo momento. Riprova tra poco."
-      );
       return;
     }
 
@@ -1045,8 +1009,6 @@ export default function MapScreen() {
         note: "",
       };
       setPreviewPlace(quickPlace);
-
-      if (!hasGeoapifyApiKey()) return;
 
       void (async () => {
         try {

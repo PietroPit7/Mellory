@@ -12,6 +12,8 @@ const GEOAPIFY_API_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY?.trim() ?? "";
 const AUTOCOMPLETE_ENDPOINT =
   "https://api.geoapify.com/v1/geocode/autocomplete";
 const PLACES_ENDPOINT = "https://api.geoapify.com/v2/places";
+const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org";
+const NOMINATIM_UA = "Mellory/1.0 (mellory-app)";
 const CITY_QUERY_RESULT_LIMIT = 12;
 const CITY_SUGGESTION_LIMIT = 4;
 const PLACE_SUGGESTION_LIMIT = 14;
@@ -370,6 +372,120 @@ function toNearbyPlace(
   };
 }
 
+type NominatimResult = {
+  osm_type?: string;
+  osm_id?: number;
+  lat: string;
+  lon: string;
+  display_name: string;
+  type?: string;
+  class?: string;
+};
+
+async function fetchCitySuggestionsFromNominatim(
+  query: string
+): Promise<CitySuggestion[]> {
+  try {
+    const url = `${NOMINATIM_ENDPOINT}/search?q=${encodeURIComponent(
+      query
+    )}&format=json&limit=6&accept-language=it&featuretype=city`;
+    const response = await fetch(url, {
+      headers: { "User-Agent": NOMINATIM_UA },
+    });
+    if (!response.ok) return [];
+    const results = (await response.json()) as NominatimResult[];
+    return results
+      .filter((r) => r.lat && r.lon)
+      .map((r, index) => {
+        const parts = r.display_name.split(",").map((s) => s.trim());
+        const cityLabel = parts[0] || query;
+        const detailLabel = parts.slice(1, 4).join(", ") || "";
+        const latitude = parseFloat(r.lat);
+        const longitude = parseFloat(r.lon);
+        if (isNaN(latitude) || isNaN(longitude)) return null;
+        return {
+          id: `nom-${r.osm_type ?? "n"}-${r.osm_id ?? index}`,
+          label: cityLabel,
+          detail: detailLabel,
+          latitude,
+          longitude,
+          cityLabel,
+          detailLabel,
+          kind: "city" as const,
+        };
+      })
+      .filter((s) => s !== null) as CitySuggestion[];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchPlaceSuggestionsFromNominatim(
+  query: string,
+  origin?: Coordinates
+): Promise<NearbyPlace[]> {
+  try {
+    const viewbox = origin
+      ? `&viewbox=${origin.longitude - 0.6},${origin.latitude + 0.6},${
+          origin.longitude + 0.6
+        },${origin.latitude - 0.6}&bounded=0`
+      : "";
+    const url = `${NOMINATIM_ENDPOINT}/search?q=${encodeURIComponent(
+      query
+    )}&format=json&limit=10&accept-language=it${viewbox}`;
+    const response = await fetch(url, {
+      headers: { "User-Agent": NOMINATIM_UA },
+    });
+    if (!response.ok) return [];
+    const results = (await response.json()) as NominatimResult[];
+    const fallbackOrigin = origin ?? { latitude: 0, longitude: 0 };
+    return results
+      .filter((r) => r.class === "amenity" && r.lat && r.lon)
+      .map((r, index) => {
+        const lat = parseFloat(r.lat);
+        const lon = parseFloat(r.lon);
+        if (isNaN(lat) || isNaN(lon)) return null;
+        const parts = r.display_name.split(",").map((s) => s.trim());
+        const name = parts[0] || r.display_name;
+        const detail = parts.slice(1, 4).join(", ");
+        const t = r.type ?? "";
+        let categoryBase = "Luogo";
+        if (t === "restaurant") categoryBase = "Ristorante";
+        else if (t === "cafe") categoryBase = "Caffè";
+        else if (t === "bar") categoryBase = "Bar";
+        else if (t === "pub") categoryBase = "Pub";
+        else if (t === "fast_food") categoryBase = "Fast food";
+        else if (t === "ice_cream") categoryBase = "Gelateria";
+        else if (t === "bakery") categoryBase = "Forno";
+        if (categoryBase === "Luogo") return null;
+        const distanceMeters = getDistanceMeters(
+          fallbackOrigin.latitude,
+          fallbackOrigin.longitude,
+          lat,
+          lon
+        );
+        return {
+          id: `nom-${r.osm_type ?? "n"}-${r.osm_id ?? index}`,
+          name,
+          category: categoryBase,
+          categoryBase,
+          detail,
+          distance: formatDistance(distanceMeters),
+          distanceMeters,
+          latitude: lat,
+          longitude: lon,
+          website: "",
+          phone: "",
+          openingHours: "",
+          editorialAwards: "",
+        };
+      })
+      .filter((p): p is NearbyPlace => p !== null);
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchCitySuggestions(query: string) {
   const trimmedQuery = query.trim();
 
@@ -378,6 +494,12 @@ export async function fetchCitySuggestions(query: string) {
   const cacheKey = trimmedQuery.toLocaleLowerCase("it");
   const cachedSuggestions = citySuggestionsCache.get(cacheKey);
   if (cachedSuggestions) return cachedSuggestions;
+
+  if (!hasGeoapifyApiKey()) {
+    const suggestions = await fetchCitySuggestionsFromNominatim(trimmedQuery);
+    citySuggestionsCache.set(cacheKey, suggestions);
+    return suggestions;
+  }
 
   const apiKey = getGeoapifyApiKey();
   const url = `${AUTOCOMPLETE_ENDPOINT}?text=${encodeURIComponent(
@@ -728,6 +850,12 @@ export async function fetchPlaceSuggestions(
   const cacheKey = `${trimmedQuery.toLocaleLowerCase("it")}|${originKey}`;
   const cachedPlaces = placeSuggestionsCache.get(cacheKey);
   if (cachedPlaces) return cachedPlaces;
+
+  if (!hasGeoapifyApiKey()) {
+    const places = await fetchPlaceSuggestionsFromNominatim(trimmedQuery, origin);
+    placeSuggestionsCache.set(cacheKey, places);
+    return places;
+  }
 
   const apiKey = getGeoapifyApiKey();
   const proximity = origin
