@@ -1236,6 +1236,8 @@ export default function HomeScreen() {
           style={styles.searchInput}
           autoCorrect={false}
           autoCapitalize="words"
+          inputMode="search"
+          clearButtonMode="while-editing"
           onFocus={() => {
             if (
               (citySuggestions.length > 0 || placeSuggestions.length > 0) &&

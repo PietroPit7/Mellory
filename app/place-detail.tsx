@@ -1966,6 +1966,7 @@ export default function PlaceDetailScreen() {
               onChangeText={setDraftListTitle}
               placeholder="Nome lista"
               placeholderTextColor={colors.muted}
+              returnKeyType="next"
               style={styles.sheetInput}
             />
 
@@ -1974,6 +1975,7 @@ export default function PlaceDetailScreen() {
               onChangeText={setDraftListDescription}
               placeholder="Descrizione opzionale"
               placeholderTextColor={colors.muted}
+              returnKeyType="done"
               style={styles.sheetInput}
             />
 
@@ -2145,6 +2147,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftDetailName}
             placeholder="Nome del locale"
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2154,6 +2157,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftDetailCategory}
             placeholder="Ristorante, Bar, Caffè..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2163,6 +2167,8 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftDetailAddress}
             placeholder="Via, zona o riferimento"
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
+            autoComplete="street-address"
             style={styles.sheetInput}
           />
 
@@ -2173,6 +2179,9 @@ export default function PlaceDetailScreen() {
             placeholder="Numero"
             placeholderTextColor={colors.muted}
             keyboardType="phone-pad"
+            inputMode="tel"
+            autoComplete="tel"
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2184,6 +2193,9 @@ export default function PlaceDetailScreen() {
             placeholderTextColor={colors.muted}
             autoCapitalize="none"
             keyboardType="url"
+            inputMode="url"
+            autoComplete="url"
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2223,6 +2235,7 @@ export default function PlaceDetailScreen() {
                 onChangeText={(value) => updateDraftDay(index, value)}
                 placeholder="09:00-18:00"
                 placeholderTextColor={colors.muted}
+                returnKeyType={index < WEEK_DAYS.length - 1 ? "next" : "done"}
                 style={styles.hoursEditInput}
               />
             </View>
@@ -2246,6 +2259,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftOccasion}
             placeholder="Cena di compleanno, pranzo veloce..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2255,6 +2269,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftWithWho}
             placeholder="Con amici, coppia, famiglia..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2264,6 +2279,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftDish}
             placeholder="Cosa ti è piaciuto di più?"
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2274,6 +2290,8 @@ export default function PlaceDetailScreen() {
             placeholder="65"
             placeholderTextColor={colors.muted}
             keyboardType="numeric"
+            inputMode="numeric"
+            returnKeyType="done"
             style={styles.sheetInput}
           />
 
@@ -2390,6 +2408,8 @@ export default function PlaceDetailScreen() {
               onChangeText={setDraftBadgeName}
               placeholder="es. vista mozzafiato"
               placeholderTextColor={colors.muted}
+              returnKeyType="done"
+              autoCapitalize="none"
               style={styles.sheetInput}
             />
 
@@ -2530,6 +2550,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftEditorialTitle}
             placeholder="es. Guida Michelin, Gambero Rosso..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2539,6 +2560,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftEditorialSource}
             placeholder="Nome guida, articolo, rivista..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2550,6 +2572,8 @@ export default function PlaceDetailScreen() {
             placeholderTextColor={colors.muted}
             autoCapitalize="none"
             keyboardType="url"
+            inputMode="url"
+            returnKeyType="done"
             style={styles.sheetInput}
           />
 

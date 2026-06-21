@@ -284,6 +284,7 @@ export default function OnboardingScreen() {
               placeholderTextColor={colors.muted}
               style={styles.input}
               autoCapitalize="words"
+              autoComplete="given-name"
               autoFocus
               returnKeyType="next"
             />
@@ -294,6 +295,7 @@ export default function OnboardingScreen() {
               placeholderTextColor={colors.muted}
               style={styles.input}
               autoCapitalize="words"
+              autoComplete="family-name"
               returnKeyType="done"
               onSubmitEditing={() => {
                 if (firstName.trim()) goNext();
@@ -336,6 +338,7 @@ export default function OnboardingScreen() {
             placeholderTextColor={colors.muted}
             style={styles.input}
             autoCapitalize="words"
+            autoComplete="postal-address-locality"
             autoFocus
             returnKeyType="done"
             onSubmitEditing={goNext}

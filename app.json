@@ -23,7 +23,13 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Mellory",
+      "shortName": "Mellory",
+      "description": "La tua guida gastronomica personale",
+      "themeColor": "#070604",
+      "backgroundColor": "#F3F0EA",
+      "lang": "it"
     },
     "plugins": [
       "expo-router",

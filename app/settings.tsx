@@ -302,6 +302,7 @@ export default function SettingsScreen() {
               placeholderTextColor={colors.muted}
               returnKeyType="next"
               autoCapitalize="words"
+              autoComplete="given-name"
             />
           </View>
 
@@ -317,6 +318,7 @@ export default function SettingsScreen() {
               placeholderTextColor={colors.muted}
               returnKeyType="next"
               autoCapitalize="words"
+              autoComplete="family-name"
             />
           </View>
 
@@ -332,6 +334,7 @@ export default function SettingsScreen() {
               placeholderTextColor={colors.muted}
               returnKeyType="done"
               autoCapitalize="words"
+              autoComplete="postal-address-locality"
               onSubmitEditing={saveProfile}
             />
           </View>

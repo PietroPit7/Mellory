@@ -1159,6 +1159,8 @@ export default function MapScreen() {
               placeholderTextColor={colors.textMuted}
               autoCapitalize="words"
               autoCorrect={false}
+              inputMode="search"
+              clearButtonMode="while-editing"
               returnKeyType="search"
               onSubmitEditing={handleSearchPress}
               style={styles.searchInput}

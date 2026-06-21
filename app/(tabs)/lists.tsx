@@ -846,6 +846,7 @@ export default function ListsScreen() {
           onChangeText={setDraftTitle}
           placeholder="Nome lista"
           placeholderTextColor={colors.muted}
+          returnKeyType="next"
           style={styles.input}
         />
 
@@ -854,6 +855,8 @@ export default function ListsScreen() {
           onChangeText={setDraftDescription}
           placeholder="Descrizione opzionale"
           placeholderTextColor={colors.muted}
+          returnKeyType="done"
+          onSubmitEditing={createCustomList}
           style={styles.input}
         />
 
