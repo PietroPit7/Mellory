@@ -959,7 +959,7 @@ function createStyles(colors: MelloryThemeColors) {
     height: 36,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: "rgba(185,71,71,0.5)",
+    borderColor: `${colors.red}80`,
     paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",

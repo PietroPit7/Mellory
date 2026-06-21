@@ -134,10 +134,6 @@ function getPlaceInitial(name: string) {
   return firstLetter || "M";
 }
 
-function getSafeSavedAt(place: SavedPlace) {
-  return place.savedAt || "";
-}
-
 function getExperienceStorageKey(placeId: string) {
   return `mellory:experience:${placeId}`;
 }
@@ -390,12 +386,6 @@ async function removeStatusFromExperience(
   return nextExperience;
 }
 
-function sortBySavedAtDesc(places: SavedPlace[]) {
-  return [...places].sort((a, b) => {
-    return getSafeSavedAt(b).localeCompare(getSafeSavedAt(a));
-  });
-}
-
 function mergePlacesWithStatuses({
   favoritePlaces,
   tryPlaces,
@@ -481,22 +471,6 @@ export default function MyMelloryScreen() {
   );
 
   const hasPlaces = allPlaces.length > 0 || customLists.length > 0;
-
-  const latestPlaces = sortBySavedAtDesc(allPlaces).slice(0, 5);
-
-  const personalDataCount = allPlaces.filter((place) => {
-    const experience = place.experience;
-
-    if (!experience) return false;
-
-    return (
-      experience.note.trim().length > 0 ||
-      experience.coverImageUri.length > 0 ||
-      experience.galleryImageUris.length > 0 ||
-      experience.badges.length > 0 ||
-      experience.experiences.length > 0
-    );
-  }).length;
 
   useFocusEffect(
     useCallback(() => {

@@ -1726,7 +1726,7 @@ function createStyles(colors: MelloryThemeColors) {
       width: 38,
       height: 38,
       borderRadius: 10,
-      backgroundColor: "rgba(192,26,47,0.08)",
+      backgroundColor: `${colors.pink}14`,
       alignItems: "center",
       justifyContent: "center",
       flexShrink: 0,
