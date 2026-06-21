@@ -8,8 +8,11 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
+
+import { PROFILE_KEY } from "./onboarding";
 
 import { PressableScale } from "@/components/pressable-scale";
 import {
@@ -41,6 +44,12 @@ const appearanceOptions: {
   },
 ];
 
+interface UserProfile {
+  firstName: string;
+  lastName: string;
+  city: string;
+}
+
 export default function SettingsScreen() {
   const { clearPreferenceForReset, colors, preference, setPreference } =
     useMelloryTheme();
@@ -49,11 +58,42 @@ export default function SettingsScreen() {
   const [backupMessage, setBackupMessage] = useState("");
   const [navigationService, setNavigationService] =
     useState<NavigationService>("automatic");
+  const [profile, setProfile] = useState<UserProfile>({
+    firstName: "",
+    lastName: "",
+    city: "",
+  });
+  const [profileSaved, setProfileSaved] = useState(false);
   const styles = useMemo(() => createStyles(colors), [colors]);
   const availableNavigationOptions = useMemo(
     () => getAvailableNavigationServiceOptions(),
     []
   );
+
+  useEffect(() => {
+    AsyncStorage.getItem(PROFILE_KEY)
+      .then((value) => {
+        if (value) {
+          const parsed = JSON.parse(value) as Partial<UserProfile>;
+          setProfile({
+            firstName: parsed.firstName ?? "",
+            lastName: parsed.lastName ?? "",
+            city: parsed.city ?? "",
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function saveProfile() {
+    try {
+      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+    } catch {
+      // silent
+    }
+  }
 
   useEffect(() => {
     let isActive = true;
@@ -240,6 +280,64 @@ export default function SettingsScreen() {
         </PressableScale>
 
         <Text style={styles.title}>Impostazioni</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>PROFILO</Text>
+
+        <View style={styles.profileCard}>
+          <View style={styles.profileField}>
+            <Text style={styles.profileFieldLabel}>Nome</Text>
+            <TextInput
+              style={styles.profileInput}
+              value={profile.firstName}
+              onChangeText={(text) =>
+                setProfile((p) => ({ ...p, firstName: text }))
+              }
+              placeholder="Il tuo nome"
+              placeholderTextColor={colors.muted}
+              returnKeyType="next"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={[styles.profileField, styles.profileFieldDivider]}>
+            <Text style={styles.profileFieldLabel}>Cognome</Text>
+            <TextInput
+              style={styles.profileInput}
+              value={profile.lastName}
+              onChangeText={(text) =>
+                setProfile((p) => ({ ...p, lastName: text }))
+              }
+              placeholder="Il tuo cognome"
+              placeholderTextColor={colors.muted}
+              returnKeyType="next"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={[styles.profileField, styles.profileFieldDivider]}>
+            <Text style={styles.profileFieldLabel}>Città</Text>
+            <TextInput
+              style={styles.profileInput}
+              value={profile.city}
+              onChangeText={(text) =>
+                setProfile((p) => ({ ...p, city: text }))
+              }
+              placeholder="La tua città"
+              placeholderTextColor={colors.muted}
+              returnKeyType="done"
+              autoCapitalize="words"
+              onSubmitEditing={saveProfile}
+            />
+          </View>
+        </View>
+
+        <PressableScale style={styles.profileSaveButton} onPress={saveProfile}>
+          <Text style={styles.profileSaveText}>
+            {profileSaved ? "Salvato ✓" : "Salva profilo"}
+          </Text>
+        </PressableScale>
       </View>
 
       <View style={styles.section}>
@@ -607,6 +705,50 @@ function createStyles(colors: MelloryThemeColors) {
       fontWeight: "800",
       textAlign: "center",
       marginTop: 12,
+    },
+    profileCard: {
+      backgroundColor: colors.card2,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+      marginBottom: 14,
+    },
+    profileField: {
+      minHeight: 72,
+      paddingHorizontal: 28,
+      paddingVertical: 16,
+      justifyContent: "center",
+      gap: 4,
+    },
+    profileFieldDivider: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    profileFieldLabel: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 2.5,
+    },
+    profileInput: {
+      color: colors.cream,
+      fontSize: 20,
+      fontWeight: "700",
+      paddingVertical: 0,
+    },
+    profileSaveButton: {
+      minHeight: 58,
+      borderRadius: 999,
+      backgroundColor: colors.gold,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    profileSaveText: {
+      color: colors.black,
+      fontSize: 17,
+      fontWeight: "900",
+      letterSpacing: 0.3,
     },
   });
 }
