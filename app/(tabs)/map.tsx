@@ -514,10 +514,12 @@ export default function MapScreen() {
     useState<MapRegionCenter | null>(null);
 
   const [previewPlace, setPreviewPlace] = useState<MapPlace | null>(null);
+  const [showList, setShowList] = useState(false);
 
   const params = useLocalSearchParams();
   const consumedParamsRef = useRef(false);
   const previewAnim = useRef(new Animated.Value(0)).current;
+  const listAnim = useRef(new Animated.Value(0)).current;
 
   const sourcePlaces = mode === "saved" ? savedPlaces : searchedPlaces;
 
@@ -1093,6 +1095,16 @@ export default function MapScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewAnim, previewPlace?.id]);
 
+  useEffect(() => {
+    Animated.spring(listAnim, {
+      toValue: showList ? 1 : 0,
+      damping: 22,
+      stiffness: 220,
+      mass: 0.9,
+      useNativeDriver: true,
+    }).start();
+  }, [listAnim, showList]);
+
   // Arrivo dalla Home con una zona già scelta: la mappa la apre e la cerca.
   useEffect(() => {
     if (consumedParamsRef.current) return;
@@ -1129,6 +1141,11 @@ export default function MapScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.latitude, params.longitude, params.cityLabel]);
 
+  const listTranslateY = listAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [600, 0],
+  });
+
   return (
     <View style={styles.root}>
       {/* Full-screen map */}
@@ -1148,16 +1165,17 @@ export default function MapScreen() {
         </View>
       ) : null}
 
-      {/* Top controls overlay */}
-      <View style={[styles.topOverlay, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
-        <View pointerEvents="auto" style={styles.topCard}>
-          {/* Search box */}
+      {/* Top floating controls — minimal */}
+      <View style={[styles.topOverlay, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        {/* Search row */}
+        <View pointerEvents="auto" style={styles.searchRow}>
           <View style={styles.searchBox}>
             <Text style={styles.searchIcon}>⌕</Text>
             <TextInput
               value={searchQuery}
               onChangeText={(value) => {
                 setPreviewPlace(null);
+                setShowList(false);
                 setSearchQuery(value);
                 setMode("search");
                 setErrorMessage("");
@@ -1176,225 +1194,261 @@ export default function MapScreen() {
             {(isSuggesting || isSearchingPlaces) && !isLocatingUser ? (
               <ActivityIndicator color={colors.pink} size="small" />
             ) : null}
+          </View>
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel="Usa la mia posizione"
+            style={[styles.locationButton, (isLocatingUser || isSearchingPlaces) && { opacity: 0.6 }]}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              void searchPlacesAroundUser();
+            }}
+            disabled={isLocatingUser || isSearchingPlaces}
+          >
+            {isLocatingUser ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <View style={styles.locationDot} />
+            )}
+          </PressableScale>
+          <PressableScale
+            style={[styles.savedToggle, mode === "saved" && styles.savedToggleActive]}
+            onPress={() => {
+              void Haptics.selectionAsync();
+              if (mode === "saved") {
+                setPreviewPlace(null);
+                setMode("search");
+              } else {
+                void refreshSavedPlaces();
+              }
+            }}
+          >
+            <Text style={[styles.savedToggleText, mode === "saved" && styles.savedToggleTextActive]}>♥</Text>
+          </PressableScale>
+        </View>
+
+        {/* Suggestions dropdown */}
+        {(placeSuggestions.length > 0 || citySuggestions.length > 0) && mode === "search" ? (
+          <View pointerEvents="auto" style={styles.suggestionsBox}>
+            {placeSuggestions.length > 0 ? (
+              <View>
+                <Text style={styles.suggestionGroupTitle}>Locali</Text>
+                {placeSuggestions.slice(0, 5).map((place) => (
+                  <PressableScale
+                    key={place.id}
+                    style={styles.suggestionRow}
+                    onPress={() => handlePlaceSuggestionPress(place)}
+                  >
+                    <View style={styles.suggestionTextBlock}>
+                      <Text numberOfLines={1} style={styles.suggestionTitle}>{place.name}</Text>
+                      <Text numberOfLines={1} style={styles.suggestionSubtitle}>
+                        {place.detail ? `${place.category} · ${place.detail}` : place.category}
+                      </Text>
+                    </View>
+                    <Text style={styles.suggestionArrow}>›</Text>
+                  </PressableScale>
+                ))}
+              </View>
+            ) : null}
+            {citySuggestions.length > 0 ? (
+              <Text style={styles.suggestionGroupTitle}>Città</Text>
+            ) : null}
+            {citySuggestions.slice(0, 4).map((city) => (
+              <PressableScale
+                key={`${city.cityLabel}-${city.latitude}-${city.longitude}`}
+                style={styles.suggestionRow}
+                onPress={() => void searchPlacesAroundCity(city)}
+              >
+                <View style={styles.suggestionTextBlock}>
+                  <Text style={styles.suggestionTitle}>{city.cityLabel}</Text>
+                  <Text style={styles.suggestionSubtitle}>Esplora questa zona</Text>
+                </View>
+                <Text style={styles.suggestionArrow}>›</Text>
+              </PressableScale>
+            ))}
+          </View>
+        ) : null}
+
+        {errorMessage ? (
+          <View pointerEvents="auto" style={styles.errorBubble}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
+        {/* Category pills */}
+        <ScrollView
+          pointerEvents="auto"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pillsContent}
+          style={styles.pillsRow}
+        >
+          {categories.map((category) => {
+            const isActive = selectedCategory === category;
+            return (
+              <PressableScale
+                key={category}
+                style={[styles.filterPill, isActive && styles.filterPillSelected]}
+                onPress={() => { setPreviewPlace(null); setSelectedCategory(category); }}
+              >
+                <Text style={[styles.filterPillText, isActive && styles.filterPillTextSelected]}>
+                  {category}
+                </Text>
+              </PressableScale>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Preview card — floats above bottom controls when a place is selected */}
+      {previewPlace ? (
+        <Animated.View
+          style={[
+            styles.previewCard,
+            { bottom: insets.bottom + 72 },
+            {
+              opacity: previewAnim,
+              transform: [
+                { translateY: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
+                { scale: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+              ],
+            },
+          ]}
+        >
+          <View style={[styles.previewAccentBar, { backgroundColor: getCategoryColor(previewPlace.categoryBase) }]} />
+          <View style={styles.previewContent}>
+            <View style={styles.previewTop}>
+              <View style={[styles.previewAvatar, { backgroundColor: `${getCategoryColor(previewPlace.categoryBase)}22` }]}>
+                <Text style={[styles.previewAvatarText, { color: getCategoryColor(previewPlace.categoryBase) }]}>
+                  {previewPlace.name.trim().charAt(0).toUpperCase() || "M"}
+                </Text>
+              </View>
+              <View style={styles.previewInfo}>
+                <Text style={styles.previewCategory}>{previewPlace.category}</Text>
+                <Text numberOfLines={1} style={styles.previewName}>{previewPlace.name}</Text>
+                {previewPlace.detail ? (
+                  <Text numberOfLines={1} style={styles.previewMeta}>{previewPlace.detail}</Text>
+                ) : null}
+              </View>
+              <PressableScale style={styles.previewCloseBtn} onPress={() => setPreviewPlace(null)}>
+                <Text style={styles.previewCloseBtnText}>×</Text>
+              </PressableScale>
+            </View>
             <PressableScale
-              accessibilityRole="button"
-              accessibilityLabel="Usa la mia posizione"
-              style={[styles.locationButton, (isLocatingUser || isSearchingPlaces) && { opacity: 0.6 }]}
+              style={styles.previewOpenBtn}
               onPress={() => {
                 void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                void searchPlacesAroundUser();
+                const place = previewPlace;
+                setPreviewPlace(null);
+                pushPlaceDetail(place);
               }}
-              disabled={isLocatingUser || isSearchingPlaces}
             >
-              {isLocatingUser ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <View style={styles.locationDot} />
-              )}
+              <Text style={styles.previewOpenBtnText}>Apri scheda completa</Text>
+              <Text style={styles.previewOpenBtnArrow}>›</Text>
             </PressableScale>
           </View>
+        </Animated.View>
+      ) : null}
 
-          {/* Mode toggle */}
-          <View style={styles.modeRow}>
-            <PressableScale
-              style={[styles.modePill, mode === "search" && styles.modePillActive]}
-              onPress={() => { setPreviewPlace(null); setMode("search"); }}
-            >
-              <Text style={[styles.modePillText, mode === "search" && styles.modePillTextActive]}>Ricerca</Text>
-            </PressableScale>
-            <PressableScale
-              style={[styles.modePill, mode === "saved" && styles.modePillActive]}
-              onPress={() => { void Haptics.selectionAsync(); void refreshSavedPlaces(); }}
-            >
-              <Text style={[styles.modePillText, mode === "saved" && styles.modePillTextActive]}>Salvati</Text>
+      {/* Floating bottom bar: list pill + empty state */}
+      <View
+        style={[styles.floatingBottom, { bottom: insets.bottom + 16 }]}
+        pointerEvents="box-none"
+      >
+        {!isMapLoading && visiblePlaces.length === 0 && !previewPlace ? (
+          <View pointerEvents="auto" style={styles.emptyPill}>
+            <Text style={styles.emptyPillText}>Cerca una città per iniziare.</Text>
+            <PressableScale onPress={() => void refreshSavedPlaces()}>
+              <Text style={styles.emptyPillAction}>I salvati ›</Text>
             </PressableScale>
           </View>
-
-          {/* Suggestions dropdown */}
-          {(placeSuggestions.length > 0 || citySuggestions.length > 0) && mode === "search" ? (
-            <View style={styles.suggestionsBox}>
-              {placeSuggestions.length > 0 ? (
-                <View>
-                  <Text style={styles.suggestionGroupTitle}>Locali</Text>
-                  {placeSuggestions.slice(0, 6).map((place) => (
-                    <PressableScale
-                      key={place.id}
-                      style={styles.suggestionRow}
-                      onPress={() => handlePlaceSuggestionPress(place)}
-                    >
-                      <View style={styles.suggestionTextBlock}>
-                        <Text numberOfLines={1} style={styles.suggestionTitle}>{place.name}</Text>
-                        <Text numberOfLines={1} style={styles.suggestionSubtitle}>
-                          {place.detail ? `${place.category} · ${place.detail}` : place.category}
-                        </Text>
-                      </View>
-                      <Text style={styles.suggestionArrow}>›</Text>
-                    </PressableScale>
-                  ))}
-                </View>
-              ) : null}
-              {citySuggestions.length > 0 ? (
-                <Text style={styles.suggestionGroupTitle}>Località</Text>
-              ) : null}
-              {citySuggestions.slice(0, 4).map((city) => (
-                <PressableScale
-                  key={`${city.cityLabel}-${city.latitude}-${city.longitude}`}
-                  style={styles.suggestionRow}
-                  onPress={() => searchPlacesAroundCity(city)}
-                >
-                  <View style={styles.suggestionTextBlock}>
-                    <Text style={styles.suggestionTitle}>{city.cityLabel}</Text>
-                    <Text style={styles.suggestionSubtitle}>Esplora questa zona</Text>
-                  </View>
-                  <Text style={styles.suggestionArrow}>›</Text>
-                </PressableScale>
-              ))}
-            </View>
-          ) : null}
-
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-          {/* Category pills */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.pillsContent}
+        ) : visiblePlaces.length > 0 && !previewPlace ? (
+          <PressableScale
+            pointerEvents="auto"
+            style={styles.listPill}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowList((v) => !v);
+            }}
           >
-            {categories.map((category) => {
-              const isActive = selectedCategory === category;
+            <Text style={styles.listPillIcon}>☰</Text>
+            <Text style={styles.listPillText}>
+              {visiblePlaces.length} {visiblePlaces.length === 1 ? "posto" : "posti"}
+            </Text>
+          </PressableScale>
+        ) : null}
+      </View>
+
+      {/* Results list sheet (slides up) */}
+      {showList ? (
+        <Animated.View
+          style={[
+            styles.listSheet,
+            { paddingBottom: Math.max(insets.bottom, 16) },
+            { transform: [{ translateY: listTranslateY }] },
+          ]}
+        >
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeader}>
+            <View>
+              <Text style={styles.sheetKicker}>
+                {mode === "saved" ? "SALVATI" : selectedCity ? selectedCity.cityLabel.toUpperCase() : "IN ZONA"}
+              </Text>
+              <Text style={styles.sheetTitle}>
+                {mode === "saved" ? "I tuoi luoghi" : "Locali trovati"}
+              </Text>
+            </View>
+            <PressableScale
+              style={styles.sheetCloseBtn}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                setShowList(false);
+              }}
+            >
+              <Text style={styles.sheetCloseBtnText}>×</Text>
+            </PressableScale>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.sheetList}>
+            {visiblePlaces.map((place) => {
+              const catColor = getCategoryColor(place.categoryBase);
+              const hasStatus = place.statuses.length > 0;
+              const statusColor = hasStatus ? getStatusColor(place.statuses[0]) : null;
               return (
                 <PressableScale
-                  key={category}
-                  style={[styles.filterPill, isActive && styles.filterPillSelected]}
-                  onPress={() => { setPreviewPlace(null); setSelectedCategory(category); }}
+                  key={place.id}
+                  style={styles.placeRow}
+                  onPress={() => {
+                    setShowList(false);
+                    openPlaceDetail(place.id);
+                  }}
                 >
-                  <Text style={[styles.filterPillText, isActive && styles.filterPillTextSelected]}>
-                    {category}
-                  </Text>
+                  <View style={[styles.placeAccent, { backgroundColor: catColor }]} />
+                  <View style={[styles.placeAvatar, { backgroundColor: `${catColor}18` }]}>
+                    <Text style={[styles.placeAvatarText, { color: catColor }]}>
+                      {place.name.trim().charAt(0).toUpperCase() || "M"}
+                    </Text>
+                  </View>
+                  <View style={styles.placeInfo}>
+                    <Text numberOfLines={1} style={styles.placeName}>{place.name}</Text>
+                    <Text numberOfLines={1} style={styles.placeSub}>
+                      {place.category}{place.distance ? ` · ${place.distance}` : ""}
+                    </Text>
+                  </View>
+                  {hasStatus && statusColor ? (
+                    <View style={[styles.statusPill, { backgroundColor: `${statusColor}1A` }]}>
+                      <Text style={[styles.statusPillText, { color: statusColor }]}>
+                        {getStatusLabel(place.statuses[0])}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.placeChevron}>›</Text>
+                  )}
                 </PressableScale>
               );
             })}
           </ScrollView>
-        </View>
-      </View>
-
-      {/* Bottom results panel */}
-      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <View style={styles.panelHandle} />
-
-        {previewPlace ? (
-          <Animated.View
-            style={[
-              styles.previewCard,
-              {
-                opacity: previewAnim,
-                transform: [
-                  { translateY: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
-                  { scale: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
-                ],
-              },
-            ]}
-          >
-            <View style={[styles.previewAccentBar, { backgroundColor: getCategoryColor(previewPlace.categoryBase) }]} />
-            <View style={styles.previewContent}>
-              <View style={styles.previewTop}>
-                <View style={[styles.previewAvatar, { backgroundColor: `${getCategoryColor(previewPlace.categoryBase)}22` }]}>
-                  <Text style={[styles.previewAvatarText, { color: getCategoryColor(previewPlace.categoryBase) }]}>
-                    {previewPlace.name.trim().charAt(0).toUpperCase() || "M"}
-                  </Text>
-                </View>
-                <View style={styles.previewInfo}>
-                  <Text style={styles.previewCategory}>{previewPlace.category}</Text>
-                  <Text numberOfLines={1} style={styles.previewName}>{previewPlace.name}</Text>
-                  {previewPlace.detail ? (
-                    <Text numberOfLines={1} style={styles.previewMeta}>{previewPlace.detail}</Text>
-                  ) : null}
-                </View>
-                <PressableScale style={styles.previewCloseBtn} onPress={() => setPreviewPlace(null)}>
-                  <Text style={styles.previewCloseBtnText}>×</Text>
-                </PressableScale>
-              </View>
-              <PressableScale
-                style={styles.previewOpenBtn}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  const place = previewPlace;
-                  setPreviewPlace(null);
-                  pushPlaceDetail(place);
-                }}
-              >
-                <Text style={styles.previewOpenBtnText}>Apri scheda completa</Text>
-                <Text style={styles.previewOpenBtnArrow}>›</Text>
-              </PressableScale>
-            </View>
-          </Animated.View>
-        ) : visiblePlaces.length > 0 ? (
-          <>
-            <View style={styles.sectionRow}>
-              <View>
-                <Text style={styles.sectionKicker}>
-                  {mode === "saved" ? "SALVATI" : selectedCity ? selectedCity.cityLabel.toUpperCase() : "IN ZONA"}
-                </Text>
-                <Text style={styles.sectionTitle}>
-                  {mode === "saved" ? "I tuoi luoghi" : "Locali trovati"}
-                </Text>
-              </View>
-              <View style={styles.sectionCountBadge}>
-                <Text style={styles.sectionCount}>
-                  {visiblePlaces.length}
-                </Text>
-              </View>
-            </View>
-            <ScrollView style={styles.panelList} showsVerticalScrollIndicator={false}>
-              {visiblePlaces.map((place) => {
-                const catColor = getCategoryColor(place.categoryBase);
-                const hasStatus = place.statuses.length > 0;
-                const statusColor = hasStatus ? getStatusColor(place.statuses[0]) : null;
-                return (
-                  <PressableScale
-                    key={place.id}
-                    style={styles.placeRow}
-                    onPress={() => openPlaceDetail(place.id)}
-                  >
-                    <View style={[styles.placeAccent, { backgroundColor: catColor }]} />
-                    <View style={[styles.placeAvatar, { backgroundColor: `${catColor}18` }]}>
-                      <Text style={[styles.placeAvatarText, { color: catColor }]}>
-                        {place.name.trim().charAt(0).toUpperCase() || "M"}
-                      </Text>
-                    </View>
-                    <View style={styles.placeInfo}>
-                      <Text numberOfLines={1} style={styles.placeName}>{place.name}</Text>
-                      <Text numberOfLines={1} style={styles.placeSub}>
-                        {place.category}{place.distance ? ` · ${place.distance}` : ""}
-                      </Text>
-                    </View>
-                    {hasStatus && statusColor ? (
-                      <View style={[styles.statusPill, { backgroundColor: `${statusColor}1A` }]}>
-                        <Text style={[styles.statusPillText, { color: statusColor }]}>
-                          {getStatusLabel(place.statuses[0])}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.placeChevron}>›</Text>
-                    )}
-                  </PressableScale>
-                );
-              })}
-            </ScrollView>
-          </>
-        ) : !isMapLoading ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Cerca una città per iniziare.</Text>
-            <PressableScale style={styles.emptyButton} onPress={() => void refreshSavedPlaces()}>
-              <Text style={styles.emptyButtonText}>Mostra i salvati</Text>
-            </PressableScale>
-          </View>
-        ) : (
-          <View style={styles.panelLoading}>
-            <ActivityIndicator color={colors.pink} />
-          </View>
-        )}
-      </View>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -1403,58 +1457,42 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.black },
 
   // Dots loading indicator
-  mapDotsCenter: { position: "absolute", top: "42%", left: 0, right: 0, alignItems: "center", zIndex: 6 },
+  mapDotsCenter: { position: "absolute", top: "42%", left: 0, right: 0, alignItems: "center", zIndex: 6, pointerEvents: "none" },
 
-  // Top floating controls
-  topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, paddingHorizontal: 12 },
-  topCard: { backgroundColor: "rgba(23,19,15,0.94)", borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 12, gap: 10 },
-  searchBox: { height: 46, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingLeft: 14, paddingRight: 6, flexDirection: "row", alignItems: "center", gap: 10 },
+  // ── Top floating overlay ──────────────────────────────────────────────
+  topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, paddingHorizontal: 12, gap: 8 },
+
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  searchBox: { flex: 1, height: 46, borderRadius: 23, backgroundColor: "rgba(23,19,15,0.90)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)", paddingLeft: 14, paddingRight: 10, flexDirection: "row", alignItems: "center", gap: 8 },
   searchIcon: { color: colors.textMuted, fontSize: 18 },
   searchInput: { flex: 1, color: colors.cream, fontSize: 15, fontWeight: "500" },
-  locationButton: { width: 34, height: 34, borderRadius: 9, backgroundColor: colors.pink, alignItems: "center", justifyContent: "center" },
-  locationDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#fff" },
-  modeRow: { flexDirection: "row", gap: 7 },
-  modePill: { height: 30, borderRadius: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
-  modePillActive: { backgroundColor: colors.cream, borderColor: colors.cream },
-  modePillText: { color: colors.muted, fontSize: 13, fontWeight: "600" },
-  modePillTextActive: { color: colors.black },
+  locationButton: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.pink, alignItems: "center", justifyContent: "center" },
+  locationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
+  savedToggle: { width: 46, height: 46, borderRadius: 23, backgroundColor: "rgba(23,19,15,0.90)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)", alignItems: "center", justifyContent: "center" },
+  savedToggleActive: { backgroundColor: colors.pink, borderColor: colors.pink },
+  savedToggleText: { color: colors.muted, fontSize: 18, lineHeight: 22 },
+  savedToggleTextActive: { color: "#fff" },
 
-  suggestionsBox: { backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: "hidden", maxHeight: 260 },
+  suggestionsBox: { backgroundColor: "rgba(23,19,15,0.96)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,248,239,0.10)", overflow: "hidden", maxHeight: 280 },
   suggestionGroupTitle: { color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.4, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, textTransform: "uppercase" },
   suggestionRow: { paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: colors.softBorder, flexDirection: "row", alignItems: "center", gap: 10 },
   suggestionTextBlock: { flex: 1, minWidth: 0 },
   suggestionTitle: { color: colors.cream, fontSize: 14, fontWeight: "600", marginBottom: 1 },
   suggestionSubtitle: { color: colors.muted, fontSize: 12 },
   suggestionArrow: { color: colors.muted, fontSize: 18 },
+
+  errorBubble: { backgroundColor: "rgba(23,19,15,0.90)", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: `${colors.orange}44` },
   errorText: { color: colors.orange, fontSize: 12, lineHeight: 18 },
 
-  pillsContent: { gap: 7, paddingRight: 2 },
-  filterPill: { height: 30, borderRadius: 8, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
+  pillsRow: { flexGrow: 0 },
+  pillsContent: { gap: 7, paddingRight: 4 },
+  filterPill: { height: 32, borderRadius: 16, backgroundColor: "rgba(23,19,15,0.88)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)", paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
   filterPillSelected: { backgroundColor: colors.cream, borderColor: colors.cream },
-  filterPillText: { color: colors.muted, fontSize: 13, fontWeight: "600" },
+  filterPillText: { color: colors.textMuted, fontSize: 13, fontWeight: "600" },
   filterPillTextSelected: { color: colors.black },
 
-  // Bottom sheet panel
-  bottomPanel: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(23,19,15,0.97)", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 0, zIndex: 10 },
-  panelHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginTop: 10, marginBottom: 2 },
-  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
-  sectionKicker: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 2 },
-  sectionTitle: { color: colors.cream, fontSize: 18, fontWeight: "800", letterSpacing: -0.4 },
-  sectionCountBadge: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  sectionCount: { color: colors.cream, fontSize: 15, fontWeight: "700" },
-  panelList: { maxHeight: 250 },
-  placeRow: { flexDirection: "row", alignItems: "center", paddingLeft: 0, paddingRight: 16, paddingVertical: 14, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.softBorder },
-  placeAccent: { width: 3, height: "100%", borderRadius: 99, marginLeft: 16, flexShrink: 0 },
-  placeAvatar: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  placeAvatarText: { fontSize: 14, fontWeight: "800" },
-  placeInfo: { flex: 1, minWidth: 0 },
-  placeName: { color: colors.cream, fontSize: 15, fontWeight: "700", marginBottom: 2, letterSpacing: -0.2 },
-  placeSub: { color: colors.muted, fontSize: 12 },
-  placeChevron: { color: colors.muted, fontSize: 18 },
-  statusPill: { borderRadius: 7, paddingHorizontal: 9, paddingVertical: 4 },
-  statusPillText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
-
-  previewCard: { marginHorizontal: 12, marginBottom: 8, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.softBorder, overflow: "hidden" },
+  // ── Floating preview card ─────────────────────────────────────────────
+  previewCard: { position: "absolute", left: 12, right: 12, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.softBorder, overflow: "hidden", zIndex: 20 },
   previewAccentBar: { height: 3, width: "100%" },
   previewContent: { padding: 14 },
   previewTop: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 14 },
@@ -1470,9 +1508,34 @@ const styles = StyleSheet.create({
   previewCloseBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.card2, alignItems: "center", justifyContent: "center" },
   previewCloseBtnText: { color: colors.muted, fontSize: 18, lineHeight: 20 },
 
-  emptyState: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
-  emptyTitle: { color: colors.muted, fontSize: 15, marginBottom: 14 },
-  emptyButton: { backgroundColor: colors.card, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingVertical: 13, alignItems: "center" },
-  emptyButtonText: { color: colors.cream, fontSize: 15, fontWeight: "600" },
-  panelLoading: { paddingVertical: 20, alignItems: "center" },
+  // ── Floating bottom controls ──────────────────────────────────────────
+  floatingBottom: { position: "absolute", left: 0, right: 0, zIndex: 20, alignItems: "center" },
+  listPill: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 28, backgroundColor: "rgba(23,19,15,0.92)", borderWidth: 1, borderColor: "rgba(255,248,239,0.14)" },
+  listPillIcon: { color: colors.cream, fontSize: 16 },
+  listPillText: { color: colors.cream, fontSize: 14, fontWeight: "700", letterSpacing: -0.2 },
+  emptyPill: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 28, backgroundColor: "rgba(23,19,15,0.90)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)" },
+  emptyPillText: { color: colors.muted, fontSize: 13 },
+  emptyPillAction: { color: colors.pink, fontSize: 13, fontWeight: "700" },
+
+  // ── Slide-up list sheet ───────────────────────────────────────────────
+  listSheet: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 30, backgroundColor: "rgba(17,13,9,0.98)", borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderTopColor: "rgba(255,248,239,0.10)", maxHeight: "72%" },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,248,239,0.18)", alignSelf: "center", marginTop: 12, marginBottom: 4 },
+  sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 18, paddingTop: 10, paddingBottom: 14 },
+  sheetKicker: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 2 },
+  sheetTitle: { color: colors.cream, fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
+  sheetCloseBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  sheetCloseBtnText: { color: colors.muted, fontSize: 20, lineHeight: 22 },
+  sheetList: { flexGrow: 0 },
+
+  // ── Place rows (inside sheet) ─────────────────────────────────────────
+  placeRow: { flexDirection: "row", alignItems: "center", paddingLeft: 0, paddingRight: 16, paddingVertical: 14, gap: 12, borderBottomWidth: 1, borderBottomColor: colors.softBorder },
+  placeAccent: { width: 3, alignSelf: "stretch", borderRadius: 99, marginLeft: 16, flexShrink: 0 },
+  placeAvatar: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  placeAvatarText: { fontSize: 14, fontWeight: "800" },
+  placeInfo: { flex: 1, minWidth: 0 },
+  placeName: { color: colors.cream, fontSize: 15, fontWeight: "700", marginBottom: 2, letterSpacing: -0.2 },
+  placeSub: { color: colors.muted, fontSize: 12 },
+  placeChevron: { color: colors.muted, fontSize: 18 },
+  statusPill: { borderRadius: 7, paddingHorizontal: 9, paddingVertical: 4 },
+  statusPillText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
 });

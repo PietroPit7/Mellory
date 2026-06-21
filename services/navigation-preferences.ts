@@ -145,9 +145,13 @@ function getGoogleUrls(destination: NavigationDestination) {
 }
 
 function getAppleUrls(destination: NavigationDestination) {
+  const appDestination = getAppDestination(destination);
   const encodedDestination = getEncodedDestination(destination);
-
-  return [`http://maps.apple.com/?daddr=${encodedDestination}&dirflg=d`];
+  // maps:// opens Apple Maps directly without a browser hop on iOS
+  return [
+    `maps://?daddr=${appDestination}&dirflg=d`,
+    `http://maps.apple.com/?daddr=${encodedDestination}&dirflg=d`,
+  ];
 }
 
 function getWazeUrls(destination: NavigationDestination) {
