@@ -1202,9 +1202,6 @@ export default function HomeScreen() {
         <View style={styles.brandBlock}>
           <Text style={styles.logo}>Mellory</Text>
           <View style={styles.brandUnderline} />
-          <Text style={styles.brandSubtitle}>
-            La tua guida personale dei posti in cui sei stato bene.
-          </Text>
         </View>
       </View>
 
@@ -1214,8 +1211,8 @@ export default function HomeScreen() {
           GUIDA GASTRONOMICA · EDIZIONE PERSONALE
         </Text>
         <Text style={styles.headline}>
-          Trova sempre{"\n"}il posto{" "}
-          <Text style={styles.headlineAccent}>giusto</Text>.
+          Ricorda dove sei stato bene,{" "}
+          <Text style={styles.headlineAccent}>sempre</Text>.
         </Text>
       </View>
 
@@ -1530,13 +1527,6 @@ function createStyles(colors: MelloryThemeColors) {
       backgroundColor: colors.pink,
       marginTop: 14,
       marginBottom: 14,
-    },
-    brandSubtitle: {
-      color: colors.muted,
-      fontSize: 15,
-      lineHeight: 21,
-      fontWeight: "500",
-      maxWidth: 320,
     },
     hero: {
       marginBottom: 36,
