@@ -16,7 +16,15 @@ import {
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { PressableScale } from "@/components/pressable-scale";
-import { melloryThemeVars } from "@/contexts/mellory-theme";
+import {
+  melloryDarkColors,
+  type MelloryThemeColors,
+  useMelloryTheme,
+} from "@/contexts/mellory-theme";
+
+// Module-level reference used by the static StyleSheet and sub-components below.
+// The component shadows this with useMelloryTheme() for dynamic accent colors.
+const colors = melloryDarkColors;
 import { openPreferredNavigation } from "@/services/navigation-preferences";
 
 type PlaceStatus = "try" | "favorite" | "visited" | "retry";
@@ -260,8 +268,6 @@ type CustomList = {
   createdAt: string;
 };
 
-const colors = melloryThemeVars;
-
 const FAVORITES_STORAGE_KEY = "mellory:favorites";
 const TRY_STORAGE_KEY = "mellory:try";
 const VISITED_STORAGE_KEY = "mellory:visited";
@@ -312,42 +318,44 @@ const emptyExperience: PlaceExperience = {
   personalDetails: emptyPersonalDetails,
 };
 
-const listOptions: {
+function makeListOptions(colors: MelloryThemeColors): {
   status: PlaceStatus;
   emoji: string;
   title: string;
   text: string;
   color: string;
-}[] = [
-  {
-    status: "try",
-    emoji: "✦",
-    title: "Da provare",
-    text: "Posti che vuoi visitare prossimamente.",
-    color: colors.yellow,
-  },
-  {
-    status: "favorite",
-    emoji: "♥",
-    title: "Preferito",
-    text: "Posti in cui torneresti senza pensarci.",
-    color: colors.pink,
-  },
-  {
-    status: "visited",
-    emoji: "✓",
-    title: "Visitato",
-    text: "Posti dove sei già stato e vuoi ricordare.",
-    color: colors.green,
-  },
-  {
-    status: "retry",
-    emoji: "↻",
-    title: "Da rivalutare",
-    text: "Posti da riprovare prima di decidere.",
-    color: colors.orange,
-  },
-];
+}[] {
+  return [
+    {
+      status: "try",
+      emoji: "✦",
+      title: "Da provare",
+      text: "Posti che vuoi visitare prossimamente.",
+      color: colors.yellow,
+    },
+    {
+      status: "favorite",
+      emoji: "♥",
+      title: "Preferito",
+      text: "Posti in cui torneresti senza pensarci.",
+      color: colors.pink,
+    },
+    {
+      status: "visited",
+      emoji: "✓",
+      title: "Visitato",
+      text: "Posti dove sei già stato e vuoi ricordare.",
+      color: colors.green,
+    },
+    {
+      status: "retry",
+      emoji: "↻",
+      title: "Da rivalutare",
+      text: "Posti da riprovare prima di decidere.",
+      color: colors.orange,
+    },
+  ];
+}
 
 const scoreRows: { key: ScoreKey; label: string }[] = [
   { key: "food", label: "Cibo" },
@@ -361,92 +369,94 @@ const scoreRows: { key: ScoreKey; label: string }[] = [
   { key: "return", label: "Voglia di tornarci" },
 ];
 
-const standardBadges: StandardBadge[] = [
-  {
-    id: "romantico",
-    label: "romantico",
-    icon: "♡",
-    category: "occasione",
-    color: colors.pink,
-  },
-  {
-    id: "amici",
-    label: "amici",
-    icon: "♢",
-    category: "occasione",
-    color: colors.gold,
-  },
-  {
-    id: "business",
-    label: "business",
-    icon: "◆",
-    category: "occasione",
-    color: colors.blue,
-  },
-  {
-    id: "famiglia",
-    label: "famiglia",
-    icon: "⌂",
-    category: "occasione",
-    color: colors.sage,
-  },
-  {
-    id: "gourmet",
-    label: "gourmet",
-    icon: "✦",
-    category: "gusto",
-    color: colors.yellow,
-  },
-  {
-    id: "vino",
-    label: "vino",
-    icon: "♕",
-    category: "gusto",
-    color: colors.red,
-  },
-  {
-    id: "cocktail",
-    label: "cocktail",
-    icon: "◒",
-    category: "gusto",
-    color: colors.violet,
-  },
-  {
-    id: "dolci",
-    label: "dolci",
-    icon: "◌",
-    category: "gusto",
-    color: colors.orange,
-  },
-  {
-    id: "hidden-gem",
-    label: "hidden gem",
-    icon: "◇",
-    category: "personale",
-    color: colors.gold,
-  },
-  {
-    id: "vista",
-    label: "vista bella",
-    icon: "◐",
-    category: "atmosfera",
-    color: colors.blue,
-  },
-  {
-    id: "design",
-    label: "design",
-    icon: "▧",
-    category: "atmosfera",
-    color: colors.violet,
-  },
-  {
-    id: "verde",
-    label: "verde",
-    icon: "♧",
-    category: "atmosfera",
-    color: colors.green,
-  },
-];
+function makeStandardBadges(colors: MelloryThemeColors): StandardBadge[] {
+  return [
+    {
+      id: "romantico",
+      label: "romantico",
+      icon: "♡",
+      category: "occasione",
+      color: colors.pink,
+    },
+    {
+      id: "amici",
+      label: "amici",
+      icon: "♢",
+      category: "occasione",
+      color: colors.gold,
+    },
+    {
+      id: "business",
+      label: "business",
+      icon: "◆",
+      category: "occasione",
+      color: colors.blue,
+    },
+    {
+      id: "famiglia",
+      label: "famiglia",
+      icon: "⌂",
+      category: "occasione",
+      color: colors.sage,
+    },
+    {
+      id: "gourmet",
+      label: "gourmet",
+      icon: "✦",
+      category: "gusto",
+      color: colors.yellow,
+    },
+    {
+      id: "vino",
+      label: "vino",
+      icon: "♕",
+      category: "gusto",
+      color: colors.red,
+    },
+    {
+      id: "cocktail",
+      label: "cocktail",
+      icon: "◒",
+      category: "gusto",
+      color: colors.violet,
+    },
+    {
+      id: "dolci",
+      label: "dolci",
+      icon: "◌",
+      category: "gusto",
+      color: colors.orange,
+    },
+    {
+      id: "hidden-gem",
+      label: "hidden gem",
+      icon: "◇",
+      category: "personale",
+      color: colors.gold,
+    },
+    {
+      id: "vista",
+      label: "vista bella",
+      icon: "◐",
+      category: "atmosfera",
+      color: colors.blue,
+    },
+    {
+      id: "design",
+      label: "design",
+      icon: "▧",
+      category: "atmosfera",
+      color: colors.violet,
+    },
+    {
+      id: "verde",
+      label: "verde",
+      icon: "♧",
+      category: "atmosfera",
+      color: colors.green,
+    },
+  ];
+}
 
 const badgeEmojis = [
   "✦",
@@ -469,15 +479,17 @@ const badgeEmojis = [
   "✨",
 ];
 
-const customListColors = [
-  colors.pink,
-  colors.yellow,
-  colors.green,
-  colors.orange,
-  colors.blue,
-  colors.violet,
-  colors.gold,
-];
+function makeCustomListColors(colors: MelloryThemeColors) {
+  return [
+    colors.pink,
+    colors.yellow,
+    colors.green,
+    colors.orange,
+    colors.blue,
+    colors.violet,
+    colors.gold,
+  ];
+}
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -729,25 +741,25 @@ function normalizeUrl(url: string) {
   return `https://${trimmed}`;
 }
 
-function getStandardBadge(label: string) {
-  return standardBadges.find((badge) => badge.label === label);
+function getStandardBadge(label: string, badges: StandardBadge[]) {
+  return badges.find((badge) => badge.label === label);
 }
 
-function getBadgeIcon(label: string, customBadges: CustomBadge[]) {
+function getBadgeIcon(label: string, customBadges: CustomBadge[], badges: StandardBadge[]) {
   const customBadge = customBadges.find((badge) => badge.label === label);
   if (customBadge) return customBadge.emoji;
 
-  const standardBadge = getStandardBadge(label);
+  const standardBadge = getStandardBadge(label, badges);
   return standardBadge?.icon || "✦";
 }
 
-function getBadgeColor(label: string) {
-  const standardBadge = getStandardBadge(label);
-  return standardBadge?.color || colors.pink;
+function getBadgeColor(label: string, badges: StandardBadge[], pinkColor: string) {
+  const standardBadge = getStandardBadge(label, badges);
+  return standardBadge?.color || pinkColor;
 }
 
-function getBadgeCategory(label: string): BadgeCategory {
-  const standardBadge = getStandardBadge(label);
+function getBadgeCategory(label: string, badges: StandardBadge[]): BadgeCategory {
+  const standardBadge = getStandardBadge(label, badges);
   if (standardBadge) return standardBadge.category;
 
   const normalized = label.toLowerCase();
@@ -784,12 +796,19 @@ function getBadgeCategory(label: string): BadgeCategory {
   return "personale";
 }
 
-function getStatusLabel(status: PlaceStatus) {
-  return listOptions.find((item) => item.status === status)?.title || status;
+function getStatusLabel(
+  status: PlaceStatus,
+  opts: ReturnType<typeof makeListOptions>
+) {
+  return opts.find((item) => item.status === status)?.title || status;
 }
 
-function getStatusColor(status: PlaceStatus) {
-  return listOptions.find((item) => item.status === status)?.color || colors.pink;
+function getStatusColor(
+  status: PlaceStatus,
+  opts: ReturnType<typeof makeListOptions>,
+  pinkColor: string
+) {
+  return opts.find((item) => item.status === status)?.color || pinkColor;
 }
 
 function getCurrentPlaceSummary({
@@ -1081,6 +1100,10 @@ async function readGlobalStatuses(placeId: string) {
 }
 
 export default function PlaceDetailScreen() {
+  const { colors } = useMelloryTheme();
+  const listOptions = useMemo(() => makeListOptions(colors), [colors]);
+  const standardBadges = useMemo(() => makeStandardBadges(colors), [colors]);
+  const customListColors = useMemo(() => makeCustomListColors(colors), [colors]);
   const params = useLocalSearchParams();
 
   const placeId = getParamValue(params.id, "mellory-place");
@@ -1118,7 +1141,7 @@ export default function PlaceDetailScreen() {
   const [draftEditorialUrl, setDraftEditorialUrl] = useState("");
   const [draftListTitle, setDraftListTitle] = useState("");
   const [draftListDescription, setDraftListDescription] = useState("");
-  const [draftListColor, setDraftListColor] = useState(colors.pink);
+  const [draftListColor, setDraftListColor] = useState(() => colors.pink);
   const [draftDetailName, setDraftDetailName] = useState("");
   const [draftDetailCategory, setDraftDetailCategory] = useState("");
   const [draftDetailAddress, setDraftDetailAddress] = useState("");
@@ -1259,11 +1282,11 @@ export default function PlaceDetailScreen() {
           id: customBadge.id,
           label: customBadge.label,
           icon: customBadge.emoji,
-          category: getBadgeCategory(customBadge.label),
+          category: getBadgeCategory(customBadge.label, standardBadges),
           color: colors.pink,
         })),
     ],
-    [experience.customBadges]
+    [experience.customBadges, standardBadges]
   );
 
   const coverBadges = experience.badges.slice(0, 3);
@@ -1278,11 +1301,11 @@ export default function PlaceDetailScreen() {
       label: "Stato",
       value:
         activeStatuses.length > 0
-          ? activeStatuses.map(getStatusLabel).join(", ")
+          ? activeStatuses.map((s) => getStatusLabel(s, listOptions)).join(", ")
           : "Da scegliere",
       color:
         activeStatuses.length > 0
-          ? getStatusColor(activeStatuses[0])
+          ? getStatusColor(activeStatuses[0], listOptions, colors.pink)
           : colors.muted,
     },
     {
@@ -2594,11 +2617,11 @@ export default function PlaceDetailScreen() {
                     <View
                       style={[
                         styles.coverBadgeDot,
-                        { backgroundColor: getBadgeColor(badge) },
+                        { backgroundColor: getBadgeColor(badge, standardBadges, colors.pink) },
                       ]}
                     >
                       <Text style={styles.coverBadgeIcon}>
-                        {getBadgeIcon(badge, experience.customBadges)}
+                        {getBadgeIcon(badge, experience.customBadges, standardBadges)}
                       </Text>
                     </View>
 
@@ -2730,23 +2753,23 @@ export default function PlaceDetailScreen() {
                     <View
                       style={[
                         styles.stateBadgeIconBox,
-                        { backgroundColor: `${getBadgeColor(badge)}26` },
+                        { backgroundColor: `${getBadgeColor(badge, standardBadges, colors.pink)}26` },
                       ]}
                     >
                       <Text
                         style={[
                           styles.stateBadgeIcon,
-                          { color: getBadgeColor(badge) },
+                          { color: getBadgeColor(badge, standardBadges, colors.pink) },
                         ]}
                       >
-                        {getBadgeIcon(badge, experience.customBadges)}
+                        {getBadgeIcon(badge, experience.customBadges, standardBadges)}
                       </Text>
                     </View>
 
                     <View style={styles.stateBadgeTextBlock}>
                       <Text style={styles.stateBadgeName}>{badge}</Text>
                       <Text style={styles.stateBadgeCategory}>
-                        {getBadgeCategory(badge)}
+                        {getBadgeCategory(badge, standardBadges)}
                       </Text>
                     </View>
                   </PressableScale>

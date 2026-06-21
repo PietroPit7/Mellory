@@ -5,9 +5,10 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PressableScale } from "@/components/pressable-scale";
-import { melloryThemeVars } from "@/contexts/mellory-theme";
-
-const colors = melloryThemeVars;
+import {
+  type MelloryThemeColors,
+  useMelloryTheme,
+} from "@/contexts/mellory-theme";
 
 const FAVORITES_STORAGE_KEY = "mellory:favorites";
 const TRY_STORAGE_KEY = "mellory:try";
@@ -449,7 +450,9 @@ function mergePlacesWithStatuses({
 }
 
 export default function MyMelloryScreen() {
+  const { colors } = useMelloryTheme();
   const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [favoritePlaces, setFavoritePlaces] = useState<SavedPlace[]>([]);
   const [tryPlaces, setTryPlaces] = useState<SavedPlace[]>([]);
   const [visitedPlaces, setVisitedPlaces] = useState<SavedPlace[]>([]);
@@ -839,7 +842,8 @@ export default function MyMelloryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: MelloryThemeColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.black,
@@ -1008,6 +1012,5 @@ const styles = StyleSheet.create({
   bottomSpace: {
     height: 118,
   },
-});
-
-
+  });
+}

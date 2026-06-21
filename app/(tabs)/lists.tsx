@@ -13,7 +13,10 @@ import {
 } from "react-native";
 
 import { PressableScale } from "@/components/pressable-scale";
-import { melloryThemeVars } from "@/contexts/mellory-theme";
+import {
+  type MelloryThemeColors,
+  useMelloryTheme,
+} from "@/contexts/mellory-theme";
 
 const FAVORITES_STORAGE_KEY = "mellory:favorites";
 const TRY_STORAGE_KEY = "mellory:try";
@@ -73,9 +76,7 @@ type Collection = {
   customListId?: string;
 };
 
-const colors = melloryThemeVars;
-
-const statusCollections: {
+function getStatusCollections(colors: MelloryThemeColors): {
   id: string;
   title: string;
   subtitle: string;
@@ -83,52 +84,46 @@ const statusCollections: {
   color: string;
   status: PlaceStatus;
   storageKey: string;
-}[] = [
-  {
-    id: "favorite",
-    title: "Preferiti",
-    subtitle: "Dove torneresti subito.",
-    icon: "♥",
-    color: colors.pink,
-    status: "favorite",
-    storageKey: FAVORITES_STORAGE_KEY,
-  },
-  {
-    id: "try",
-    title: "Da provare",
-    subtitle: "Posti che vuoi tenere a mente.",
-    icon: "✦",
-    color: colors.yellow,
-    status: "try",
-    storageKey: TRY_STORAGE_KEY,
-  },
-  {
-    id: "visited",
-    title: "Visitati",
-    subtitle: "Locali già vissuti e ricordati.",
-    icon: "✓",
-    color: colors.green,
-    status: "visited",
-    storageKey: VISITED_STORAGE_KEY,
-  },
-  {
-    id: "retry",
-    title: "Da rivalutare",
-    subtitle: "Da riprovare con calma.",
-    icon: "↻",
-    color: colors.orange,
-    status: "retry",
-    storageKey: RETRY_STORAGE_KEY,
-  },
-];
-
-const customListColors = [
-  colors.pink,
-  colors.gold,
-  colors.green,
-  colors.orange,
-  colors.blue,
-];
+}[] {
+  return [
+    {
+      id: "favorite",
+      title: "Preferiti",
+      subtitle: "Dove torneresti subito.",
+      icon: "♥",
+      color: colors.pink,
+      status: "favorite",
+      storageKey: FAVORITES_STORAGE_KEY,
+    },
+    {
+      id: "try",
+      title: "Da provare",
+      subtitle: "Posti che vuoi tenere a mente.",
+      icon: "✦",
+      color: colors.yellow,
+      status: "try",
+      storageKey: TRY_STORAGE_KEY,
+    },
+    {
+      id: "visited",
+      title: "Visitati",
+      subtitle: "Locali già vissuti e ricordati.",
+      icon: "✓",
+      color: colors.green,
+      status: "visited",
+      storageKey: VISITED_STORAGE_KEY,
+    },
+    {
+      id: "retry",
+      title: "Da rivalutare",
+      subtitle: "Da riprovare con calma.",
+      icon: "↻",
+      color: colors.orange,
+      status: "retry",
+      storageKey: RETRY_STORAGE_KEY,
+    },
+  ];
+}
 
 function createId() {
   return `${Date.now()}-${Math.round(Math.random() * 100000)}`;
@@ -280,7 +275,7 @@ function getStatusLabel(status: PlaceStatus) {
   return "Da rivalutare";
 }
 
-function getStatusColor(status: PlaceStatus) {
+function getStatusColor(status: PlaceStatus, colors: MelloryThemeColors) {
   if (status === "favorite") return colors.pink;
   if (status === "try") return colors.yellow;
   if (status === "visited") return colors.green;
@@ -288,7 +283,14 @@ function getStatusColor(status: PlaceStatus) {
 }
 
 export default function ListsScreen() {
+  const { colors } = useMelloryTheme();
   const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const statusCollections = useMemo(() => getStatusCollections(colors), [colors]);
+  const customListColors = useMemo(
+    () => [colors.pink, colors.gold, colors.green, colors.orange, colors.blue],
+    [colors]
+  );
   const [favoritePlaces, setFavoritePlaces] = useState<SavedPlace[]>([]);
   const [tryPlaces, setTryPlaces] = useState<SavedPlace[]>([]);
   const [visitedPlaces, setVisitedPlaces] = useState<SavedPlace[]>([]);
@@ -483,7 +485,7 @@ export default function ListsScreen() {
     setSelectedCollectionId(`custom:${newList.id}`);
     setDraftTitle("");
     setDraftDescription("");
-    setDraftColor(colors.pink);
+    setDraftColor(customListColors[0] ?? colors.pink);
   }
 
   async function removePlaceFromCustomList(placeId: string) {
@@ -744,7 +746,7 @@ export default function ListsScreen() {
               {selectedPlaces.map((place) => {
                 const placeStatus = place.status || selectedCollection.status;
                 const statusColor = placeStatus
-                  ? getStatusColor(placeStatus)
+                  ? getStatusColor(placeStatus, colors)
                   : selectedCollection.color;
 
                 return (
@@ -858,7 +860,8 @@ export default function ListsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: MelloryThemeColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.black,
@@ -1158,4 +1161,5 @@ const styles = StyleSheet.create({
   bottomSpace: {
     height: 122,
   },
-});
+  });
+}
