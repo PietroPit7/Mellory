@@ -115,6 +115,7 @@ export default function MelloryMap({
         showsCompass={false}
         showsScale={false}
         toolbarEnabled={false}
+        legalLabelInsets={{ bottom: -200, left: 0, right: 0, top: 0 }}
         onRegionChangeComplete={handleRegionChangeComplete}
         onPoiClick={(event) => {
           const { name, placeId, coordinate } = event.nativeEvent;

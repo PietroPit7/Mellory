@@ -679,7 +679,20 @@ export default function MyMelloryScreen() {
         </View>
 
         <PressableScale style={styles.settingsButton} onPress={openSettings}>
-          <Text style={styles.settingsIcon}>⚙</Text>
+          <View style={styles.sliderIcon}>
+            <View style={styles.sliderRow}>
+              <View style={styles.sliderKnob} />
+              <View style={styles.sliderTrack} />
+            </View>
+            <View style={styles.sliderRow}>
+              <View style={styles.sliderTrack} />
+              <View style={styles.sliderKnob} />
+            </View>
+            <View style={styles.sliderRow}>
+              <View style={styles.sliderKnob} />
+              <View style={styles.sliderTrack} />
+            </View>
+          </View>
         </PressableScale>
       </View>
 
@@ -758,6 +771,7 @@ export default function MyMelloryScreen() {
             </View>
 
             <View style={styles.quickCardAccent}>
+              <View style={styles.quickCardGlow} />
               <Text style={styles.quickIconAccent}>✓</Text>
               <Text style={styles.quickValueAccent}>{tryPlaces.length}</Text>
               <Text style={styles.quickLabelAccent}>da provare</Text>
@@ -1246,11 +1260,28 @@ function createStyles(colors: MelloryThemeColors) {
       justifyContent: "center",
       marginTop: 4,
     },
-    settingsIcon: {
-      color: colors.cream,
-      fontSize: 25,
-      lineHeight: 28,
-      fontWeight: "700",
+    sliderIcon: {
+      gap: 5,
+      width: 22,
+    },
+    sliderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    sliderTrack: {
+      flex: 1,
+      height: 1.5,
+      borderRadius: 1,
+      backgroundColor: colors.cream,
+    },
+    sliderKnob: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      borderWidth: 1.5,
+      borderColor: colors.cream,
+      backgroundColor: colors.card2,
     },
     heroCard: {
       backgroundColor: colors.card,
@@ -1414,9 +1445,21 @@ function createStyles(colors: MelloryThemeColors) {
       flex: 1,
       minHeight: 130,
       borderRadius: 20,
-      backgroundColor: colors.pink,
+      backgroundColor: colors.card2,
+      borderWidth: 1.5,
+      borderColor: `${colors.pink}55`,
       padding: 18,
       justifyContent: "space-between",
+      overflow: "hidden",
+    },
+    quickCardGlow: {
+      position: "absolute",
+      right: -22,
+      top: -22,
+      width: 90,
+      height: 90,
+      borderRadius: 45,
+      backgroundColor: `${colors.pink}1E`,
     },
     quickIcon: {
       color: colors.pink,
@@ -1424,7 +1467,7 @@ function createStyles(colors: MelloryThemeColors) {
       fontWeight: "900",
     },
     quickIconAccent: {
-      color: colors.cream,
+      color: colors.pink,
       fontSize: 27,
       fontWeight: "900",
     },
@@ -1435,7 +1478,7 @@ function createStyles(colors: MelloryThemeColors) {
       fontWeight: "900",
     },
     quickValueAccent: {
-      color: colors.cream,
+      color: colors.pink,
       fontSize: 39,
       lineHeight: 42,
       fontWeight: "900",
