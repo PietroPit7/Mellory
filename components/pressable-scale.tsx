@@ -26,6 +26,7 @@ export function PressableScale({
   onPressIn,
   onPressOut,
   style,
+  accessibilityRole = "button",
   ...rest
 }: PressableScaleProps) {
   const scale = useRef(new Animated.Value(1)).current;

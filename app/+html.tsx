@@ -17,6 +17,10 @@ export default function Root({ children }: { children: ReactNode }) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="Mellory" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <link rel="apple-touch-icon" sizes="192x192" href="/Mellory/assets/images/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="512x512" href="/Mellory/assets/images/icon-512.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/Mellory/assets/images/icon-192.png" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/Mellory/assets/images/icon-512.png" />
 
         {/* Theme color — matches dark/light preference */}
         <meta name="theme-color" content="#070604" media="(prefers-color-scheme: dark)" />
