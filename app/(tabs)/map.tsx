@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MelloryMap from "@/components/MelloryMap";
 import { PressableScale } from "@/components/pressable-scale";
-import { melloryDarkColors } from "@/contexts/mellory-theme";
+import { melloryDarkColors, useMelloryTheme } from "@/contexts/mellory-theme";
 import {
   fetchCitySuggestions,
   fetchNearbyPlaces,
@@ -504,6 +504,8 @@ function getUserLocationSuggestion(
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
+  const { isLight } = useMelloryTheme();
+  const [mapLayer, setMapLayer] = useState<"streets" | "satellite">("streets");
   const [searchQuery, setSearchQuery] = useState("");
   const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
   const [placeSuggestions, setPlaceSuggestions] = useState<MapPlace[]>([]);
@@ -1161,6 +1163,8 @@ export default function MapScreen() {
         onRegionChange={handleMapRegionChange}
         onPoiPress={handlePoiPress}
         fullScreen
+        mapLayer={mapLayer}
+        isLight={isLight}
       />
 
       {/* Dots loader — centered on map while loading */}
@@ -1234,6 +1238,19 @@ export default function MapScreen() {
             }}
           >
             <Text style={[styles.savedToggleText, mode === "saved" && styles.savedToggleTextActive]}>♥</Text>
+          </PressableScale>
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={mapLayer === "satellite" ? "Vista strade" : "Vista satellite"}
+            style={[styles.layerToggle, mapLayer === "satellite" && styles.layerToggleActive]}
+            onPress={() => {
+              void Haptics.selectionAsync();
+              setMapLayer((l) => (l === "streets" ? "satellite" : "streets"));
+            }}
+          >
+            <Text style={[styles.layerToggleText, mapLayer === "satellite" && styles.layerToggleTextActive]}>
+              {mapLayer === "satellite" ? "⊞" : "◉"}
+            </Text>
           </PressableScale>
         </View>
 
@@ -1531,6 +1548,10 @@ const styles = StyleSheet.create({
   savedToggleActive: { backgroundColor: colors.pink, borderColor: colors.pink },
   savedToggleText: { color: colors.muted, fontSize: 18, lineHeight: 22 },
   savedToggleTextActive: { color: "#fff" },
+  layerToggle: { width: 46, height: 46, borderRadius: 23, backgroundColor: "rgba(23,19,15,0.90)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)", alignItems: "center", justifyContent: "center" },
+  layerToggleActive: { backgroundColor: colors.blue, borderColor: colors.blue },
+  layerToggleText: { color: colors.muted, fontSize: 18, lineHeight: 22 },
+  layerToggleTextActive: { color: "#fff" },
 
   suggestionsBox: { backgroundColor: "rgba(23,19,15,0.96)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,248,239,0.10)", overflow: "hidden", maxHeight: 280 },
   suggestionGroupTitle: { color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.4, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, textTransform: "uppercase" },

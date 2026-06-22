@@ -3,6 +3,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { melloryThemeVars } from "@/contexts/mellory-theme";
+import type { MelloryMapLayer } from "./MelloryMap";
 
 type MelloryMapMarker = {
   id: string;
@@ -32,6 +33,8 @@ type MelloryMapProps = {
     longitude: number;
   }) => void;
   fullScreen?: boolean;
+  mapLayer?: MelloryMapLayer;
+  isLight?: boolean;
 };
 
 const colors = melloryThemeVars;
@@ -39,10 +42,12 @@ const colors = melloryThemeVars;
 const MELLORY_SOURCE_ID = "mellory-places";
 const USER_ATTRIBUTION_TOGGLE_WINDOW_MS = 500;
 
+// Tutti e tre gli stili sono definiti all'avvio: cambiare layer significa solo
+// accendere/spegnere la visibility senza ricreare la mappa o i marker.
 const MAP_STYLE = {
   version: 8 as const,
   sources: {
-    streets: {
+    "streets-dark": {
       type: "raster" as const,
       tiles: [
         "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
@@ -53,13 +58,44 @@ const MAP_STYLE = {
       tileSize: 256,
       attribution: "© OpenStreetMap contributors © CARTO",
     },
+    "streets-light": {
+      type: "raster" as const,
+      tiles: [
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors © CARTO",
+    },
+    satellite: {
+      type: "raster" as const,
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      attribution: "Tiles © Esri",
+    },
   },
   layers: [
     {
-      id: "streets",
+      id: "streets-dark-layer",
       type: "raster" as const,
-      source: "streets",
-      paint: { "raster-opacity": 1 },
+      source: "streets-dark",
+      layout: { visibility: "visible" as const },
+    },
+    {
+      id: "streets-light-layer",
+      type: "raster" as const,
+      source: "streets-light",
+      layout: { visibility: "none" as const },
+    },
+    {
+      id: "satellite-layer",
+      type: "raster" as const,
+      source: "satellite",
+      layout: { visibility: "none" as const },
     },
   ],
 };
@@ -167,6 +203,8 @@ export default function MelloryMap({
   onMarkerPress,
   onRegionChange,
   fullScreen = false,
+  mapLayer = "streets",
+  isLight = false,
 }: MelloryMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -215,6 +253,28 @@ export default function MelloryMap({
       duration: 650,
     });
   }, [center.latitude, center.longitude, center.zoom]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    let cancelled = false;
+
+    const applyLayers = () => {
+      if (cancelled) return;
+      const wantSatellite = mapLayer === "satellite";
+      map.setLayoutProperty("streets-dark-layer", "visibility", !wantSatellite && !isLight ? "visible" : "none");
+      map.setLayoutProperty("streets-light-layer", "visibility", !wantSatellite && isLight ? "visible" : "none");
+      map.setLayoutProperty("satellite-layer", "visibility", wantSatellite ? "visible" : "none");
+    };
+
+    if (map.isStyleLoaded()) {
+      applyLayers();
+    } else {
+      map.once("load", applyLayers);
+    }
+
+    return () => { cancelled = true; };
+  }, [mapLayer, isLight]);
 
   useEffect(() => {
     const map = mapRef.current;

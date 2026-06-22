@@ -16,6 +16,8 @@ export type MelloryMapCenter = {
   zoom: number;
 };
 
+export type MelloryMapLayer = "streets" | "satellite";
+
 export type MelloryMapProps = {
   markers: MelloryMapMarker[];
   center: MelloryMapCenter;
@@ -28,6 +30,8 @@ export type MelloryMapProps = {
     longitude: number;
   }) => void;
   fullScreen?: boolean;
+  mapLayer?: MelloryMapLayer;
+  isLight?: boolean;
 };
 
 export default function MelloryMap(props: MelloryMapProps): ReactElement;

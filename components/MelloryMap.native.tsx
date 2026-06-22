@@ -36,6 +36,8 @@ type MelloryMapProps = {
     longitude: number;
   }) => void;
   fullScreen?: boolean;
+  mapLayer?: "streets" | "satellite";
+  isLight?: boolean;
 };
 
 const colors = melloryThemeVars;
@@ -51,6 +53,7 @@ export default function MelloryMap({
   onRegionChange,
   onPoiPress,
   fullScreen = false,
+  mapLayer = "streets",
 }: MelloryMapProps) {
   const mapRef = useRef<MapView>(null);
   const currentZoomRef = useRef(center.zoom);
@@ -102,7 +105,7 @@ export default function MelloryMap({
         ref={mapRef}
         style={styles.map}
         provider={PROVIDER_DEFAULT}
-        mapType="standard"
+        mapType={mapLayer === "satellite" ? "satellite" : "standard"}
         initialRegion={{
           latitude: center.latitude,
           longitude: center.longitude,
