@@ -445,6 +445,7 @@ function isPlaceStatus(value: unknown): value is PlaceStatus {
 }
 
 function parseOptionalNumber(value: string) {
+  if (!value.trim()) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
@@ -1840,11 +1841,15 @@ export default function PlaceDetailScreen() {
 
   async function openMaps() {
     try {
+      const hasValidCoords =
+        (latitude !== 0 || longitude !== 0) &&
+        latitude !== undefined &&
+        longitude !== undefined;
       await openPreferredNavigation({
         name: effectiveName,
         address: effectiveDetail,
-        latitude,
-        longitude,
+        latitude: hasValidCoords ? latitude : undefined,
+        longitude: hasValidCoords ? longitude : undefined,
       });
     } catch {
       Alert.alert(

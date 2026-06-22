@@ -1161,8 +1161,8 @@ export default function HomeScreen() {
         phone: draftAddPhone.trim(),
         openingHours: "",
         editorialAwards: "",
-        latitude: "0",
-        longitude: "0",
+        latitude: "",
+        longitude: "",
       },
     } as never);
   }

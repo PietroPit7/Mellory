@@ -825,7 +825,9 @@ export default function ListsScreen() {
           ) : (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyText}>
-                Aggiungi locali dalla mappa o dalla scheda dettaglio.
+                {selectedCollection.kind === "custom"
+                  ? "Aggiungi locali a questa raccolta dalla loro scheda dettaglio."
+                  : "Aggiungi locali dalla mappa, dalla loro scheda o con il pulsante + nella home."}
               </Text>
               <PressableScale
                 style={styles.emptyButton}

@@ -764,8 +764,7 @@ export default function MyMelloryScreen() {
 
           <Text style={styles.emptyTitle}>Il tuo archivio è pronto.</Text>
           <Text style={styles.emptyText}>
-            Apri la mappa, esplora una città o usa la tua posizione. Tocca ♡ per
-            salvare un preferito oppure + per aggiungere un posto da provare.
+            Apri la mappa e tocca ♡ su un locale per salvarlo. Oppure usa il + nella home per aggiungere un posto manualmente.
           </Text>
 
           <PressableScale style={styles.emptyButton} onPress={openMap}>

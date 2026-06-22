@@ -189,6 +189,10 @@ function storedPlaceToMapPlace(value: unknown): MapPlace | null {
     return null;
   }
 
+  if (latitude === 0 && longitude === 0) {
+    return null;
+  }
+
   const id = getString(place.id);
   const name = getString(place.name);
 
@@ -1325,10 +1329,20 @@ export default function MapScreen() {
       >
         {!isMapLoading && visiblePlaces.length === 0 && !previewPlace ? (
           <View pointerEvents="auto" style={styles.emptyPill}>
-            <Text style={styles.emptyPillText}>Cerca una città per iniziare.</Text>
-            <PressableScale onPress={() => void refreshSavedPlaces()}>
-              <Text style={styles.emptyPillAction}>I salvati ›</Text>
-            </PressableScale>
+            <Text style={styles.emptyPillText}>
+              {mode === "saved"
+                ? "Nessun salvato su mappa."
+                : "Cerca una città per iniziare."}
+            </Text>
+            {mode === "saved" ? (
+              <PressableScale onPress={() => { setMode("search"); }}>
+                <Text style={styles.emptyPillAction}>Cerca ›</Text>
+              </PressableScale>
+            ) : (
+              <PressableScale onPress={() => void refreshSavedPlaces()}>
+                <Text style={styles.emptyPillAction}>I salvati ›</Text>
+              </PressableScale>
+            )}
           </View>
         ) : visiblePlaces.length > 0 && !previewPlace ? (
           <PressableScale
