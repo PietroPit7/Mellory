@@ -822,8 +822,12 @@ export async function fetchNearbyPlaces(
   // Geoapify e Overpass in parallelo: se una fonte fallisce o è lenta, usiamo
   // l'altra (Overpass è limitato nel tempo per non bloccare la ricerca).
   const [geoapifyPlaces, overpassPlaces] = await Promise.all([
-    fetchGeoapifyNearby(latitude, longitude, radiusMeters, limit).catch(
-      () => [] as NearbyPlace[]
+    withTimeout(
+      fetchGeoapifyNearby(latitude, longitude, radiusMeters, limit).catch(
+        () => [] as NearbyPlace[]
+      ),
+      12000,
+      [] as NearbyPlace[]
     ),
     withTimeout(
       fetchOverpassNearby(latitude, longitude, radiusMeters).catch(

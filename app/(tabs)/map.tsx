@@ -954,19 +954,19 @@ export default function MapScreen() {
     isLocatingUser || isSearchingPlaces || (mode === "saved" && isLoadingSaved);
 
   const shouldShowAreaSearch = useMemo(() => {
-    if (mode !== "search" || !mapRegion) return false;
+    if (!mapRegion) return false;
     if (isMapLoading) return false;
     if (previewPlace) return false;
-    // Don't fire while the user is actively typing — wait until they've selected
-    // a result (searchQuery === selectedSearchLabel) or cleared the input.
+    if (showList) return false;
+    // Non mostrare mentre l'utente sta digitando
     if (searchQuery.trim() !== "" && searchQuery !== selectedSearchLabel) return false;
 
-    // Nessuna ricerca ancora fatta: appena la mappa si muove, permetti di
-    // cercare la zona inquadrata.
-    if (!lastSearchCenter) return true;
+    if (!lastSearchCenter) {
+      // In saved mode senza ricerche precedenti, mostra sempre il pill
+      return true;
+    }
 
     const lastAreaSearchProfile = getAreaSearchProfile(lastSearchCenter.zoom);
-
     if (lastAreaSearchProfile.radiusMeters !== areaSearchProfile.radiusMeters) {
       return true;
     }
@@ -976,8 +976,6 @@ export default function MapScreen() {
       Math.max(25, areaSearchProfile.radiusMeters * 0.12)
     );
 
-    // La soglia segue il raggio: area stretta = movimento minimo, area larga =
-    // evita ricerche ridondanti per piccoli trascinamenti.
     return (
       getDistanceMeters(
         mapRegion.latitude,
@@ -986,7 +984,7 @@ export default function MapScreen() {
         lastSearchCenter.longitude
       ) > movementThresholdMeters
     );
-  }, [areaSearchProfile.radiusMeters, isMapLoading, lastSearchCenter, mapRegion, mode, previewPlace, searchQuery, selectedSearchLabel]);
+  }, [areaSearchProfile.radiusMeters, isMapLoading, lastSearchCenter, mapRegion, previewPlace, searchQuery, selectedSearchLabel, showList]);
 
   const handleMapRegionChange = useCallback((region: MapRegionCenter) => {
     setPreviewPlace(null);
@@ -1036,18 +1034,6 @@ export default function MapScreen() {
     []
   );
 
-  // Auto-search when map settles on a new area
-  const searchAroundRegionRef = useRef<() => void>(() => {});
-  searchAroundRegionRef.current = () => {
-    if (!isMapLoading && mapRegion) void searchPlacesAroundMapRegion();
-  };
-
-  useEffect(() => {
-    if (!shouldShowAreaSearch) return;
-    const timer = setTimeout(() => searchAroundRegionRef.current(), 750);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldShowAreaSearch, mapRegion]);
 
   useEffect(() => {
     if (!previewPlace) return;
@@ -1339,17 +1325,20 @@ export default function MapScreen() {
                   ? `Nessun risultato per "${searchQuery.trim()}".`
                   : "Cerca una città per iniziare."}
             </Text>
-            {mode === "saved" ? (
+            {shouldShowAreaSearch ? (
               <PressableScale onPress={() => {
                 void Haptics.selectionAsync();
-                if (mapRegion) void searchPlacesAroundMapRegion();
-                else setMode("search");
+                void searchPlacesAroundMapRegion();
               }}>
                 <Text style={styles.emptyPillAction}>Cerca qui ›</Text>
               </PressableScale>
-            ) : (
+            ) : mode === "search" ? (
               <PressableScale onPress={() => void refreshSavedPlaces()}>
                 <Text style={styles.emptyPillAction}>I salvati ›</Text>
+              </PressableScale>
+            ) : (
+              <PressableScale onPress={() => setMode("search")}>
+                <Text style={styles.emptyPillAction}>Cerca ›</Text>
               </PressableScale>
             )}
           </View>
@@ -1368,7 +1357,7 @@ export default function MapScreen() {
               </Text>
             </PressableScale>
 
-            {mode === "saved" && mapRegion !== null && !showList ? (
+            {shouldShowAreaSearch && !showList ? (
               <PressableScale
                 style={styles.searchHerePill}
                 onPress={() => {
