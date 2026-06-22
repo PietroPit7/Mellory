@@ -15,6 +15,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
@@ -1072,6 +1073,7 @@ async function readGlobalStatuses(placeId: string) {
 
 export default function PlaceDetailScreen() {
   const { colors } = useMelloryTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const listOptions = useMemo(() => makeListOptions(colors), [colors]);
   const standardBadges = useMemo(() => makeStandardBadges(colors), [colors]);
@@ -3358,10 +3360,11 @@ export default function PlaceDetailScreen() {
                   : undefined
             }
           >
-            <View style={styles.sheet}>
+            <View style={[styles.sheet, { maxHeight: windowHeight * 0.84 }]}>
               <View style={styles.sheetHandle} />
 
               <ScrollView
+                style={{ flex: 1 }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.sheetContent}
@@ -4672,7 +4675,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    maxHeight: "84%",
     backgroundColor: colors.card,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
