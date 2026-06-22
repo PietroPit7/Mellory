@@ -1239,19 +1239,6 @@ export default function MapScreen() {
           >
             <Text style={[styles.savedToggleText, mode === "saved" && styles.savedToggleTextActive]}>♥</Text>
           </PressableScale>
-          <PressableScale
-            accessibilityRole="button"
-            accessibilityLabel={mapLayer === "satellite" ? "Vista strade" : "Vista satellite"}
-            style={[styles.layerToggle, mapLayer === "satellite" && styles.layerToggleActive]}
-            onPress={() => {
-              void Haptics.selectionAsync();
-              setMapLayer((l) => (l === "streets" ? "satellite" : "streets"));
-            }}
-          >
-            <Text style={[styles.layerToggleText, mapLayer === "satellite" && styles.layerToggleTextActive]}>
-              {mapLayer === "satellite" ? "⊞" : "◉"}
-            </Text>
-          </PressableScale>
         </View>
 
         {/* Suggestions dropdown */}
@@ -1517,6 +1504,30 @@ export default function MapScreen() {
           </ScrollView>
         </Animated.View>
       ) : null}
+
+      {/* Layer toggle — bottom-right corner */}
+      <View
+        style={[styles.layerToggleContainer, { bottom: insets.bottom + 112 }]}
+        pointerEvents="box-none"
+      >
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel={mapLayer === "satellite" ? "Torna alla vista strade" : "Attiva vista satellite"}
+          style={[styles.layerToggle, mapLayer === "satellite" && styles.layerToggleActive]}
+          onPress={() => {
+            void Haptics.selectionAsync();
+            setMapLayer((l) => (l === "streets" ? "satellite" : "streets"));
+          }}
+          pointerEvents="auto"
+        >
+          <Text style={[styles.layerToggleEmoji]}>
+            {mapLayer === "satellite" ? "🗺" : "🛰"}
+          </Text>
+          <Text style={[styles.layerToggleLabel, mapLayer === "satellite" && styles.layerToggleLabelActive]}>
+            {mapLayer === "satellite" ? "Strade" : "Satellite"}
+          </Text>
+        </PressableScale>
+      </View>
     </View>
   );
 }
@@ -1548,10 +1559,12 @@ const styles = StyleSheet.create({
   savedToggleActive: { backgroundColor: colors.pink, borderColor: colors.pink },
   savedToggleText: { color: colors.muted, fontSize: 18, lineHeight: 22 },
   savedToggleTextActive: { color: "#fff" },
-  layerToggle: { width: 46, height: 46, borderRadius: 23, backgroundColor: "rgba(23,19,15,0.90)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)", alignItems: "center", justifyContent: "center" },
+  layerToggleContainer: { position: "absolute", right: 14, zIndex: 20 },
+  layerToggle: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 24, backgroundColor: "rgba(23,19,15,0.92)", borderWidth: 1, borderColor: "rgba(255,248,239,0.14)" },
   layerToggleActive: { backgroundColor: colors.blue, borderColor: colors.blue },
-  layerToggleText: { color: colors.muted, fontSize: 18, lineHeight: 22 },
-  layerToggleTextActive: { color: "#fff" },
+  layerToggleEmoji: { fontSize: 16, lineHeight: 20 },
+  layerToggleLabel: { color: colors.cream, fontSize: 13, fontWeight: "700", letterSpacing: -0.2 },
+  layerToggleLabelActive: { color: "#fff" },
 
   suggestionsBox: { backgroundColor: "rgba(23,19,15,0.96)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,248,239,0.10)", overflow: "hidden", maxHeight: 280 },
   suggestionGroupTitle: { color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.4, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, textTransform: "uppercase" },
