@@ -1130,6 +1130,8 @@ export default function PlaceDetailScreen() {
   const scoreLabel = getScoreLabel(score);
   const scoreColor = getScoreColor(score);
 
+  const coverCardHeight = Math.min(320, Math.round(windowHeight * 0.44));
+
   const effectiveName = experience.personalDetails.name.trim() || name;
   const effectiveCategory =
     experience.personalDetails.category.trim() || category;
@@ -2660,7 +2662,7 @@ export default function PlaceDetailScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         <View style={{ height: insets.top + 8 }} />
 
-        <View style={styles.coverCard}>
+        <View style={[styles.coverCard, { height: coverCardHeight }]}>
           {hasCover ? (
             <Image source={{ uri: coverDisplayUri }} style={styles.coverImage} />
           ) : (
@@ -3571,7 +3573,6 @@ const styles = StyleSheet.create({
     height: 18,
   },
   coverCard: {
-    height: 380,
     borderRadius: 34,
     backgroundColor: colors.card,
     overflow: "hidden",
@@ -3629,8 +3630,8 @@ const styles = StyleSheet.create({
   },
   coverInitial: {
     color: colors.cream,
-    fontSize: 112,
-    lineHeight: 120,
+    fontSize: 88,
+    lineHeight: 96,
     fontFamily: undefined,
     fontWeight: "900",
     letterSpacing: -2,
@@ -3715,7 +3716,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 20,
     right: 20,
-    bottom: 30,
+    bottom: 22,
   },
   coverGuideRow: {
     flexDirection: "row",
@@ -3752,12 +3753,12 @@ const styles = StyleSheet.create({
   },
   placeTitle: {
     color: colors.cream,
-    fontSize: 36,
-    lineHeight: 40,
+    fontSize: 30,
+    lineHeight: 34,
     fontFamily: undefined,
     fontWeight: "900",
-    letterSpacing: -0.9,
-    marginBottom: 8,
+    letterSpacing: -0.7,
+    marginBottom: 6,
   },
   placeAddress: {
     color: "#D7CEC4",
@@ -3767,8 +3768,8 @@ const styles = StyleSheet.create({
   coverBadgeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginTop: 14,
+    gap: 6,
+    marginTop: 10,
   },
   coverBadgeChip: {
     minHeight: 34,

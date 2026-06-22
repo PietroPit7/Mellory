@@ -285,15 +285,15 @@ function getPlaceCategory(categories: string[] | undefined, categoryBase: string
     safeCategories.includes("catering.restaurant.pizza") ||
     safeCategories.includes("catering.fast_food.pizza")
   ) {
-    return "Ristorante / Pizza";
+    return "Pizzeria";
   }
 
   if (safeCategories.includes("catering.cafe.ice_cream")) {
-    return "Caffè / Gelateria";
+    return "Gelateria";
   }
 
   if (safeCategories.includes("catering.cafe.coffee_shop")) {
-    return "Caffè / Coffee shop";
+    return "Caffè";
   }
 
   return categoryBase;
@@ -604,6 +604,32 @@ function getOsmCategoryBase(tags: Record<string, string> | undefined) {
   return "Luogo";
 }
 
+const CUISINE_IT: Record<string, string> = {
+  italian: "Italiana",
+  pizza: "Pizza",
+  sushi: "Sushi",
+  japanese: "Giapponese",
+  chinese: "Cinese",
+  indian: "Indiana",
+  mexican: "Messicana",
+  greek: "Greca",
+  french: "Francese",
+  american: "Americana",
+  burger: "Burger",
+  kebab: "Kebab",
+  thai: "Thailandese",
+  vietnamese: "Vietnamita",
+  korean: "Coreana",
+  mediterranean: "Mediterranea",
+  seafood: "Pesce",
+  fish_and_chips: "Fish & Chips",
+  chicken: "Pollo",
+  steak_house: "Steakhouse",
+  sandwich: "Sandwich",
+  pasta: "Pasta",
+  regional: "Regionale",
+};
+
 function getOsmCategory(
   tags: Record<string, string> | undefined,
   categoryBase: string
@@ -611,13 +637,13 @@ function getOsmCategory(
   const cuisine = cleanText(tags?.cuisine);
   if (!cuisine) return categoryBase;
 
-  const firstCuisine = cuisine.split(",")[0]?.trim();
+  const firstCuisine = cuisine.split(",")[0]?.trim().toLowerCase();
   if (!firstCuisine) return categoryBase;
 
-  const capitalized =
-    firstCuisine.charAt(0).toUpperCase() + firstCuisine.slice(1);
+  const label = CUISINE_IT[firstCuisine];
+  if (!label) return categoryBase;
 
-  return `${categoryBase} · ${capitalized}`;
+  return `${categoryBase} · ${label}`;
 }
 
 function getOsmDetail(tags: Record<string, string> | undefined) {
