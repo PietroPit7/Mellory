@@ -868,29 +868,35 @@ export default function HomeScreen() {
     const timeout = setTimeout(async () => {
       setIsSuggesting(true);
 
-      const origin = activeContext
-        ? {
-            latitude: activeContext.latitude,
-            longitude: activeContext.longitude,
-          }
-        : undefined;
-      const [suggestions, placeResults] = await Promise.all([
-        fetchCitySuggestions(query),
-        fetchGeoapifyPlaceSuggestions(query, origin).catch(() => []),
-      ]);
-      const visiblePlaceResults = hasPreciseCitySuggestion(query, suggestions)
-        ? []
-        : placeResults;
+      try {
+        const origin = activeContext
+          ? {
+              latitude: activeContext.latitude,
+              longitude: activeContext.longitude,
+            }
+          : undefined;
+        const [suggestions, placeResults] = await Promise.all([
+          fetchCitySuggestions(query),
+          fetchGeoapifyPlaceSuggestions(query, origin).catch(() => []),
+        ]);
+        const visiblePlaceResults = hasPreciseCitySuggestion(query, suggestions)
+          ? []
+          : placeResults;
 
-      if (isActive) {
-        setCitySuggestions(suggestions);
-        setPlaceSuggestions(
-          visiblePlaceResults.map(geoapifyPlaceToDashboardPlace)
-        );
-        setShowSuggestions(
-          suggestions.length > 0 || visiblePlaceResults.length > 0
-        );
-        setIsSuggesting(false);
+        if (isActive) {
+          setCitySuggestions(suggestions);
+          setPlaceSuggestions(
+            visiblePlaceResults.map(geoapifyPlaceToDashboardPlace)
+          );
+          setShowSuggestions(
+            suggestions.length > 0 || visiblePlaceResults.length > 0
+          );
+          setIsSuggesting(false);
+        }
+      } catch {
+        if (isActive) {
+          setIsSuggesting(false);
+        }
       }
     }, 350);
 

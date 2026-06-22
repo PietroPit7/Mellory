@@ -501,32 +501,36 @@ export async function fetchCitySuggestions(query: string) {
     return suggestions;
   }
 
-  const apiKey = getGeoapifyApiKey();
-  const url = `${AUTOCOMPLETE_ENDPOINT}?text=${encodeURIComponent(
-    trimmedQuery
-  )}&type=city&limit=${CITY_QUERY_RESULT_LIMIT}&lang=it&format=geojson&apiKey=${encodeURIComponent(
-    apiKey
-  )}`;
+  try {
+    const apiKey = getGeoapifyApiKey();
+    const url = `${AUTOCOMPLETE_ENDPOINT}?text=${encodeURIComponent(
+      trimmedQuery
+    )}&type=city&limit=${CITY_QUERY_RESULT_LIMIT}&lang=it&format=geojson&apiKey=${encodeURIComponent(
+      apiKey
+    )}`;
 
-  const response = await fetch(url);
+    const response = await fetch(url);
 
-  if (!response.ok) {
-    throw new Error(
-      "Non riesco a caricare i suggerimenti città. Riprova tra poco."
-    );
+    if (!response.ok) {
+      throw new Error(`Geoapify city autocomplete error: ${response.status}`);
+    }
+
+    const data =
+      (await response.json()) as GeoapifyFeatureCollection<GeoapifyCityProperties>;
+    const features = Array.isArray(data.features) ? data.features : [];
+    const suggestions = features
+      .map((feature, index) => toCitySuggestion(feature, index, trimmedQuery))
+      .filter((city): city is CitySuggestion => city !== null);
+
+    const uniqueSuggestions = dedupeCitySuggestions(trimmedQuery, suggestions);
+    citySuggestionsCache.set(cacheKey, uniqueSuggestions);
+
+    return uniqueSuggestions;
+  } catch {
+    const suggestions = await fetchCitySuggestionsFromNominatim(trimmedQuery);
+    citySuggestionsCache.set(cacheKey, suggestions);
+    return suggestions;
   }
-
-  const data =
-    (await response.json()) as GeoapifyFeatureCollection<GeoapifyCityProperties>;
-  const features = Array.isArray(data.features) ? data.features : [];
-  const suggestions = features
-    .map((feature, index) => toCitySuggestion(feature, index, trimmedQuery))
-    .filter((city): city is CitySuggestion => city !== null);
-
-  const uniqueSuggestions = dedupeCitySuggestions(trimmedQuery, suggestions);
-  citySuggestionsCache.set(cacheKey, uniqueSuggestions);
-
-  return uniqueSuggestions;
 }
 
 export function hasPreciseCitySuggestion(
@@ -861,37 +865,41 @@ export async function fetchPlaceSuggestions(
     return places;
   }
 
-  const apiKey = getGeoapifyApiKey();
-  const proximity = origin
-    ? `&bias=proximity:${origin.longitude},${origin.latitude}`
-    : "";
-  const url = `${AUTOCOMPLETE_ENDPOINT}?text=${encodeURIComponent(
-    trimmedQuery
-  )}&type=amenity&limit=${PLACE_SUGGESTION_LIMIT}&lang=it&format=geojson${proximity}&apiKey=${encodeURIComponent(
-    apiKey
-  )}`;
+  try {
+    const apiKey = getGeoapifyApiKey();
+    const proximity = origin
+      ? `&bias=proximity:${origin.longitude},${origin.latitude}`
+      : "";
+    const url = `${AUTOCOMPLETE_ENDPOINT}?text=${encodeURIComponent(
+      trimmedQuery
+    )}&type=amenity&limit=${PLACE_SUGGESTION_LIMIT}&lang=it&format=geojson${proximity}&apiKey=${encodeURIComponent(
+      apiKey
+    )}`;
 
-  const response = await fetch(url);
+    const response = await fetch(url);
 
-  if (!response.ok) {
-    throw new Error(
-      "Non riesco a cercare questo locale adesso. Riprova tra poco."
-    );
+    if (!response.ok) {
+      throw new Error(`Geoapify place autocomplete error: ${response.status}`);
+    }
+
+    const data =
+      (await response.json()) as GeoapifyFeatureCollection<GeoapifyPlaceProperties>;
+    const features = Array.isArray(data.features) ? data.features : [];
+    const fallbackOrigin = origin ?? { latitude: 0, longitude: 0 };
+    const places = features
+      .map((feature, index) => toNearbyPlace(feature, index, fallbackOrigin))
+      .filter((place): place is NearbyPlace => place !== null)
+      .sort((firstPlace, secondPlace) => {
+        return firstPlace.distanceMeters - secondPlace.distanceMeters;
+      });
+
+    const uniquePlaces = dedupePlaces(places, PLACE_SUGGESTION_LIMIT);
+    placeSuggestionsCache.set(cacheKey, uniquePlaces);
+
+    return uniquePlaces;
+  } catch {
+    const places = await fetchPlaceSuggestionsFromNominatim(trimmedQuery, origin);
+    placeSuggestionsCache.set(cacheKey, places);
+    return places;
   }
-
-  const data =
-    (await response.json()) as GeoapifyFeatureCollection<GeoapifyPlaceProperties>;
-  const features = Array.isArray(data.features) ? data.features : [];
-  const fallbackOrigin = origin ?? { latitude: 0, longitude: 0 };
-  const places = features
-    .map((feature, index) => toNearbyPlace(feature, index, fallbackOrigin))
-    .filter((place): place is NearbyPlace => place !== null)
-    .sort((firstPlace, secondPlace) => {
-      return firstPlace.distanceMeters - secondPlace.distanceMeters;
-    });
-
-  const uniquePlaces = dedupePlaces(places, PLACE_SUGGESTION_LIMIT);
-  placeSuggestionsCache.set(cacheKey, uniquePlaces);
-
-  return uniquePlaces;
 }
