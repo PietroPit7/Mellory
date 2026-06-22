@@ -1280,7 +1280,7 @@ export default function MapScreen() {
         <Animated.View
           style={[
             styles.previewCard,
-            { bottom: insets.bottom + 72 },
+            { bottom: insets.bottom + 96 },
             {
               opacity: previewAnim,
               transform: [
@@ -1327,7 +1327,7 @@ export default function MapScreen() {
 
       {/* Floating bottom bar: list pill + empty state */}
       <View
-        style={[styles.floatingBottom, { bottom: insets.bottom + 16 }]}
+        style={[styles.floatingBottom, { bottom: insets.bottom + 96 }]}
         pointerEvents="box-none"
       >
         {!isMapLoading && visiblePlaces.length === 0 && !previewPlace ? (
@@ -1335,7 +1335,9 @@ export default function MapScreen() {
             <Text style={styles.emptyPillText}>
               {mode === "saved"
                 ? "Nessun salvato su mappa."
-                : "Cerca una città per iniziare."}
+                : searchQuery.trim().length > 0
+                  ? `Nessun risultato per "${searchQuery.trim()}".`
+                  : "Cerca una città per iniziare."}
             </Text>
             {mode === "saved" ? (
               <PressableScale onPress={() => {
