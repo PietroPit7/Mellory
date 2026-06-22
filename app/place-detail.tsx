@@ -375,90 +375,15 @@ const scoreRows: { key: ScoreKey; label: string }[] = [
 
 function makeStandardBadges(colors: MelloryThemeColors): StandardBadge[] {
   return [
-    {
-      id: "romantico",
-      label: "romantico",
-      icon: "♡",
-      category: "occasione",
-      color: colors.pink,
-    },
-    {
-      id: "amici",
-      label: "amici",
-      icon: "♢",
-      category: "occasione",
-      color: colors.gold,
-    },
-    {
-      id: "business",
-      label: "business",
-      icon: "◆",
-      category: "occasione",
-      color: colors.blue,
-    },
-    {
-      id: "famiglia",
-      label: "famiglia",
-      icon: "⌂",
-      category: "occasione",
-      color: colors.sage,
-    },
-    {
-      id: "gourmet",
-      label: "gourmet",
-      icon: "✦",
-      category: "gusto",
-      color: colors.yellow,
-    },
-    {
-      id: "vino",
-      label: "vino",
-      icon: "♕",
-      category: "gusto",
-      color: colors.red,
-    },
-    {
-      id: "cocktail",
-      label: "cocktail",
-      icon: "◒",
-      category: "gusto",
-      color: colors.violet,
-    },
-    {
-      id: "dolci",
-      label: "dolci",
-      icon: "◌",
-      category: "gusto",
-      color: colors.orange,
-    },
-    {
-      id: "hidden-gem",
-      label: "hidden gem",
-      icon: "◇",
-      category: "personale",
-      color: colors.gold,
-    },
-    {
-      id: "vista",
-      label: "vista bella",
-      icon: "◐",
-      category: "atmosfera",
-      color: colors.blue,
-    },
-    {
-      id: "design",
-      label: "design",
-      icon: "▧",
-      category: "atmosfera",
-      color: colors.violet,
-    },
-    {
-      id: "verde",
-      label: "verde",
-      icon: "♧",
-      category: "atmosfera",
-      color: colors.green,
-    },
+    { id: "romantico", label: "Romantico", icon: "♡", category: "occasione", color: colors.pink },
+    { id: "amici", label: "Amici", icon: "♢", category: "occasione", color: colors.gold },
+    { id: "business", label: "Business", icon: "◆", category: "occasione", color: colors.blue },
+    { id: "gourmet", label: "Gourmet", icon: "✦", category: "gusto", color: colors.yellow },
+    { id: "vino", label: "Vino", icon: "♕", category: "gusto", color: colors.red },
+    { id: "cocktail", label: "Cocktail", icon: "◒", category: "gusto", color: colors.violet },
+    { id: "nascosto", label: "Nascosto", icon: "◇", category: "personale", color: colors.gold },
+    { id: "vista", label: "Vista", icon: "◐", category: "atmosfera", color: colors.blue },
+    { id: "design", label: "Design", icon: "▧", category: "atmosfera", color: colors.violet },
   ];
 }
 
@@ -747,7 +672,8 @@ function normalizeUrl(url: string) {
 }
 
 function getStandardBadge(label: string, badges: StandardBadge[]) {
-  return badges.find((badge) => badge.label === label);
+  const lower = label.toLowerCase();
+  return badges.find((badge) => badge.label.toLowerCase() === lower);
 }
 
 function getBadgeIcon(label: string, customBadges: CustomBadge[], badges: StandardBadge[]) {
@@ -761,6 +687,16 @@ function getBadgeIcon(label: string, customBadges: CustomBadge[], badges: Standa
 function getBadgeColor(label: string, badges: StandardBadge[], pinkColor: string) {
   const standardBadge = getStandardBadge(label, badges);
   return standardBadge?.color || pinkColor;
+}
+
+function getCategoryLabel(category: BadgeCategory): string {
+  const labels: Record<BadgeCategory, string> = {
+    occasione: "Occasione",
+    gusto: "Gusto & Bere",
+    atmosfera: "Atmosfera",
+    personale: "Personale",
+  };
+  return labels[category] ?? category;
 }
 
 function getBadgeCategory(label: string, badges: StandardBadge[]): BadgeCategory {
@@ -1037,6 +973,22 @@ async function writeCustomLists(lists: CustomList[]) {
   await AsyncStorage.setItem(CUSTOM_LISTS_STORAGE_KEY, JSON.stringify(lists));
 }
 
+const BADGE_LABEL_MIGRATIONS: Record<string, string> = {
+  "romantico": "Romantico",
+  "amici": "Amici",
+  "business": "Business",
+  "gourmet": "Gourmet",
+  "vino": "Vino",
+  "cocktail": "Cocktail",
+  "hidden gem": "Nascosto",
+  "vista bella": "Vista",
+  "design": "Design",
+};
+
+function migrateBadgeLabels(badges: string[]): string[] {
+  return badges.map((b) => BADGE_LABEL_MIGRATIONS[b.toLowerCase()] ?? b);
+}
+
 async function readExperienceState(placeId: string) {
   try {
     const stored = await AsyncStorage.getItem(getExperienceStorageKey(placeId));
@@ -1056,7 +1008,7 @@ async function readExperienceState(placeId: string) {
         ...emptyExperience,
         ...parsed,
         statuses: Array.isArray(parsed.statuses) ? parsed.statuses : [],
-        badges: Array.isArray(parsed.badges) ? parsed.badges : [],
+        badges: migrateBadgeLabels(Array.isArray(parsed.badges) ? parsed.badges : []),
         customBadges: Array.isArray(parsed.customBadges)
           ? parsed.customBadges
           : [],
@@ -1582,13 +1534,17 @@ export default function PlaceDetailScreen() {
 
   async function toggleBadge(badge: string) {
     void Haptics.selectionAsync();
-    const isActive = experience.badges.includes(badge);
+    const lowerBadge = badge.toLowerCase();
+    const existingIndex = experience.badges.findIndex(
+      (b) => b.toLowerCase() === lowerBadge
+    );
 
     await saveExperience({
       ...experience,
-      badges: isActive
-        ? experience.badges.filter((item) => item !== badge)
-        : [...experience.badges, badge],
+      badges:
+        existingIndex >= 0
+          ? experience.badges.filter((_, i) => i !== existingIndex)
+          : [...experience.badges, badge],
     });
   }
 
@@ -2071,7 +2027,10 @@ export default function PlaceDetailScreen() {
     if (activeSheet === "note") {
       return (
         <>
-          <SheetHeader title="Nuova nota" onClose={closeSheet} />
+          <SheetHeader
+            title={experience.note ? "Modifica nota" : "Aggiungi nota"}
+            onClose={closeSheet}
+          />
 
           <TextInput
             value={draftNote}
@@ -2081,53 +2040,8 @@ export default function PlaceDetailScreen() {
             multiline
             textAlignVertical="top"
             style={styles.sheetTextArea}
+            autoFocus
           />
-
-          <Text style={styles.sheetSmallTitle}>Badge rapidi</Text>
-
-          <View style={styles.compactBadgeWrap}>
-            {standardBadges.slice(0, 8).map((badge) => {
-              const isActive = experience.badges.includes(badge.label);
-
-              return (
-                <PressableScale
-                  key={badge.id}
-                  style={[
-                    styles.compactBadgeChip,
-                    isActive && styles.compactBadgeChipActive,
-                  ]}
-                  onPress={() => toggleBadge(badge.label)}
-                >
-                  <View
-                    style={[
-                      styles.compactBadgeIconBox,
-                      { backgroundColor: `${badge.color}24` },
-                      isActive && { backgroundColor: badge.color },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.compactBadgeIcon,
-                        { color: badge.color },
-                        isActive && styles.compactBadgeIconActive,
-                      ]}
-                    >
-                      {badge.icon}
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={[
-                      styles.compactBadgeText,
-                      isActive && styles.compactBadgeTextActive,
-                    ]}
-                  >
-                    {badge.label}
-                  </Text>
-                </PressableScale>
-              );
-            })}
-          </View>
 
           <PressableScale style={styles.sheetPrimaryButton} onPress={saveNote}>
             <Text style={styles.sheetPrimaryButtonText}>Salva nota</Text>
@@ -2339,66 +2253,139 @@ export default function PlaceDetailScreen() {
     }
 
     if (activeSheet === "badges") {
+      const categoryOrder: BadgeCategory[] = [
+        "occasione",
+        "gusto",
+        "atmosfera",
+        "personale",
+      ];
+
       return (
         <>
-          <SheetHeader title="Gestisci badge" onClose={closeSheet} />
+          <SheetHeader title="Badge" onClose={closeSheet} />
 
           <Text style={styles.sheetDescription}>
-            I badge raccontano il tuo stato personale del locale: atmosfera,
-            occasione e motivi per cui vuoi ricordarlo.
+            Scegli i tratti che vuoi ricordare. Appaiono sulla scheda del posto.
           </Text>
 
-          <View style={styles.badgeLibrary}>
-            {allBadges.map((badge) => {
-              const isActive = experience.badges.includes(badge.label);
+          {categoryOrder.map((category) => {
+            const catBadges = standardBadges.filter(
+              (b) => b.category === category
+            );
+            if (catBadges.length === 0) return null;
 
-              return (
-                <PressableScale
-                  key={badge.id}
-                  style={[
-                    styles.editorialBadge,
-                    isActive && styles.editorialBadgeActive,
-                  ]}
-                  onPress={() => toggleBadge(badge.label)}
-                >
-                  <View
-                    style={[
-                      styles.editorialBadgeIconBox,
-                      { backgroundColor: `${badge.color}24` },
-                      isActive && { backgroundColor: badge.color },
-                    ]}
-                  >
-                    <Text
+            return (
+              <View key={category} style={styles.badgeCategorySection}>
+                <Text style={styles.badgeCategoryLabel}>
+                  {getCategoryLabel(category)}
+                </Text>
+
+                <View style={styles.badgePillRow}>
+                  {catBadges.map((badge) => {
+                    const isActive = experience.badges.some(
+                      (b) => b.toLowerCase() === badge.label.toLowerCase()
+                    );
+
+                    return (
+                      <PressableScale
+                        key={badge.id}
+                        style={[
+                          styles.badgePill,
+                          isActive && {
+                            backgroundColor: `${badge.color}20`,
+                            borderColor: `${badge.color}80`,
+                          },
+                        ]}
+                        onPress={() => toggleBadge(badge.label)}
+                      >
+                        <View
+                          style={[
+                            styles.badgePillIconWrap,
+                            { backgroundColor: `${badge.color}24` },
+                            isActive && { backgroundColor: badge.color },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.badgePillIcon,
+                              { color: badge.color },
+                              isActive && { color: colors.black },
+                            ]}
+                          >
+                            {badge.icon}
+                          </Text>
+                        </View>
+
+                        <Text
+                          style={[
+                            styles.badgePillLabel,
+                            isActive && styles.badgePillLabelActive,
+                          ]}
+                        >
+                          {badge.label}
+                        </Text>
+                      </PressableScale>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+
+          {experience.customBadges.length > 0 && (
+            <View style={styles.badgeCategorySection}>
+              <Text style={styles.badgeCategoryLabel}>I tuoi badge</Text>
+
+              <View style={styles.badgePillRow}>
+                {experience.customBadges.map((badge) => {
+                  const isActive = experience.badges.some(
+                    (b) => b.toLowerCase() === badge.label.toLowerCase()
+                  );
+
+                  return (
+                    <PressableScale
+                      key={badge.id}
                       style={[
-                        styles.editorialBadgeIcon,
-                        { color: badge.color },
-                        isActive && styles.editorialBadgeIconActive,
+                        styles.badgePill,
+                        isActive && {
+                          backgroundColor: `${colors.pink}20`,
+                          borderColor: `${colors.pink}80`,
+                        },
                       ]}
+                      onPress={() => toggleBadge(badge.label)}
                     >
-                      {badge.icon}
-                    </Text>
-                  </View>
+                      <View
+                        style={[
+                          styles.badgePillIconWrap,
+                          { backgroundColor: `${colors.pink}24` },
+                          isActive && { backgroundColor: colors.pink },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.badgePillIcon,
+                            { color: colors.pink },
+                            isActive && { color: colors.black },
+                          ]}
+                        >
+                          {badge.emoji}
+                        </Text>
+                      </View>
 
-                  <View style={styles.editorialBadgeTextBlock}>
-                    <Text
-                      style={[
-                        styles.editorialBadgeTitle,
-                        isActive && styles.editorialBadgeTitleActive,
-                      ]}
-                    >
-                      {badge.label}
-                    </Text>
-
-                    <Text style={styles.editorialBadgeCategory}>
-                      {badge.category}
-                    </Text>
-                  </View>
-
-                  {isActive && <Text style={styles.editorialBadgeCheck}>✓</Text>}
-                </PressableScale>
-              );
-            })}
-          </View>
+                      <Text
+                        style={[
+                          styles.badgePillLabel,
+                          isActive && styles.badgePillLabelActive,
+                        ]}
+                      >
+                        {badge.label}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
           <View style={styles.createBadgeBox}>
             <Text style={styles.sheetSmallTitle}>Crea badge personale</Text>
@@ -2406,10 +2393,10 @@ export default function PlaceDetailScreen() {
             <TextInput
               value={draftBadgeName}
               onChangeText={setDraftBadgeName}
-              placeholder="es. vista mozzafiato"
+              placeholder="es. terrazza sul mare"
               placeholderTextColor={colors.muted}
               returnKeyType="done"
-              autoCapitalize="none"
+              autoCapitalize="words"
               style={styles.sheetInput}
             />
 
@@ -2433,7 +2420,7 @@ export default function PlaceDetailScreen() {
             </ScrollView>
 
             <PressableScale style={styles.sheetPrimaryButton} onPress={createCustomBadge}>
-              <Text style={styles.sheetPrimaryButtonText}>Crea e assegna badge</Text>
+              <Text style={styles.sheetPrimaryButtonText}>Crea e assegna</Text>
             </PressableScale>
           </View>
         </>
@@ -3280,7 +3267,15 @@ export default function PlaceDetailScreen() {
         <View style={styles.modalBackdrop}>
           <PressableScale style={styles.modalBackdropPressable} onPress={closeSheet} />
 
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <KeyboardAvoidingView
+            behavior={
+              Platform.OS === "ios"
+                ? "padding"
+                : Platform.OS === "android"
+                  ? "height"
+                  : undefined
+            }
+          >
             <View style={styles.sheet}>
               <View style={styles.sheetHandle} />
 
@@ -3478,6 +3473,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.black,
+    position: "relative",
   },
   screen: {
     flex: 1,
@@ -4939,6 +4935,53 @@ const styles = StyleSheet.create({
   badgeLibrary: {
     gap: 9,
     marginBottom: 20,
+  },
+  badgeCategorySection: {
+    marginBottom: 20,
+  },
+  badgeCategoryLabel: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: 10,
+  },
+  badgePillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  badgePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,248,239,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.10)",
+    paddingLeft: 6,
+    paddingRight: 14,
+    minHeight: 42,
+  },
+  badgePillIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgePillIcon: {
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  badgePillLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  badgePillLabelActive: {
+    color: colors.cream,
   },
   editorialBadge: {
     minHeight: 62,
