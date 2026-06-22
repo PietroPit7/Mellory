@@ -510,7 +510,7 @@ export default function MapScreen() {
   const [isLocatingUser, setIsLocatingUser] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-  const [mode, setMode] = useState<"search" | "saved">("search");
+  const [mode, setMode] = useState<"search" | "saved">("saved");
   const [mapRegion, setMapRegion] = useState<MapRegionCenter | null>(null);
   const [lastSearchCenter, setLastSearchCenter] =
     useState<MapRegionCenter | null>(null);

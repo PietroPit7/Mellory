@@ -2081,18 +2081,22 @@ export default function PlaceDetailScreen() {
       return (
         <>
           <SheetHeader
-            title={experience.note ? "Modifica nota" : "Aggiungi nota"}
+            title={experience.note ? "Modifica nota" : "La tua nota"}
             onClose={closeSheet}
           />
+
+          <Text style={styles.sheetDescription}>
+            Cosa vuoi ricordare di questo posto? Un piatto, un dettaglio, un momento.
+          </Text>
 
           <TextInput
             value={draftNote}
             onChangeText={setDraftNote}
-            placeholder="Scrivi cosa ricordare di questo posto..."
+            placeholder="es. Gnocchi al ragù incredibili, chiedere del tavolo vicino alla finestra..."
             placeholderTextColor={colors.muted}
             multiline
             textAlignVertical="top"
-            style={styles.sheetTextArea}
+            style={[styles.sheetTextArea, { minHeight: 160 }]}
             autoFocus
           />
 
@@ -2345,8 +2349,8 @@ export default function PlaceDetailScreen() {
                         style={[
                           styles.badgePill,
                           isActive && {
-                            backgroundColor: `${badge.color}20`,
-                            borderColor: `${badge.color}80`,
+                            backgroundColor: `${badge.color}2A`,
+                            borderColor: badge.color,
                           },
                         ]}
                         onPress={() => toggleBadge(badge.label)}
@@ -2354,7 +2358,7 @@ export default function PlaceDetailScreen() {
                         <View
                           style={[
                             styles.badgePillIconWrap,
-                            { backgroundColor: `${badge.color}24` },
+                            { backgroundColor: `${badge.color}40` },
                             isActive && { backgroundColor: badge.color },
                           ]}
                         >
@@ -2362,7 +2366,7 @@ export default function PlaceDetailScreen() {
                             style={[
                               styles.badgePillIcon,
                               { color: badge.color },
-                              isActive && { color: colors.black },
+                              isActive && { color: "#fff" },
                             ]}
                           >
                             {badge.icon}
@@ -2401,8 +2405,8 @@ export default function PlaceDetailScreen() {
                       style={[
                         styles.badgePill,
                         isActive && {
-                          backgroundColor: `${colors.pink}20`,
-                          borderColor: `${colors.pink}80`,
+                          backgroundColor: `${colors.pink}2A`,
+                          borderColor: colors.pink,
                         },
                       ]}
                       onPress={() => toggleBadge(badge.label)}
@@ -2410,7 +2414,7 @@ export default function PlaceDetailScreen() {
                       <View
                         style={[
                           styles.badgePillIconWrap,
-                          { backgroundColor: `${colors.pink}24` },
+                          { backgroundColor: `${colors.pink}40` },
                           isActive && { backgroundColor: colors.pink },
                         ]}
                       >
@@ -2418,7 +2422,7 @@ export default function PlaceDetailScreen() {
                           style={[
                             styles.badgePillIcon,
                             { color: colors.pink },
-                            isActive && { color: colors.black },
+                            isActive && { color: "#fff" },
                           ]}
                         >
                           {badge.emoji}
@@ -2476,6 +2480,10 @@ export default function PlaceDetailScreen() {
               <Text style={styles.sheetPrimaryButtonText}>Crea e assegna</Text>
             </PressableScale>
           </View>
+
+          <PressableScale style={styles.secondarySheetButton} onPress={closeSheet}>
+            <Text style={styles.secondarySheetButtonText}>Fatto</Text>
+          </PressableScale>
         </>
       );
     }
@@ -2860,7 +2868,7 @@ export default function PlaceDetailScreen() {
                     <View
                       style={[
                         styles.stateBadgeIconBox,
-                        { backgroundColor: `${getBadgeColor(badge, standardBadges, colors.pink)}26` },
+                        { backgroundColor: `${getBadgeColor(badge, standardBadges, colors.pink)}40` },
                       ]}
                     >
                       <Text
@@ -4012,9 +4020,9 @@ const styles = StyleSheet.create({
   stateBadgeChip: {
     minHeight: 52,
     borderRadius: 18,
-    backgroundColor: colors.black,
+    backgroundColor: colors.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.07)",
+    borderColor: "rgba(255,248,239,0.12)",
     paddingHorizontal: 10,
     paddingVertical: 8,
     flexDirection: "row",
@@ -4874,6 +4882,8 @@ const styles = StyleSheet.create({
     minHeight: 130,
     borderRadius: 18,
     backgroundColor: colors.black,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.16)",
     color: colors.cream,
     fontSize: 15,
     lineHeight: 23,
@@ -4957,6 +4967,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     backgroundColor: colors.black,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.14)",
     color: colors.cream,
     fontSize: 15,
     paddingHorizontal: 14,
@@ -5022,7 +5034,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   badgeCategoryLabel: {
-    color: colors.muted,
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 2,
@@ -5039,28 +5051,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,248,239,0.05)",
+    backgroundColor: colors.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.10)",
+    borderColor: "rgba(255,248,239,0.16)",
     paddingLeft: 6,
     paddingRight: 14,
-    minHeight: 42,
+    minHeight: 44,
   },
   badgePillIconWrap: {
-    width: 30,
-    height: 30,
+    width: 34,
+    height: 34,
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
   },
   badgePillIcon: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "900",
   },
   badgePillLabel: {
-    color: colors.textMuted,
+    color: colors.cream,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   badgePillLabelActive: {
     color: colors.cream,

@@ -59,7 +59,7 @@ const MAP_STYLE = {
       id: "streets",
       type: "raster" as const,
       source: "streets",
-      paint: { "raster-opacity": 0.78 },
+      paint: { "raster-opacity": 1 },
     },
   ],
 };
