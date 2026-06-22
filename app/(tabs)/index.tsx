@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -777,6 +778,7 @@ function createCustomPlaceId() {
 
 export default function HomeScreen() {
   const { colors } = useMelloryTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCityLabel, setSelectedCityLabel] = useState("");
@@ -1576,10 +1578,11 @@ export default function HomeScreen() {
                 : undefined
           }
         >
-          <View style={styles.addPlaceSheet}>
+          <View style={[styles.addPlaceSheet, { maxHeight: windowHeight * 0.9 }]}>
             <View style={styles.sheetHandle} />
 
             <ScrollView
+              style={{ flex: 1 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.addPlaceContent}
@@ -2149,7 +2152,6 @@ function createStyles(colors: MelloryThemeColors) {
       backgroundColor: colors.card,
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
-      maxHeight: "90%",
       minHeight: 420,
     },
     sheetHandle: {

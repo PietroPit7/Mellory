@@ -1335,8 +1335,12 @@ export default function MapScreen() {
                 : "Cerca una città per iniziare."}
             </Text>
             {mode === "saved" ? (
-              <PressableScale onPress={() => { setMode("search"); }}>
-                <Text style={styles.emptyPillAction}>Cerca ›</Text>
+              <PressableScale onPress={() => {
+                void Haptics.selectionAsync();
+                if (mapRegion) void searchPlacesAroundMapRegion();
+                else setMode("search");
+              }}>
+                <Text style={styles.emptyPillAction}>Cerca qui ›</Text>
               </PressableScale>
             ) : (
               <PressableScale onPress={() => void refreshSavedPlaces()}>
@@ -1345,19 +1349,32 @@ export default function MapScreen() {
             )}
           </View>
         ) : visiblePlaces.length > 0 && !previewPlace ? (
-          <PressableScale
-            pointerEvents="auto"
-            style={styles.listPill}
-            onPress={() => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowList((v) => !v);
-            }}
-          >
-            <Text style={styles.listPillIcon}>☰</Text>
-            <Text style={styles.listPillText}>
-              {visiblePlaces.length} {visiblePlaces.length === 1 ? "posto" : "posti"}
-            </Text>
-          </PressableScale>
+          <View pointerEvents="auto" style={styles.bottomPillsRow}>
+            <PressableScale
+              style={styles.listPill}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowList((v) => !v);
+              }}
+            >
+              <Text style={styles.listPillIcon}>☰</Text>
+              <Text style={styles.listPillText}>
+                {visiblePlaces.length} {visiblePlaces.length === 1 ? "posto" : "posti"}
+              </Text>
+            </PressableScale>
+
+            {mode === "saved" && mapRegion !== null && !showList ? (
+              <PressableScale
+                style={styles.searchHerePill}
+                onPress={() => {
+                  void Haptics.selectionAsync();
+                  void searchPlacesAroundMapRegion();
+                }}
+              >
+                <Text style={styles.searchHerePillText}>Cerca qui ›</Text>
+              </PressableScale>
+            ) : null}
+          </View>
         ) : null}
       </View>
 
@@ -1500,9 +1517,12 @@ const styles = StyleSheet.create({
 
   // ── Floating bottom controls ──────────────────────────────────────────
   floatingBottom: { position: "absolute", left: 0, right: 0, zIndex: 20, alignItems: "center" },
+  bottomPillsRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   listPill: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 28, backgroundColor: "rgba(23,19,15,0.92)", borderWidth: 1, borderColor: "rgba(255,248,239,0.14)" },
   listPillIcon: { color: colors.cream, fontSize: 16 },
   listPillText: { color: colors.cream, fontSize: 14, fontWeight: "700", letterSpacing: -0.2 },
+  searchHerePill: { paddingVertical: 12, paddingHorizontal: 18, borderRadius: 28, backgroundColor: colors.pink },
+  searchHerePillText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   emptyPill: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 28, backgroundColor: "rgba(23,19,15,0.90)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)" },
   emptyPillText: { color: colors.muted, fontSize: 13 },
   emptyPillAction: { color: colors.pink, fontSize: 13, fontWeight: "700" },
