@@ -1782,6 +1782,41 @@ export default function PlaceDetailScreen() {
     });
   }
 
+  async function pickCoverImage() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Permesso necessario",
+        "Per aggiungere foto, Mellory ha bisogno di accedere alla tua galleria."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.92,
+      allowsMultipleSelection: false,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const uri = result.assets[0].uri;
+    if (!uri) return;
+
+    const nextGallery = experience.galleryImageUris.includes(uri)
+      ? experience.galleryImageUris
+      : [uri, ...experience.galleryImageUris].slice(0, 12);
+
+    await saveExperience({
+      ...experience,
+      coverImageUri: uri,
+      galleryImageUris: nextGallery,
+    });
+  }
+
   async function setCover(imageUri: string) {
     await saveExperience({
       ...experience,
@@ -2445,43 +2480,64 @@ export default function PlaceDetailScreen() {
 
       return (
         <>
-          <SheetHeader title="Gestisci foto" onClose={closeSheet} />
+          <SheetHeader title="Foto" onClose={closeSheet} />
 
-          <Text style={styles.sheetDescription}>
-            Scegli una copertina chiara e conserva solo le immagini che vuoi davvero
-            ritrovare.
-          </Text>
+          <View style={styles.galleryActionRow}>
+            <PressableScale
+              style={styles.galleryActionCard}
+              onPress={pickCoverImage}
+            >
+              <Text style={styles.galleryActionIcon}>◉</Text>
+              <Text style={styles.galleryActionLabel}>Scegli copertina</Text>
+              <Text style={styles.galleryActionHint}>Con ritaglio</Text>
+            </PressableScale>
 
-          <PressableScale style={styles.sheetPrimaryButton} onPress={pickGalleryImage}>
-            <Text style={styles.sheetPrimaryButtonText}>Aggiungi nuove foto</Text>
-          </PressableScale>
+            <PressableScale
+              style={styles.galleryActionCard}
+              onPress={pickGalleryImage}
+            >
+              <Text style={styles.galleryActionIcon}>▧</Text>
+              <Text style={styles.galleryActionLabel}>Aggiungi foto</Text>
+              <Text style={styles.galleryActionHint}>Selezione multipla</Text>
+            </PressableScale>
+          </View>
 
           {experience.galleryImageUris.length === 0 ? (
             <View style={styles.galleryEmptySheet}>
-              <Text style={styles.galleryEmptySheetIcon}>▧</Text>
               <Text style={styles.galleryEmptySheetTitle}>
                 Nessuna foto salvata.
               </Text>
               <Text style={styles.galleryEmptySheetText}>
-                La prima foto aggiunta diventerà automaticamente la copertina.
+                Aggiungi la copertina con ritaglio, oppure più foto dalla galleria.
               </Text>
             </View>
           ) : (
             <>
-              <View style={styles.coverManagerCard}>
-                <Image source={{ uri: coverUri }} style={styles.coverManagerImage} />
+              {coverUri ? (
+                <View style={styles.coverManagerCard}>
+                  <Image source={{ uri: coverUri }} style={styles.coverManagerImage} />
 
-                <View style={styles.coverManagerOverlay}>
-                  <View>
-                    <Text style={styles.coverManagerKicker}>COPERTINA ATTUALE</Text>
-                    <Text numberOfLines={1} style={styles.coverManagerTitle}>
-                      {effectiveName}
-                    </Text>
+                  <View style={styles.coverManagerOverlay}>
+                    <View>
+                      <Text style={styles.coverManagerKicker}>COPERTINA</Text>
+                      <Text numberOfLines={1} style={styles.coverManagerTitle}>
+                        {effectiveName}
+                      </Text>
+                    </View>
+
+                    <PressableScale
+                      style={styles.coverChangePill}
+                      onPress={pickCoverImage}
+                    >
+                      <Text style={styles.coverChangePillText}>Cambia</Text>
+                    </PressableScale>
                   </View>
                 </View>
-              </View>
+              ) : null}
 
-              <Text style={styles.sheetSmallTitle}>Foto salvate</Text>
+              <Text style={styles.sheetSmallTitle}>
+                Galleria · {experience.galleryImageUris.length} foto
+              </Text>
 
               <View style={styles.galleryGrid}>
                 {experience.galleryImageUris.map((imageUri) => {
@@ -2496,27 +2552,21 @@ export default function PlaceDetailScreen() {
 
                       {isCover && (
                         <View style={styles.galleryCoverFlag}>
-                          <Text style={styles.galleryCoverFlagText}>Copertina</Text>
+                          <Text style={styles.galleryCoverFlagText}>Cover</Text>
                         </View>
                       )}
 
                       <View style={styles.galleryImageActions}>
-                        <PressableScale
-                          style={[
-                            styles.coverSelectButton,
-                            isCover && styles.coverSelectButtonActive,
-                          ]}
-                          onPress={() => setCover(imageUri)}
-                        >
-                          <Text
-                            style={[
-                              styles.coverSelectButtonText,
-                              isCover && styles.coverSelectButtonTextActive,
-                            ]}
+                        {!isCover && (
+                          <PressableScale
+                            style={styles.coverSelectButton}
+                            onPress={() => setCover(imageUri)}
                           >
-                            {isCover ? "Attiva" : "Usa"}
-                          </Text>
-                        </PressableScale>
+                            <Text style={styles.coverSelectButtonText}>
+                              Usa cover
+                            </Text>
+                          </PressableScale>
+                        )}
 
                         <PressableScale
                           style={styles.removeImageButton}
@@ -5089,20 +5139,48 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: "900",
   },
+  galleryActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 18,
+  },
+  galleryActionCard: {
+    flex: 1,
+    minHeight: 96,
+    borderRadius: 22,
+    backgroundColor: colors.black,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.10)",
+    padding: 16,
+    justifyContent: "center",
+    gap: 5,
+  },
+  galleryActionIcon: {
+    color: colors.pink,
+    fontSize: 22,
+    fontWeight: "900",
+    marginBottom: 2,
+  },
+  galleryActionLabel: {
+    color: colors.cream,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  galleryActionHint: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "600",
+  },
   galleryEmptySheet: {
     backgroundColor: colors.black,
     borderRadius: 24,
     padding: 20,
-    marginTop: 16,
-  },
-  galleryEmptySheetIcon: {
-    color: colors.pink,
-    fontSize: 30,
-    marginBottom: 10,
+    marginTop: 4,
   },
   galleryEmptySheetTitle: {
     color: colors.cream,
-    fontSize: 22,
+    fontSize: 18,
     fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 8,
@@ -5113,12 +5191,11 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   coverManagerCard: {
-    height: 230,
+    height: 210,
     borderRadius: 26,
     overflow: "hidden",
     backgroundColor: colors.black,
-    marginTop: 18,
-    marginBottom: 10,
+    marginBottom: 16,
   },
   coverManagerImage: {
     width: "100%",
@@ -5126,9 +5203,11 @@ const styles = StyleSheet.create({
   },
   coverManagerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.34)",
-    justifyContent: "flex-end",
-    padding: 18,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    padding: 16,
   },
   coverManagerKicker: {
     color: colors.yellow,
@@ -5139,9 +5218,26 @@ const styles = StyleSheet.create({
   },
   coverManagerTitle: {
     color: colors.cream,
-    fontSize: 26,
-    lineHeight: 31,
+    fontSize: 22,
+    lineHeight: 27,
     fontFamily: undefined,
+    fontWeight: "900",
+    maxWidth: 200,
+  },
+  coverChangePill: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,248,239,0.20)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-end",
+  },
+  coverChangePillText: {
+    color: colors.cream,
+    fontSize: 12,
     fontWeight: "900",
   },
   galleryGrid: {
@@ -5185,19 +5281,16 @@ const styles = StyleSheet.create({
     minHeight: 34,
     borderRadius: 999,
     backgroundColor: "rgba(7,6,4,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.25)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  coverSelectButtonActive: {
-    backgroundColor: colors.cream,
+    paddingHorizontal: 12,
   },
   coverSelectButtonText: {
     color: colors.cream,
     fontSize: 11,
     fontWeight: "900",
-  },
-  coverSelectButtonTextActive: {
-    color: colors.black,
   },
   removeImageButton: {
     minHeight: 34,

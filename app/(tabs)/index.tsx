@@ -6,6 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -754,6 +757,24 @@ function openPlaceDetail(place: DashboardPlace) {
   } as never);
 }
 
+const ADD_PLACE_CATEGORIES = [
+  "Ristorante",
+  "Bar",
+  "Caffè",
+  "Pizzeria",
+  "Osteria",
+  "Trattoria",
+  "Pub",
+  "Gelateria",
+  "Pasticceria",
+  "Cocktail bar",
+  "Altro",
+];
+
+function createCustomPlaceId() {
+  return `mellory-custom-${Date.now()}-${Math.round(Math.random() * 99999)}`;
+}
+
 export default function HomeScreen() {
   const { colors } = useMelloryTheme();
   const insets = useSafeAreaInsets();
@@ -775,6 +796,14 @@ export default function HomeScreen() {
   const loadingPulse = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Add place manually
+  const [showAddPlaceSheet, setShowAddPlaceSheet] = useState(false);
+  const [draftAddName, setDraftAddName] = useState("");
+  const [draftAddCategory, setDraftAddCategory] = useState("Ristorante");
+  const [draftAddAddress, setDraftAddAddress] = useState("");
+  const [draftAddPhone, setDraftAddPhone] = useState("");
+  const [draftAddWebsite, setDraftAddWebsite] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -1098,6 +1127,44 @@ export default function HomeScreen() {
     }
 
     openMap();
+  }
+
+  function openAddPlaceSheet() {
+    void Haptics.selectionAsync();
+    setDraftAddName("");
+    setDraftAddCategory("Ristorante");
+    setDraftAddAddress("");
+    setDraftAddPhone("");
+    setDraftAddWebsite("");
+    setShowAddPlaceSheet(true);
+  }
+
+  function createAndOpenCustomPlace() {
+    const name = draftAddName.trim();
+    if (!name) return;
+
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const id = createCustomPlaceId();
+    setShowAddPlaceSheet(false);
+
+    router.push({
+      pathname: "/place-detail",
+      params: {
+        id,
+        name,
+        category: draftAddCategory,
+        detail: draftAddAddress.trim(),
+        distance: "",
+        distanceMeters: "0",
+        status: "none",
+        website: draftAddWebsite.trim(),
+        phone: draftAddPhone.trim(),
+        openingHours: "",
+        editorialAwards: "",
+        latitude: "0",
+        longitude: "0",
+      },
+    } as never);
   }
 
   function renderSuggestionGroup(title: string, items: CitySuggestion[]) {
@@ -1478,6 +1545,147 @@ export default function HomeScreen() {
         <Text style={styles.floatingMapPillText}>Mappa</Text>
       </PressableScale>
     )}
+
+    <PressableScale
+      style={[styles.addPlaceFAB, { bottom: insets.bottom + 68 }]}
+      onPress={openAddPlaceSheet}
+      accessibilityRole="button"
+      accessibilityLabel="Aggiungi locale"
+    >
+      <Text style={styles.addPlaceFABText}>＋</Text>
+    </PressableScale>
+
+    <Modal
+      transparent
+      visible={showAddPlaceSheet}
+      animationType="slide"
+      onRequestClose={() => setShowAddPlaceSheet(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <PressableScale
+          style={styles.modalBackdropPressable}
+          onPress={() => setShowAddPlaceSheet(false)}
+        />
+
+        <KeyboardAvoidingView
+          behavior={
+            Platform.OS === "ios"
+              ? "padding"
+              : Platform.OS === "android"
+                ? "height"
+                : undefined
+          }
+        >
+          <View style={styles.addPlaceSheet}>
+            <View style={styles.sheetHandle} />
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.addPlaceContent}
+            >
+              <View style={styles.addPlaceSheetHeader}>
+                <Text style={styles.addPlaceSheetTitle}>Aggiungi locale</Text>
+                <PressableScale onPress={() => setShowAddPlaceSheet(false)}>
+                  <Text style={styles.addPlaceSheetClose}>×</Text>
+                </PressableScale>
+              </View>
+
+              <Text style={styles.addPlaceSheetDesc}>
+                Inserisci un locale non trovato nella ricerca, visto su Maps o
+                suggerito da un amico.
+              </Text>
+
+              <Text style={styles.addPlaceInputLabel}>Nome *</Text>
+              <TextInput
+                value={draftAddName}
+                onChangeText={setDraftAddName}
+                placeholder="Nome del locale"
+                placeholderTextColor={colors.muted}
+                autoFocus
+                returnKeyType="next"
+                style={styles.addPlaceInput}
+              />
+
+              <Text style={styles.addPlaceInputLabel}>Categoria</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryChipsRow}
+              >
+                {ADD_PLACE_CATEGORIES.map((cat) => (
+                  <PressableScale
+                    key={cat}
+                    style={[
+                      styles.categoryChip,
+                      draftAddCategory === cat && styles.categoryChipActive,
+                    ]}
+                    onPress={() => setDraftAddCategory(cat)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        draftAddCategory === cat && styles.categoryChipTextActive,
+                      ]}
+                    >
+                      {cat}
+                    </Text>
+                  </PressableScale>
+                ))}
+              </ScrollView>
+
+              <Text style={styles.addPlaceInputLabel}>Indirizzo o zona</Text>
+              <TextInput
+                value={draftAddAddress}
+                onChangeText={setDraftAddAddress}
+                placeholder="Via, quartiere, città..."
+                placeholderTextColor={colors.muted}
+                returnKeyType="next"
+                style={styles.addPlaceInput}
+              />
+
+              <Text style={styles.addPlaceInputLabel}>Telefono</Text>
+              <TextInput
+                value={draftAddPhone}
+                onChangeText={setDraftAddPhone}
+                placeholder="Numero di telefono"
+                placeholderTextColor={colors.muted}
+                keyboardType="phone-pad"
+                inputMode="tel"
+                returnKeyType="next"
+                style={styles.addPlaceInput}
+              />
+
+              <Text style={styles.addPlaceInputLabel}>Sito web</Text>
+              <TextInput
+                value={draftAddWebsite}
+                onChangeText={setDraftAddWebsite}
+                placeholder="sito.it"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="none"
+                keyboardType="url"
+                inputMode="url"
+                returnKeyType="done"
+                style={styles.addPlaceInput}
+              />
+
+              <PressableScale
+                style={[
+                  styles.addPlaceButton,
+                  !draftAddName.trim() && styles.addPlaceButtonDisabled,
+                ]}
+                onPress={createAndOpenCustomPlace}
+                disabled={!draftAddName.trim()}
+              >
+                <Text style={styles.addPlaceButtonText}>
+                  Crea scheda locale
+                </Text>
+              </PressableScale>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
     </View>
   );
 }
@@ -1907,6 +2115,140 @@ function createStyles(colors: MelloryThemeColors) {
     },
     bottomSpace: {
       height: 110,
+    },
+    addPlaceFAB: {
+      position: "absolute",
+      right: 20,
+      width: 46,
+      height: 46,
+      borderRadius: 999,
+      backgroundColor: colors.cream,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.22,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    addPlaceFABText: {
+      color: colors.black,
+      fontSize: 24,
+      lineHeight: 28,
+      fontWeight: "900",
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "flex-end",
+    },
+    modalBackdropPressable: {
+      flex: 1,
+    },
+    addPlaceSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      maxHeight: "90%",
+      minHeight: 420,
+    },
+    sheetHandle: {
+      width: 38,
+      height: 4,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,248,239,0.18)",
+      alignSelf: "center",
+      marginTop: 12,
+      marginBottom: 4,
+    },
+    addPlaceContent: {
+      paddingHorizontal: 22,
+      paddingBottom: 40,
+    },
+    addPlaceSheetHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 16,
+    },
+    addPlaceSheetTitle: {
+      color: colors.cream,
+      fontSize: 20,
+      fontWeight: "900",
+      letterSpacing: -0.4,
+    },
+    addPlaceSheetClose: {
+      color: colors.muted,
+      fontSize: 28,
+      lineHeight: 30,
+      fontWeight: "400",
+      paddingHorizontal: 4,
+    },
+    addPlaceSheetDesc: {
+      color: colors.textMuted,
+      fontSize: 14,
+      lineHeight: 21,
+      marginBottom: 22,
+    },
+    addPlaceInputLabel: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      marginBottom: 7,
+      marginTop: 16,
+    },
+    addPlaceInput: {
+      backgroundColor: colors.black,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: "rgba(255,248,239,0.10)",
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "500",
+      paddingHorizontal: 15,
+      paddingVertical: 13,
+    },
+    categoryChipsRow: {
+      gap: 8,
+      paddingBottom: 4,
+    },
+    categoryChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.black,
+      borderWidth: 1,
+      borderColor: "rgba(255,248,239,0.12)",
+    },
+    categoryChipActive: {
+      backgroundColor: `${colors.pink}22`,
+      borderColor: `${colors.pink}80`,
+    },
+    categoryChipText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    categoryChipTextActive: {
+      color: colors.cream,
+    },
+    addPlaceButton: {
+      backgroundColor: colors.cream,
+      borderRadius: 16,
+      paddingVertical: 17,
+      alignItems: "center",
+      marginTop: 28,
+    },
+    addPlaceButtonDisabled: {
+      opacity: 0.4,
+    },
+    addPlaceButtonText: {
+      color: colors.black,
+      fontSize: 15,
+      fontWeight: "900",
+      letterSpacing: 0.2,
     },
   });
 }
