@@ -660,6 +660,19 @@ function getEditorialRecognitionsFromParams(rawValue: string) {
   });
 }
 
+function formatEntryDate(isoDate: string) {
+  if (!isoDate) return "";
+  try {
+    return new Date(isoDate).toLocaleDateString("it-IT", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
 function normalizeUrl(url: string) {
   const trimmed = url.trim();
 
@@ -1293,7 +1306,7 @@ export default function PlaceDetailScreen() {
     {
       id: "notes",
       label: "Nota",
-      value: experience.note.trim().length > 0 ? "Scritta" : "Manca",
+      value: experience.note.trim().length > 0 ? "Scritta" : "Da scrivere",
       color: experience.note.trim().length > 0 ? colors.green : colors.muted,
     },
     {
@@ -2808,7 +2821,7 @@ export default function PlaceDetailScreen() {
                     <View style={styles.stateBadgeTextBlock}>
                       <Text style={styles.stateBadgeName}>{badge}</Text>
                       <Text style={styles.stateBadgeCategory}>
-                        {getBadgeCategory(badge, standardBadges)}
+                        {getCategoryLabel(getBadgeCategory(badge, standardBadges))}
                       </Text>
                     </View>
                   </PressableScale>
@@ -2816,8 +2829,8 @@ export default function PlaceDetailScreen() {
               </View>
             ) : (
               <Text style={styles.stateBadgeEmptyText}>
-                Usa badge piccoli e colorati per segnare se il posto è romantico,
-                gourmet, da amici, di design o da ricordare per un motivo preciso.
+                Usa i badge per segnare se il posto è Romantico, Gourmet, Nascosto
+                o di Design. Puoi anche crearne di personali.
               </Text>
             )}
           </View>
@@ -2878,8 +2891,8 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="INFO DEL POSTO"
-            actionLabel={infoRows.length > 0 ? "Modifica" : undefined}
-            onAction={infoRows.length > 0 ? () => openSheet("details") : undefined}
+            actionLabel={infoRows.length > 0 ? "Modifica" : "Aggiungi"}
+            onAction={() => openSheet("details")}
           >
             {infoRows.length > 0 ? (
               <View style={styles.infoCard}>
@@ -2913,13 +2926,13 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="ORARI"
-            actionLabel={hasRealHours ? "Modifica" : undefined}
-            onAction={hasRealHours ? () => openSheet("hours") : undefined}
+            actionLabel={hasRealHours ? "Modifica" : "Aggiungi"}
+            onAction={() => openSheet("hours")}
           >
             {hasRealHours ? (
               <View style={styles.hoursCard}>
                 <View style={styles.rowBetween}>
-                  <Text style={styles.hoursTitle}>Orari</Text>
+                  <Text style={styles.hoursTitle}>Apertura</Text>
                   {displayedOpenNowState !== null ? (
                     <View
                       style={[
@@ -2997,8 +3010,8 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="CONTATTI"
-            actionLabel={hasRealContacts ? "Modifica" : undefined}
-            onAction={hasRealContacts ? () => openSheet("details") : undefined}
+            actionLabel={hasRealContacts ? "Modifica" : "Aggiungi"}
+            onAction={() => openSheet("details")}
           >
             {hasRealContacts ? (
               <View style={styles.contactRow}>
@@ -3038,7 +3051,7 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="LA TUA GALLERIA"
-            actionLabel="Gestisci foto"
+            actionLabel={hasGallery ? "Gestisci" : "Aggiungi foto"}
             onAction={() => openSheet("gallery")}
           >
             {hasGallery ? (
@@ -3115,7 +3128,7 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="LE TUE NOTE"
-            actionLabel="Scrivi nota"
+            actionLabel={experience.note ? "Modifica nota" : "Scrivi nota"}
             onAction={() => openSheet("note")}
           >
             <Text style={styles.noteText}>
@@ -3126,28 +3139,33 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="DIARIO ESPERIENZE"
-            actionLabel="Aggiungi esperienza"
+            actionLabel={experience.experiences.length > 0 ? "Aggiungi altra" : "Aggiungi"}
             onAction={() => openSheet("experience")}
           >
-            <Text style={styles.diarySubtitle}>
-              Quando torni, scrivi com&apos;è andata.
-            </Text>
-
             {experience.experiences.length === 0 ? (
-              <PressableScale
-                style={styles.diaryEmptyCard}
-                onPress={() => openSheet("experience")}
-              >
-                <Text style={styles.diaryEmptyIcon}>▣</Text>
-                <Text style={styles.diaryEmptyTitle}>Nessuna esperienza ancora.</Text>
-                <Text style={styles.diaryEmptyText}>
-                  Dopo una visita puoi segnare occasione, compagnia, piatto
-                  migliore, spesa e voglia di tornarci.
+              <>
+                <Text style={styles.diarySubtitle}>
+                  Quando torni, scrivi com&apos;è andata.
                 </Text>
-              </PressableScale>
+                <PressableScale
+                  style={styles.diaryEmptyCard}
+                  onPress={() => openSheet("experience")}
+                >
+                  <Text style={styles.diaryEmptyIcon}>▣</Text>
+                  <Text style={styles.diaryEmptyTitle}>Nessuna esperienza ancora.</Text>
+                  <Text style={styles.diaryEmptyText}>
+                    Dopo una visita puoi segnare occasione, compagnia, piatto
+                    migliore, spesa e voglia di tornarci.
+                  </Text>
+                </PressableScale>
+              </>
             ) : (
               experience.experiences.map((entry) => (
                 <View key={entry.id} style={styles.timelineCard}>
+                  <Text style={styles.timelineDate}>
+                    {formatEntryDate(entry.createdAt)}
+                  </Text>
+
                   <Text style={styles.timelineTitle}>
                     {entry.occasion || "Esperienza salvata"}
                   </Text>
@@ -3158,13 +3176,16 @@ export default function PlaceDetailScreen() {
                       .join(" · ")}
                   </Text>
 
-                  <Text style={styles.timelineReturn}>
-                    {entry.wouldReturn === null
-                      ? "Ritorno non indicato"
-                      : entry.wouldReturn
-                        ? "Ci tornerei"
-                        : "Non ci tornerei"}
-                  </Text>
+                  {entry.wouldReturn !== null && (
+                    <Text
+                      style={[
+                        styles.timelineReturn,
+                        { color: entry.wouldReturn ? colors.green : colors.muted },
+                      ]}
+                    >
+                      {entry.wouldReturn ? "Ci tornerei" : "Non ci tornerei"}
+                    </Text>
+                  )}
                 </View>
               ))
             )}
@@ -3175,8 +3196,6 @@ export default function PlaceDetailScreen() {
             actionLabel="Aggiungi premio"
             onAction={() => openSheet("editorial")}
           >
-            <Text style={styles.editorialTitle}>Riconoscimenti editoriali</Text>
-
             {allEditorialRecognitions.length > 0 ? (
               <View style={styles.editorialList}>
                 {allEditorialRecognitions.map((recognition) => (
@@ -4433,6 +4452,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,248,239,0.08)",
     padding: 16,
     marginBottom: 10,
+  },
+  timelineDate: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    marginBottom: 5,
+    textTransform: "uppercase",
   },
   timelineTitle: {
     color: colors.cream,
