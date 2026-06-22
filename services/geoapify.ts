@@ -830,12 +830,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T) {
   ]);
 }
 
-const OVERPASS_TIMEOUT_MS = 20000;
-
 export async function fetchNearbyPlaces(
   latitude: number,
   longitude: number,
-  options: NearbyPlacesOptions = {}
+  options: NearbyPlacesOptions = {},
+  onPartialResults?: (places: NearbyPlace[]) => void
 ) {
   const radiusMeters = options.radiusMeters ?? PLACE_RADIUS_METERS;
   const limit = options.limit ?? PLACE_LIMIT;
@@ -845,25 +844,33 @@ export async function fetchNearbyPlaces(
   const cachedPlaces = nearbyPlacesCache.get(cacheKey);
   if (cachedPlaces) return cachedPlaces;
 
-  // Geoapify e Overpass in parallelo: se una fonte fallisce o è lenta, usiamo
-  // l'altra (Overpass è limitato nel tempo per non bloccare la ricerca).
-  const [geoapifyPlaces, overpassPlaces] = await Promise.all([
-    withTimeout(
-      fetchGeoapifyNearby(latitude, longitude, radiusMeters, limit).catch(
-        () => [] as NearbyPlace[]
-      ),
-      12000,
-      [] as NearbyPlace[]
+  // Avvia Geoapify e Overpass in parallelo.
+  // Geoapify è tipicamente più veloce (1-3s): appena arriva, emettiamo i
+  // risultati parziali via callback così la mappa si aggiorna subito.
+  // Overpass integra ulteriori locali OSM; se non risponde entro 7s, rinunciamo.
+  const geoapifyPromise = withTimeout(
+    fetchGeoapifyNearby(latitude, longitude, radiusMeters, limit).catch(
+      () => [] as NearbyPlace[]
     ),
-    withTimeout(
-      fetchOverpassNearby(latitude, longitude, radiusMeters).catch(
-        () => [] as NearbyPlace[]
-      ),
-      OVERPASS_TIMEOUT_MS,
-      [] as NearbyPlace[]
+    8000,
+    [] as NearbyPlace[]
+  );
+  const overpassPromise = withTimeout(
+    fetchOverpassNearby(latitude, longitude, radiusMeters).catch(
+      () => [] as NearbyPlace[]
     ),
-  ]);
+    7000,
+    [] as NearbyPlace[]
+  );
 
+  // Mostra i risultati Geoapify appena disponibili (fast path).
+  const geoapifyPlaces = await geoapifyPromise;
+  if (onPartialResults && geoapifyPlaces.length > 0) {
+    onPartialResults(mergeNearbyPlaces(geoapifyPlaces, limit));
+  }
+
+  // Integra con Overpass quando arriva, poi metti in cache.
+  const overpassPlaces = await overpassPromise;
   const uniquePlaces = mergeNearbyPlaces(
     [...geoapifyPlaces, ...overpassPlaces],
     limit

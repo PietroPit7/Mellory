@@ -692,19 +692,33 @@ export default function MapScreen() {
     setIsSearchingPlaces(true);
     Keyboard.dismiss();
 
+    const lastCenter = { latitude: city.latitude, longitude: city.longitude, zoom: 13 };
+    let partialShown = false;
+
     try {
-      const places = await fetchNearbyPlaces(city.latitude, city.longitude);
+      const places = await fetchNearbyPlaces(
+        city.latitude,
+        city.longitude,
+        {},
+        (partialPlaces) => {
+          const partial = partialPlaces
+            .map(nearbyPlaceToMapPlace)
+            .filter((p): p is MapPlace => Boolean(p));
+          setSearchedPlaces(partial);
+          setLastSearchCenter(lastCenter);
+          setIsSearchingPlaces(false);
+          partialShown = true;
+        }
+      );
 
       const nextPlaces = places
         .map(nearbyPlaceToMapPlace)
         .filter((place): place is MapPlace => Boolean(place));
 
       setSearchedPlaces(nextPlaces);
-      setLastSearchCenter({
-        latitude: city.latitude,
-        longitude: city.longitude,
-        zoom: 13,
-      });
+      if (!partialShown) {
+        setLastSearchCenter(lastCenter);
+      }
 
       if (nextPlaces.length === 0) {
         setErrorMessage(
@@ -751,17 +765,32 @@ export default function MapScreen() {
       setSearchQuery(userLocation.cityLabel);
       setSelectedSearchLabel(userLocation.cityLabel);
 
-      const places = await fetchNearbyPlaces(latitude, longitude);
+      const gpsCenter = { latitude, longitude, zoom: 13 };
+      let partialShown = false;
+
+      const places = await fetchNearbyPlaces(
+        latitude,
+        longitude,
+        {},
+        (partialPlaces) => {
+          const partial = partialPlaces
+            .map(nearbyPlaceToMapPlace)
+            .filter((p): p is MapPlace => Boolean(p));
+          setSearchedPlaces(partial);
+          setLastSearchCenter(gpsCenter);
+          setIsLocatingUser(false);
+          setIsSearchingPlaces(false);
+          partialShown = true;
+        }
+      );
       const nextPlaces = places
         .map(nearbyPlaceToMapPlace)
         .filter((place): place is MapPlace => Boolean(place));
 
       setSearchedPlaces(nextPlaces);
-      setLastSearchCenter({
-        latitude,
-        longitude,
-        zoom: 13,
-      });
+      if (!partialShown) {
+        setLastSearchCenter(gpsCenter);
+      }
 
       if (nextPlaces.length === 0) {
         setErrorMessage(
@@ -806,6 +835,9 @@ export default function MapScreen() {
     setIsSearchingPlaces(true);
     Keyboard.dismiss();
 
+    const areaCenter = { ...mapRegion };
+    let partialShown = false;
+
     try {
       const places = await fetchNearbyPlaces(
         mapRegion.latitude,
@@ -813,6 +845,15 @@ export default function MapScreen() {
         {
           limit: areaSearchProfile.limit,
           radiusMeters: areaSearchProfile.radiusMeters,
+        },
+        (partialPlaces) => {
+          const partial = partialPlaces
+            .map(nearbyPlaceToMapPlace)
+            .filter((p): p is MapPlace => Boolean(p));
+          setSearchedPlaces(partial);
+          setLastSearchCenter(areaCenter);
+          setIsSearchingPlaces(false);
+          partialShown = true;
         }
       );
       const nextPlaces = places
@@ -820,7 +861,9 @@ export default function MapScreen() {
         .filter((place): place is MapPlace => Boolean(place));
 
       setSearchedPlaces(nextPlaces);
-      setLastSearchCenter(mapRegion);
+      if (!partialShown) {
+        setLastSearchCenter(areaCenter);
+      }
 
       if (nextPlaces.length === 0) {
         setErrorMessage("Non ho trovato locali in quest'area.");
