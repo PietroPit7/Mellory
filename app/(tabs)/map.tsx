@@ -957,6 +957,9 @@ export default function MapScreen() {
     if (mode !== "search" || !mapRegion) return false;
     if (isMapLoading) return false;
     if (previewPlace) return false;
+    // Don't fire while the user is actively typing — wait until they've selected
+    // a result (searchQuery === selectedSearchLabel) or cleared the input.
+    if (searchQuery.trim() !== "" && searchQuery !== selectedSearchLabel) return false;
 
     // Nessuna ricerca ancora fatta: appena la mappa si muove, permetti di
     // cercare la zona inquadrata.
@@ -983,7 +986,7 @@ export default function MapScreen() {
         lastSearchCenter.longitude
       ) > movementThresholdMeters
     );
-  }, [areaSearchProfile.radiusMeters, isMapLoading, lastSearchCenter, mapRegion, mode, previewPlace]);
+  }, [areaSearchProfile.radiusMeters, isMapLoading, lastSearchCenter, mapRegion, mode, previewPlace, searchQuery, selectedSearchLabel]);
 
   const handleMapRegionChange = useCallback((region: MapRegionCenter) => {
     setPreviewPlace(null);
