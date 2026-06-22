@@ -1100,6 +1100,7 @@ export default function PlaceDetailScreen() {
   const [customLists, setCustomLists] = useState<CustomList[]>([]);
   const [activeSheet, setActiveSheet] = useState<SheetType>("none");
   const [isHoursExpanded, setIsHoursExpanded] = useState(false);
+  const [isRecapExpanded, setIsRecapExpanded] = useState(false);
   const [hasLoadedExperience, setHasLoadedExperience] = useState(false);
 
   const [draftNote, setDraftNote] = useState("");
@@ -2669,10 +2670,12 @@ export default function PlaceDetailScreen() {
             <View style={styles.coverPlaceholder}>
               <View style={styles.coverOrbLarge} />
               <View style={styles.coverOrbSmall} />
+              <View style={styles.coverOrbAccent} />
               <View style={styles.coverLineOne} />
               <View style={styles.coverLineTwo} />
-              <Text style={styles.coverInitial}>{getInitial(name)}</Text>
-              <Text style={styles.coverMonogramLabel}>MELLORY</Text>
+              <View style={styles.coverInitialBadge}>
+                <Text style={styles.coverInitialBadgeText}>{getInitial(effectiveName)}</Text>
+              </View>
             </View>
           )}
 
@@ -2714,6 +2717,22 @@ export default function PlaceDetailScreen() {
               </View>
             ) : null}
 
+            {activeStatuses.length > 0 ? (
+              <View style={styles.coverStatusRow}>
+                {activeStatuses.map((s) => {
+                  const opt = listOptions.find((o) => o.status === s);
+                  if (!opt) return null;
+                  return (
+                    <View key={s} style={[styles.coverStatusPill, { borderColor: `${opt.color}55` }]}>
+                      <Text style={[styles.coverStatusPillText, { color: opt.color }]}>
+                        {opt.emoji}{"  "}{opt.title}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+
             <Text style={styles.placeArea}>
               {effectiveCategory.toUpperCase()}
             </Text>
@@ -2751,41 +2770,73 @@ export default function PlaceDetailScreen() {
 
         <View style={styles.mainPanel}>
           <View style={styles.recapPanel}>
-            <View style={styles.recapHeader}>
+            <PressableScale
+              style={styles.recapHeader}
+              onPress={() => {
+                void Haptics.selectionAsync();
+                setIsRecapExpanded((v) => !v);
+              }}
+            >
               <View style={styles.recapTitleBlock}>
                 <Text style={styles.recapKicker}>RECAP PERSONALE</Text>
-
                 <Text style={styles.recapTitle}>Tutto a colpo d’occhio</Text>
-
-                <Text style={styles.recapSubtitle}>
-                  Una sintesi chiara e discreta di quello che hai già salvato su
-                  questo locale.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.recapGrid}>
-              {recapItems.map((item) => (
-                <View key={item.id} style={styles.recapItem}>
-                  <View style={styles.recapItemTop}>
-                    <View
-                      style={[
-                        styles.recapDot,
-                        {
-                          backgroundColor: item.color,
-                        },
-                      ]}
-                    />
-
-                    <Text style={styles.recapItemLabel}>{item.label}</Text>
+                {!isRecapExpanded ? (
+                  <View style={styles.recapMiniRow}>
+                    {activeStatuses.length > 0 ? (
+                      activeStatuses.map((s) => {
+                        const opt = listOptions.find((o) => o.status === s);
+                        return opt ? (
+                          <View key={s} style={[styles.recapMiniStatus, { backgroundColor: `${opt.color}22` }]}>
+                            <Text style={[styles.recapMiniStatusEmoji, { color: opt.color }]}>{opt.emoji}</Text>
+                          </View>
+                        ) : null;
+                      })
+                    ) : (
+                      <Text style={styles.recapMiniNone}>Nessuno stato</Text>
+                    )}
+                    {score ? (
+                      <View style={styles.recapMiniScore}>
+                        <Text style={[styles.recapMiniScoreText, { color: scoreColor }]}>{score.toFixed(1)}</Text>
+                        <Text style={styles.recapMiniScoreOf}>/10</Text>
+                      </View>
+                    ) : null}
                   </View>
+                ) : null}
+              </View>
+              <Text style={styles.recapChevron}>{isRecapExpanded ? "∧" : "∨"}</Text>
+            </PressableScale>
 
-                  <Text numberOfLines={1} style={styles.recapItemValue}>
-                    {item.value}
-                  </Text>
-                </View>
-              ))}
-            </View>
+            {isRecapExpanded ? (
+              <View style={styles.recapGrid}>
+                {recapItems.map((item) => (
+                  <View key={item.id} style={styles.recapItem}>
+                    <View style={styles.recapItemTop}>
+                      <View style={[styles.recapDot, { backgroundColor: item.color }]} />
+                      <Text style={styles.recapItemLabel}>{item.label}</Text>
+                    </View>
+
+                    {item.id === "status" ? (
+                      activeStatuses.length > 0 ? (
+                        <View style={styles.recapStatusDots}>
+                          {activeStatuses.map((s) => {
+                            const opt = listOptions.find((o) => o.status === s);
+                            return opt ? (
+                              <View key={s} style={[styles.recapStatusBubble, { backgroundColor: `${opt.color}22` }]}>
+                                <Text style={[styles.recapStatusEmoji, { color: opt.color }]}>{opt.emoji}</Text>
+                              </View>
+                            ) : null;
+                          })}
+                        </View>
+                      ) : (
+                        <Text style={[styles.recapItemValue, { color: colors.muted }]}>—</Text>
+                      )
+                    ) : (
+                      <Text numberOfLines={1} style={styles.recapItemValue}>{item.value}</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </View>
 
           <Text style={styles.sectionKickerStandalone}>IL TUO STATO</Text>
@@ -3613,6 +3664,15 @@ const styles = StyleSheet.create({
     left: 28,
     bottom: 66,
   },
+  coverOrbAccent: {
+    position: "absolute",
+    width: 72,
+    height: 72,
+    borderRadius: 999,
+    backgroundColor: "rgba(199, 168, 91, 0.09)",
+    left: 54,
+    top: 38,
+  },
   coverLineOne: {
     position: "absolute",
     width: 210,
@@ -3631,20 +3691,39 @@ const styles = StyleSheet.create({
     bottom: 112,
     transform: [{ rotate: "24deg" }],
   },
-  coverInitial: {
-    color: colors.cream,
-    fontSize: 88,
-    lineHeight: 96,
-    fontFamily: undefined,
-    fontWeight: "900",
-    letterSpacing: -2,
+  coverInitialBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,248,239,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  coverMonogramLabel: {
-    color: colors.muted,
-    fontSize: 10,
+  coverInitialBadgeText: {
+    color: "rgba(255,248,239,0.55)",
+    fontSize: 36,
     fontWeight: "900",
-    letterSpacing: 3,
-    marginTop: 2,
+    letterSpacing: -1,
+  },
+  coverStatusRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 10,
+  },
+  coverStatusPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: "rgba(7,6,4,0.45)",
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  coverStatusPillText: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.2,
   },
   coverOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -3819,36 +3898,97 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   recapHeader: {
-    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
   },
   recapTitleBlock: {
-    maxWidth: 310,
+    flex: 1,
+    marginRight: 10,
   },
   recapKicker: {
     color: colors.muted,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 2.2,
-    marginBottom: 7,
+    marginBottom: 5,
   },
   recapTitle: {
     color: colors.cream,
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: 18,
+    lineHeight: 22,
     fontFamily: undefined,
     fontWeight: "900",
-    letterSpacing: -0.4,
-    marginBottom: 7,
+    letterSpacing: -0.3,
+    marginBottom: 8,
   },
-  recapSubtitle: {
-    color: colors.textMuted,
+  recapChevron: {
+    color: colors.muted,
+    fontSize: 16,
+    fontWeight: "900",
+    paddingLeft: 8,
+    paddingTop: 2,
+  },
+  recapMiniRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  recapMiniStatus: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recapMiniStatusEmoji: {
     fontSize: 14,
-    lineHeight: 21,
+    fontWeight: "900",
+  },
+  recapMiniNone: {
+    color: colors.muted,
+    fontSize: 13,
+    fontStyle: "italic",
+  },
+  recapMiniScore: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 1,
+    marginLeft: 4,
+  },
+  recapMiniScoreText: {
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: -0.3,
+  },
+  recapMiniScoreOf: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  recapStatusDots: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  recapStatusBubble: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recapStatusEmoji: {
+    fontSize: 16,
+    fontWeight: "900",
   },
   recapGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
+    marginTop: 14,
   },
   recapItem: {
     width: "48%",
