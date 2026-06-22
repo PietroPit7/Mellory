@@ -1222,7 +1222,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
-      <View style={styles.bottomSpace} />
+      <View style={{ height: 88 + insets.bottom + 16 }} />
     </ScrollView>
     </Animated.View>
   );
@@ -1904,9 +1904,6 @@ function createStyles(colors: MelloryThemeColors) {
       color: colors.paperText,
       fontSize: 16,
       lineHeight: 25,
-    },
-    bottomSpace: {
-      height: 118,
     },
   });
 }

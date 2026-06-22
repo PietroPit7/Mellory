@@ -1274,6 +1274,14 @@ export default function HomeScreen() {
           <Text style={styles.logo}>Mellory</Text>
           <View style={styles.brandUnderline} />
         </View>
+        <PressableScale
+          style={styles.addPlaceHeaderBtn}
+          onPress={openAddPlaceSheet}
+          accessibilityRole="button"
+          accessibilityLabel="Aggiungi locale"
+        >
+          <Text style={styles.addPlaceHeaderBtnText}>＋</Text>
+        </PressableScale>
       </View>
 
       {/* Hero */}
@@ -1535,27 +1543,18 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
-      <View style={styles.bottomSpace} />
+      <View style={{ height: 88 + insets.bottom + 16 }} />
     </ScrollView>
 
     {hasDashboard && hasPlaces && (
       <PressableScale
-        style={[styles.floatingMapPill, { bottom: insets.bottom + 68 }]}
+        style={[styles.floatingMapPill, { bottom: insets.bottom + 96 }]}
         onPress={openContextSearch}
       >
         <Text style={styles.floatingMapPillIcon}>⊞</Text>
         <Text style={styles.floatingMapPillText}>Mappa</Text>
       </PressableScale>
     )}
-
-    <PressableScale
-      style={[styles.addPlaceFAB, { bottom: insets.bottom + 68 }]}
-      onPress={openAddPlaceSheet}
-      accessibilityRole="button"
-      accessibilityLabel="Aggiungi locale"
-    >
-      <Text style={styles.addPlaceFABText}>＋</Text>
-    </PressableScale>
 
     <Modal
       transparent
@@ -1743,6 +1742,24 @@ function createStyles(colors: MelloryThemeColors) {
     },
     brandBlock: {
       flex: 1,
+    },
+    addPlaceHeaderBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 4,
+    },
+    addPlaceHeaderBtnText: {
+      color: colors.cream,
+      fontSize: 22,
+      lineHeight: 26,
+      fontWeight: "300",
+      includeFontPadding: false,
     },
     logo: {
       color: colors.cream,
@@ -2115,30 +2132,6 @@ function createStyles(colors: MelloryThemeColors) {
       fontSize: 15,
       fontWeight: "800",
       letterSpacing: 0.2,
-    },
-    bottomSpace: {
-      height: 110,
-    },
-    addPlaceFAB: {
-      position: "absolute",
-      right: 20,
-      width: 46,
-      height: 46,
-      borderRadius: 999,
-      backgroundColor: colors.cream,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.22,
-      shadowRadius: 6,
-      elevation: 4,
-    },
-    addPlaceFABText: {
-      color: colors.black,
-      fontSize: 24,
-      lineHeight: 28,
-      fontWeight: "900",
     },
     modalBackdrop: {
       flex: 1,

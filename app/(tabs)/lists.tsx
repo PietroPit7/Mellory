@@ -889,7 +889,7 @@ export default function ListsScreen() {
         </PressableScale>
       </View>
 
-      <View style={styles.bottomSpace} />
+      <View style={{ height: 88 + insets.bottom + 16 }} />
     </ScrollView>
     </Animated.View>
   );
@@ -1217,9 +1217,6 @@ function createStyles(colors: MelloryThemeColors) {
     fontSize: 15,
     fontWeight: "800",
     letterSpacing: 0.2,
-  },
-  bottomSpace: {
-    height: 110,
   },
   });
 }
