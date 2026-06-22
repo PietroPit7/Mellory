@@ -903,6 +903,9 @@ function createStyles(colors: MelloryThemeColors) {
   },
   content: {
     paddingHorizontal: 20,
+    maxWidth: 560,
+    width: "100%",
+    alignSelf: "center",
   },
   safeTop: {
     height: 16,

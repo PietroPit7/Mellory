@@ -1236,6 +1236,9 @@ function createStyles(colors: MelloryThemeColors) {
     },
     content: {
       paddingHorizontal: 22,
+      maxWidth: 560,
+      width: "100%",
+      alignSelf: "center",
     },
     topRule: {
       height: 1,

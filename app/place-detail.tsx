@@ -3568,6 +3568,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 14,
+    maxWidth: 560,
+    width: "100%",
+    alignSelf: "center",
   },
   safeTop: {
     height: 18,

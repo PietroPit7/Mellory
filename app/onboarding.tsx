@@ -556,6 +556,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
+    maxWidth: 560,
+    width: "100%",
+    alignSelf: "center",
   },
 
   progressTrack: {
