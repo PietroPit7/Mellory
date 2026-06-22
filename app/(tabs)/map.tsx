@@ -22,6 +22,7 @@ import {
   fetchNearbyPlaces,
   fetchPlaceSuggestions,
   hasPreciseCitySuggestion,
+  isOpenNow,
 } from "@/services/geoapify";
 
 type PlaceStatus = "try" | "favorite" | "visited" | "retry";
@@ -49,6 +50,9 @@ type MapPlace = {
   statuses: PlaceStatus[];
   coverImageUri: string;
   note: string;
+  outdoorSeating?: boolean;
+  delivery?: boolean;
+  takeaway?: boolean;
 };
 
 type MapRegionCenter = {
@@ -174,6 +178,9 @@ function nearbyPlaceToMapPlace(place: NearbyPlace): MapPlace | null {
     statuses: [],
     coverImageUri: "",
     note: "",
+    outdoorSeating: place.outdoorSeating,
+    delivery: place.delivery,
+    takeaway: place.takeaway,
   };
 }
 
@@ -1328,7 +1335,15 @@ export default function MapScreen() {
                 </Text>
               </View>
               <View style={styles.previewInfo}>
-                <Text style={styles.previewCategory}>{previewPlace.category}</Text>
+                <View style={styles.previewCategoryRow}>
+                  <Text style={styles.previewCategory}>{previewPlace.category}</Text>
+                  {(() => {
+                    const status = isOpenNow(previewPlace.openingHours);
+                    if (status === "open") return <Text style={styles.previewOpenNow}>Aperto</Text>;
+                    if (status === "closed") return <Text style={styles.previewClosedNow}>Chiuso</Text>;
+                    return null;
+                  })()}
+                </View>
                 <Text numberOfLines={1} style={styles.previewName}>{previewPlace.name}</Text>
                 {previewPlace.detail ? (
                   <Text numberOfLines={1} style={styles.previewMeta}>{previewPlace.detail}</Text>
@@ -1543,7 +1558,10 @@ const styles = StyleSheet.create({
   previewAvatar: { width: 48, height: 48, borderRadius: 13, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   previewAvatarText: { fontSize: 20, fontWeight: "800" },
   previewInfo: { flex: 1, minWidth: 0, paddingTop: 2 },
-  previewCategory: { color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 3 },
+  previewCategoryRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3 },
+  previewCategory: { color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1.5, textTransform: "uppercase" },
+  previewOpenNow: { color: colors.green, fontSize: 10, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  previewClosedNow: { color: colors.orange, fontSize: 10, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
   previewName: { color: colors.cream, fontSize: 18, fontWeight: "800", letterSpacing: -0.4, marginBottom: 2 },
   previewMeta: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   previewOpenBtn: { height: 46, borderRadius: 12, backgroundColor: colors.pink, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },

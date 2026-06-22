@@ -696,6 +696,9 @@ function osmElementToNearbyPlace(
     phone: getBestTag(tags, ["phone", "contact:phone"]),
     openingHours: getBestTag(tags, ["opening_hours"]),
     editorialAwards: "",
+    outdoorSeating: osmTriBool(tags?.outdoor_seating),
+    delivery: osmTriBool(tags?.delivery),
+    takeaway: osmTriBool(tags?.takeaway),
   };
 }
 
@@ -811,6 +814,9 @@ function mergeNearbyPlaces(places: NearbyPlace[], limit: number) {
           : place.categoryBase,
       category:
         existing.categoryBase !== "Luogo" ? existing.category : place.category,
+      outdoorSeating: existing.outdoorSeating ?? place.outdoorSeating,
+      delivery: existing.delivery ?? place.delivery,
+      takeaway: existing.takeaway ?? place.takeaway,
     });
   });
 
@@ -819,6 +825,99 @@ function mergeNearbyPlaces(places: NearbyPlace[], limit: number) {
       return firstPlace.distanceMeters - secondPlace.distanceMeters;
     })
     .slice(0, limit);
+}
+
+// Interpreta il tag OSM "yes/no/only" come booleano, undefined se assente.
+function osmTriBool(v: string | undefined): boolean | undefined {
+  if (!v) return undefined;
+  const lower = v.toLowerCase();
+  if (lower === "yes" || lower === "only") return true;
+  if (lower === "no") return false;
+  return undefined;
+}
+
+const OSM_DAY_ABBR = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function parseTimeMins(timeStr: string): number {
+  const parts = timeStr.split(":").map(Number);
+  return (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+}
+
+function parseDayIdxs(spec: string): number[] {
+  const result: number[] = [];
+  for (const part of spec.split(",").map((p) => p.trim())) {
+    const rangeParts = part.split("-").map((p) => p.trim());
+    if (rangeParts.length === 2) {
+      const from = OSM_DAY_ABBR.indexOf(rangeParts[0]);
+      const to = OSM_DAY_ABBR.indexOf(rangeParts[1]);
+      if (from >= 0 && to >= 0) {
+        let i = from;
+        while (true) {
+          result.push(i);
+          if (i === to) break;
+          i = (i + 1) % 7;
+        }
+      }
+    } else {
+      const idx = OSM_DAY_ABBR.indexOf(part);
+      if (idx >= 0) result.push(idx);
+    }
+  }
+  return result;
+}
+
+// Controlla se un posto è aperto adesso in base all'OSM opening_hours.
+// Restituisce "open", "closed" o "unknown" (se il formato non è riconosciuto).
+export function isOpenNow(openingHours: string): "open" | "closed" | "unknown" {
+  const raw = openingHours.trim();
+  if (!raw) return "unknown";
+  if (/^24\/7$/i.test(raw)) return "open";
+
+  const now = new Date();
+  const todayIdx = now.getDay(); // 0=Dom, 1=Lun, ..., 6=Sab
+  const currentMins = now.getHours() * 60 + now.getMinutes();
+  let lastResult: "open" | "closed" | "unknown" = "unknown";
+
+  for (const segment of raw.split(";").map((s) => s.trim()).filter(Boolean)) {
+    const dayTimeMatch = segment.match(
+      /^((?:[A-Z][a-z](?:\s*[-–]\s*[A-Z][a-z])?(?:\s*,\s*[A-Z][a-z](?:\s*[-–]\s*[A-Z][a-z])?)*)+)\s+(.+)$/
+    );
+
+    let dayIdxs: number[];
+    let timeSpec: string;
+
+    if (dayTimeMatch) {
+      dayIdxs = parseDayIdxs(dayTimeMatch[1]);
+      timeSpec = dayTimeMatch[2].trim().toLowerCase();
+    } else {
+      dayIdxs = [0, 1, 2, 3, 4, 5, 6];
+      timeSpec = segment.trim().toLowerCase();
+    }
+
+    if (!dayIdxs.includes(todayIdx)) continue;
+
+    if (timeSpec === "off" || timeSpec === "closed") {
+      lastResult = "closed";
+      continue;
+    }
+
+    const ranges: [number, number][] = [];
+    for (const range of timeSpec.split(",").map((r) => r.trim())) {
+      const m = range.match(/^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$/);
+      if (!m) continue;
+      const open = parseTimeMins(m[1]);
+      let close = parseTimeMins(m[2]);
+      if (close <= open) close += 1440;
+      ranges.push([open, close]);
+    }
+
+    if (ranges.length === 0) continue;
+    lastResult = ranges.some(([o, c]) => currentMins >= o && currentMins < c)
+      ? "open"
+      : "closed";
+  }
+
+  return lastResult;
 }
 
 // Limita l'attesa di una fonte lenta: se non risponde entro il timeout

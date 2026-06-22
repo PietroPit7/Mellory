@@ -24,6 +24,9 @@ export type NearbyPlace = Coordinates & {
   phone: string;
   openingHours: string;
   editorialAwards: string;
+  outdoorSeating?: boolean;
+  delivery?: boolean;
+  takeaway?: boolean;
 };
 
 export type GeoapifyPointGeometry = {
