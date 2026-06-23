@@ -1505,29 +1505,26 @@ export default function MapScreen() {
         </Animated.View>
       ) : null}
 
-      {/* Layer toggle — bottom-right corner */}
-      <View
-        style={[styles.layerToggleContainer, { bottom: insets.bottom + 112 }]}
-        pointerEvents="box-none"
+      {/* Layer toggle — small icon-only button, top-right below the overlay */}
+      <PressableScale
+        accessibilityRole="button"
+        accessibilityLabel={mapLayer === "satellite" ? "Torna alla vista strade" : "Attiva vista satellite"}
+        style={[
+          styles.layerToggle,
+          { top: insets.top + 64 },
+          mapLayer === "satellite" && styles.layerToggleActive,
+        ]}
+        onPress={() => {
+          void Haptics.selectionAsync();
+          setMapLayer((l) => (l === "streets" ? "satellite" : "streets"));
+        }}
       >
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel={mapLayer === "satellite" ? "Torna alla vista strade" : "Attiva vista satellite"}
-          style={[styles.layerToggle, mapLayer === "satellite" && styles.layerToggleActive]}
-          onPress={() => {
-            void Haptics.selectionAsync();
-            setMapLayer((l) => (l === "streets" ? "satellite" : "streets"));
-          }}
-          pointerEvents="auto"
-        >
-          <Text style={[styles.layerToggleEmoji]}>
-            {mapLayer === "satellite" ? "🗺" : "🛰"}
-          </Text>
-          <Text style={[styles.layerToggleLabel, mapLayer === "satellite" && styles.layerToggleLabelActive]}>
-            {mapLayer === "satellite" ? "Strade" : "Satellite"}
-          </Text>
-        </PressableScale>
-      </View>
+        {/* Layers icon: two overlapping rounded rects */}
+        <View style={styles.layerIconWrap}>
+          <View style={[styles.layerIconBack, mapLayer === "satellite" && styles.layerIconBackActive]} />
+          <View style={[styles.layerIconFront, mapLayer === "satellite" && styles.layerIconFrontActive]} />
+        </View>
+      </PressableScale>
     </View>
   );
 }
@@ -1559,12 +1556,53 @@ const styles = StyleSheet.create({
   savedToggleActive: { backgroundColor: colors.pink, borderColor: colors.pink },
   savedToggleText: { color: colors.muted, fontSize: 18, lineHeight: 22 },
   savedToggleTextActive: { color: "#fff" },
-  layerToggleContainer: { position: "absolute", right: 14, zIndex: 20 },
-  layerToggle: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 24, backgroundColor: "rgba(23,19,15,0.92)", borderWidth: 1, borderColor: "rgba(255,248,239,0.14)" },
-  layerToggleActive: { backgroundColor: colors.blue, borderColor: colors.blue },
-  layerToggleEmoji: { fontSize: 16, lineHeight: 20 },
-  layerToggleLabel: { color: colors.cream, fontSize: 13, fontWeight: "700", letterSpacing: -0.2 },
-  layerToggleLabelActive: { color: "#fff" },
+  layerToggle: {
+    position: "absolute",
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 11,
+    backgroundColor: "rgba(7,6,4,0.80)",
+    borderWidth: 0.5,
+    borderColor: "rgba(255,248,239,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 11,
+  },
+  layerToggleActive: {
+    borderColor: colors.blue,
+    borderWidth: 1.5,
+  },
+  layerIconWrap: {
+    width: 20,
+    height: 18,
+    position: "relative",
+  },
+  layerIconBack: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 15,
+    height: 12,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,248,239,0.5)",
+  },
+  layerIconBackActive: {
+    borderColor: colors.blue,
+  },
+  layerIconFront: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: 15,
+    height: 12,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,248,239,0.85)",
+  },
+  layerIconFrontActive: {
+    backgroundColor: colors.blue,
+  },
 
   suggestionsBox: { backgroundColor: "rgba(23,19,15,0.96)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,248,239,0.10)", overflow: "hidden", maxHeight: 280 },
   suggestionGroupTitle: { color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.4, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, textTransform: "uppercase" },
