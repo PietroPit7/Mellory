@@ -39,6 +39,7 @@ type SheetType =
   | "lists"
   | "note"
   | "experience"
+  | "experienceDetail"
   | "badges"
   | "gallery"
   | "editorial"
@@ -64,6 +65,12 @@ type ExperienceEntry = {
   dish: string;
   spend: string;
   wouldReturn: boolean | null;
+  createdAt: string;
+};
+
+type NoteEntry = {
+  id: string;
+  text: string;
   createdAt: string;
 };
 
@@ -213,7 +220,7 @@ function getOpenNowStateFromHoursValue(value: string): boolean | null {
 }
 
 type PlaceExperience = {
-  note: string;
+  notes: NoteEntry[];
   coverImageUri: string;
   galleryImageUris: string[];
   statuses: PlaceStatus[];
@@ -311,7 +318,7 @@ const emptyPersonalDetails: PersonalDetails = {
 };
 
 const emptyExperience: PlaceExperience = {
-  note: "",
+  notes: [],
   coverImageUri: "",
   galleryImageUris: [],
   statuses: [],
@@ -1017,11 +1024,18 @@ async function readExperienceState(placeId: string) {
 
     const parsed = JSON.parse(stored);
 
+    const migratedNotes: NoteEntry[] = Array.isArray(parsed.notes)
+      ? parsed.notes
+      : typeof parsed.note === "string" && parsed.note.trim()
+        ? [{ id: createId(), text: parsed.note.trim(), createdAt: new Date().toISOString() }]
+        : [];
+
     return {
       exists: true,
       experience: {
         ...emptyExperience,
         ...parsed,
+        notes: migratedNotes,
         statuses: Array.isArray(parsed.statuses) ? parsed.statuses : [],
         badges: migrateBadgeLabels(Array.isArray(parsed.badges) ? parsed.badges : []),
         customBadges: Array.isArray(parsed.customBadges)
@@ -1103,6 +1117,8 @@ export default function PlaceDetailScreen() {
   const [hasLoadedExperience, setHasLoadedExperience] = useState(false);
 
   const [draftNote, setDraftNote] = useState("");
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [draftOccasion, setDraftOccasion] = useState("");
   const [draftWithWho, setDraftWithWho] = useState("");
   const [draftDish, setDraftDish] = useState("");
@@ -1310,8 +1326,8 @@ export default function PlaceDetailScreen() {
     {
       id: "notes",
       label: "Nota",
-      value: experience.note.trim().length > 0 ? "Scritta" : "Da scrivere",
-      color: experience.note.trim().length > 0 ? colors.green : colors.muted,
+      value: experience.notes.length > 0 ? `${experience.notes.length} ${experience.notes.length === 1 ? "nota" : "note"}` : "Da scrivere",
+      color: experience.notes.length > 0 ? colors.green : colors.muted,
     },
     {
       id: "lists",
@@ -1347,7 +1363,7 @@ export default function PlaceDetailScreen() {
             status,
             badges: nextExperience.badges,
             coverImageUri: nextExperience.coverImageUri,
-            note: nextExperience.note,
+            note: nextExperience.notes[0]?.text ?? "",
             website: effectiveWebsite,
             phone: effectivePhone,
             openingHours: effectiveOpeningHours,
@@ -1387,7 +1403,7 @@ export default function PlaceDetailScreen() {
           status: primaryStatus,
           badges: nextExperience.badges,
           coverImageUri: nextExperience.coverImageUri,
-          note: nextExperience.note,
+          note: nextExperience.notes[0]?.text ?? "",
           website: effectiveWebsite,
           phone: effectivePhone,
           openingHours: effectiveOpeningHours,
@@ -1397,7 +1413,7 @@ export default function PlaceDetailScreen() {
         }),
         badges: nextExperience.badges,
         coverImageUri: nextExperience.coverImageUri,
-        note: nextExperience.note,
+        note: nextExperience.notes[0]?.text ?? "",
         statuses,
         updatedAt: now,
       };
@@ -1446,7 +1462,6 @@ export default function PlaceDetailScreen() {
       if (!isActive) return;
 
       setExperience(nextExperience);
-      setDraftNote(nextExperience.note);
       setCustomLists(storedLists);
       setHasLoadedExperience(true);
 
@@ -1502,8 +1517,8 @@ export default function PlaceDetailScreen() {
 
   function openSheet(sheet: SheetType) {
     void Haptics.selectionAsync();
-    if (sheet === "note") {
-      setDraftNote(experience.note);
+    if (sheet === "note" && selectedNoteId === null) {
+      setDraftNote("");
     }
 
     if (sheet === "customLists") {
@@ -1555,42 +1570,14 @@ export default function PlaceDetailScreen() {
     const existingIndex = experience.badges.findIndex(
       (b) => b.toLowerCase() === lowerBadge
     );
-    const isAdding = existingIndex < 0;
-    const nextBadges = isAdding
-      ? [...experience.badges, badge]
-      : experience.badges.filter((_, i) => i !== existingIndex);
 
-    await saveExperience({ ...experience, badges: nextBadges });
-
-    const lists = await readCustomLists();
-    const existingList = lists.find((l) => l.title.toLowerCase() === lowerBadge);
-
-    if (isAdding) {
-      if (!existingList) {
-        const badgeInfo = allBadges.find((b) => b.label.toLowerCase() === lowerBadge);
-        const newList: CustomList = {
-          id: createId(),
-          title: badge,
-          description: "",
-          color: badgeInfo?.color ?? colors.pink,
-          placeIds: [placeId],
-          createdAt: new Date().toISOString(),
-        };
-        await saveCustomLists([newList, ...lists]);
-      } else if (!existingList.placeIds.includes(placeId)) {
-        await saveCustomLists(
-          lists.map((l) =>
-            l.id === existingList.id ? { ...l, placeIds: [placeId, ...l.placeIds] } : l
-          )
-        );
-      }
-    } else if (existingList) {
-      await saveCustomLists(
-        lists.map((l) =>
-          l.id === existingList.id ? { ...l, placeIds: l.placeIds.filter((id) => id !== placeId) } : l
-        )
-      );
-    }
+    await saveExperience({
+      ...experience,
+      badges:
+        existingIndex >= 0
+          ? experience.badges.filter((_, i) => i !== existingIndex)
+          : [...experience.badges, badge],
+    });
   }
 
   async function toggleCustomList(listId: string) {
@@ -1644,13 +1631,50 @@ export default function PlaceDetailScreen() {
     });
   }
 
-  async function saveNote() {
+  async function addNote() {
+    const text = draftNote.trim();
+    if (!text) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const entry: NoteEntry = {
+      id: createId(),
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    await saveExperience({ ...experience, notes: [entry, ...experience.notes] });
+    setDraftNote("");
+    setSelectedNoteId(null);
+    closeSheet();
+  }
+
+  async function updateNote(id: string) {
+    const text = draftNote.trim();
+    if (!text) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await saveExperience({
       ...experience,
-      note: draftNote,
+      notes: experience.notes.map((n) => (n.id === id ? { ...n, text } : n)),
     });
+    setSelectedNoteId(null);
+    closeSheet();
+  }
 
+  async function deleteNote(id: string) {
+    void Haptics.selectionAsync();
+    await saveExperience({
+      ...experience,
+      notes: experience.notes.filter((n) => n.id !== id),
+    });
+    setSelectedNoteId(null);
+    closeSheet();
+  }
+
+  async function deleteExperienceEntry(id: string) {
+    void Haptics.selectionAsync();
+    await saveExperience({
+      ...experience,
+      experiences: experience.experiences.filter((e) => e.id !== id),
+    });
+    setSelectedEntryId(null);
     closeSheet();
   }
 
@@ -2109,16 +2133,19 @@ export default function PlaceDetailScreen() {
     }
 
     if (activeSheet === "note") {
+      const isEditing = selectedNoteId !== null;
       return (
         <>
           <SheetHeader
-            title={experience.note ? "Modifica nota" : "La tua nota"}
+            title={isEditing ? "Modifica nota" : "Nuova nota"}
             onClose={closeSheet}
           />
 
-          <Text style={styles.sheetDescription}>
-            Cosa vuoi ricordare di questo posto? Un piatto, un dettaglio, un momento.
-          </Text>
+          {!isEditing && (
+            <Text style={styles.sheetDescription}>
+              Cosa vuoi ricordare di questo posto? Un piatto, un dettaglio, un momento.
+            </Text>
+          )}
 
           <TextInput
             value={draftNote}
@@ -2128,12 +2155,27 @@ export default function PlaceDetailScreen() {
             multiline
             textAlignVertical="top"
             style={[styles.sheetTextArea, { minHeight: 160 }]}
-            autoFocus
+            autoFocus={!isEditing}
           />
 
-          <PressableScale style={styles.sheetPrimaryButton} onPress={saveNote}>
+          <PressableScale
+            style={styles.sheetPrimaryButton}
+            onPress={() => {
+              if (isEditing) void updateNote(selectedNoteId);
+              else void addNote();
+            }}
+          >
             <Text style={styles.sheetPrimaryButtonText}>Salva nota</Text>
           </PressableScale>
+
+          {isEditing && (
+            <PressableScale
+              style={styles.sheetDeleteButton}
+              onPress={() => void deleteNote(selectedNoteId)}
+            >
+              <Text style={styles.sheetDeleteButtonText}>Elimina nota</Text>
+            </PressableScale>
+          )}
         </>
       );
     }
@@ -2335,6 +2377,64 @@ export default function PlaceDetailScreen() {
 
           <PressableScale style={styles.sheetPrimaryButton} onPress={saveExperienceEntry}>
             <Text style={styles.sheetPrimaryButtonText}>Salva esperienza</Text>
+          </PressableScale>
+        </>
+      );
+    }
+
+    if (activeSheet === "experienceDetail") {
+      const entry = experience.experiences.find((e) => e.id === selectedEntryId);
+      if (!entry) return null;
+      return (
+        <>
+          <SheetHeader title="Esperienza" onClose={closeSheet} />
+
+          <Text style={styles.entryDetailDate}>{formatEntryDate(entry.createdAt)}</Text>
+
+          {entry.occasion ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Occasione</Text>
+              <Text style={styles.entryDetailValue}>{entry.occasion}</Text>
+            </View>
+          ) : null}
+
+          {entry.withWho ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Con chi</Text>
+              <Text style={styles.entryDetailValue}>{entry.withWho}</Text>
+            </View>
+          ) : null}
+
+          {entry.dish ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Piatto</Text>
+              <Text style={styles.entryDetailValue}>{entry.dish}</Text>
+            </View>
+          ) : null}
+
+          {entry.spend ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Spesa</Text>
+              <Text style={styles.entryDetailValue}>{entry.spend} €</Text>
+            </View>
+          ) : null}
+
+          {entry.wouldReturn !== null ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Torneresti?</Text>
+              <Text style={[styles.entryDetailValue, { color: entry.wouldReturn ? colors.green : colors.muted }]}>
+                {entry.wouldReturn ? "Sì, ci tornerei" : "No, non ci tornerei"}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={{ flex: 1 }} />
+
+          <PressableScale
+            style={styles.sheetDeleteButton}
+            onPress={() => void deleteExperienceEntry(entry.id)}
+          >
+            <Text style={styles.sheetDeleteButtonText}>Elimina esperienza</Text>
           </PressableScale>
         </>
       );
@@ -2951,7 +3051,11 @@ export default function PlaceDetailScreen() {
 
           <View style={styles.actionGrid}>
             <ActionBox symbol="☰" label="Liste" onPress={() => openSheet("lists")} />
-            <ActionBox symbol="✎" label="Nota" onPress={() => openSheet("note")} />
+            <ActionBox symbol="✎" label="Nota" onPress={() => {
+              setSelectedNoteId(null);
+              setDraftNote("");
+              openSheet("note");
+            }} />
             <ActionBox
               symbol="▣"
               label="Esperienza"
@@ -3199,13 +3303,33 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="LE TUE NOTE"
-            actionLabel={experience.note ? "Modifica nota" : "Scrivi nota"}
-            onAction={() => openSheet("note")}
+            actionLabel="Aggiungi nota"
+            onAction={() => {
+              setSelectedNoteId(null);
+              setDraftNote("");
+              openSheet("note");
+            }}
           >
-            <Text style={styles.noteText}>
-              {experience.note ||
-                "Nessuna nota ancora. Aggiungi un pensiero per ricordartelo."}
-            </Text>
+            {experience.notes.length === 0 ? (
+              <Text style={styles.noteText}>
+                Nessuna nota ancora. Aggiungi un pensiero per ricordartelo.
+              </Text>
+            ) : (
+              experience.notes.map((noteEntry) => (
+                <PressableScale
+                  key={noteEntry.id}
+                  style={styles.noteCard}
+                  onPress={() => {
+                    setSelectedNoteId(noteEntry.id);
+                    setDraftNote(noteEntry.text);
+                    openSheet("note");
+                  }}
+                >
+                  <Text style={styles.noteCardDate}>{formatEntryDate(noteEntry.createdAt)}</Text>
+                  <Text style={styles.noteCardText} numberOfLines={5}>{noteEntry.text}</Text>
+                </PressableScale>
+              ))
+            )}
           </Section>
 
           <Section
@@ -3232,7 +3356,14 @@ export default function PlaceDetailScreen() {
               </>
             ) : (
               experience.experiences.map((entry) => (
-                <View key={entry.id} style={styles.timelineCard}>
+                <PressableScale
+                  key={entry.id}
+                  style={styles.timelineCard}
+                  onPress={() => {
+                    setSelectedEntryId(entry.id);
+                    openSheet("experienceDetail");
+                  }}
+                >
                   <Text style={styles.timelineDate}>
                     {formatEntryDate(entry.createdAt)}
                   </Text>
@@ -3257,7 +3388,9 @@ export default function PlaceDetailScreen() {
                       {entry.wouldReturn ? "Ci tornerei" : "Non ci tornerei"}
                     </Text>
                   )}
-                </View>
+
+                  <Text style={styles.timelineTapHint}>Leggi tutto ›</Text>
+                </PressableScale>
               ))
             )}
           </Section>
@@ -4932,6 +5065,75 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 15,
     fontWeight: "900",
+  },
+  sheetDeleteButton: {
+    minHeight: 48,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,80,80,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  sheetDeleteButtonText: {
+    color: "#FF5050",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  noteCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.08)",
+    padding: 16,
+    marginBottom: 10,
+  },
+  noteCardDate: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 7,
+  },
+  noteCardText: {
+    color: colors.cream,
+    fontSize: 15,
+    lineHeight: 23,
+  },
+  entryDetailDate: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 20,
+  },
+  entryDetailRow: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,248,239,0.07)",
+  },
+  entryDetailLabel: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+    marginBottom: 5,
+  },
+  entryDetailValue: {
+    color: colors.cream,
+    fontSize: 17,
+    fontWeight: "700",
+    lineHeight: 24,
+  },
+  timelineTapHint: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 10,
   },
   inputLabel: {
     color: colors.muted,
