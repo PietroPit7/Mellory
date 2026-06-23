@@ -1505,13 +1505,13 @@ export default function MapScreen() {
         </Animated.View>
       ) : null}
 
-      {/* Layer toggle — small icon-only button, top-right below the overlay */}
+      {/* Layer toggle — small icon-only button, right side just below the top overlay */}
       <PressableScale
         accessibilityRole="button"
         accessibilityLabel={mapLayer === "satellite" ? "Torna alla vista strade" : "Attiva vista satellite"}
         style={[
           styles.layerToggle,
-          { top: insets.top + 64 },
+          { top: overlayHeight + 10 },
           mapLayer === "satellite" && styles.layerToggleActive,
         ]}
         onPress={() => {
