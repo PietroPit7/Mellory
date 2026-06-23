@@ -23,13 +23,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "@/components/pressable-scale";
 import {
   melloryDarkColors,
+  melloryThemeVars,
   type MelloryThemeColors,
   useMelloryTheme,
 } from "@/contexts/mellory-theme";
 
-// Module-level reference used by the static StyleSheet and sub-components below.
-// The component shadows this with useMelloryTheme() for dynamic accent colors.
-const colors = melloryDarkColors;
+// On web, melloryThemeVars uses CSS variables so the StyleSheet responds to
+// theme changes automatically. On native melloryThemeVars === melloryLightColors;
+// the component overrides key elements via inline styles from useMelloryTheme().
+const colors = melloryThemeVars;
 import { openPreferredNavigation } from "@/services/navigation-preferences";
 
 type PlaceStatus = "try" | "favorite" | "visited" | "retry";
@@ -2785,15 +2787,15 @@ export default function PlaceDetailScreen() {
   }
 
   return (
-    <View style={styles.root}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <View style={[styles.root, { backgroundColor: colors.black }]}>
+      <ScrollView style={[styles.screen, { backgroundColor: colors.black }]} contentContainerStyle={styles.content}>
         <View style={{ height: insets.top + 8 }} />
 
         <View style={[styles.coverCard, { height: coverCardHeight }]}>
           {hasCover ? (
             <Image source={{ uri: coverDisplayUri }} style={styles.coverImage} />
           ) : (
-            <View style={styles.coverPlaceholder}>
+            <View style={[styles.coverPlaceholder, { backgroundColor: colors.card }]}>
               <View style={styles.coverOrbLarge} />
               <View style={styles.coverOrbSmall} />
               <View style={styles.coverOrbAccent} />
@@ -2854,8 +2856,8 @@ export default function PlaceDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.mainPanel}>
-          <View style={styles.recapPanel}>
+        <View style={[styles.mainPanel, { backgroundColor: colors.black }]}>
+          <View style={[styles.recapPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.recapHeader}>
               <Text style={styles.recapKicker}>RECAP PERSONALE</Text>
               <Text style={styles.recapTitle}>Tutto a colpo d’occhio</Text>
@@ -2863,7 +2865,7 @@ export default function PlaceDetailScreen() {
 
             <View style={styles.recapGrid}>
               {recapItems.map((item) => (
-                <View key={item.id} style={styles.recapItem}>
+                <View key={item.id} style={[styles.recapItem, { backgroundColor: colors.black, borderColor: colors.border }]}>
                   <View style={styles.recapItemTop}>
                     <View style={[styles.recapDot, { backgroundColor: item.color }]} />
                     <Text style={styles.recapItemLabel}>{item.label}</Text>
@@ -2903,6 +2905,7 @@ export default function PlaceDetailScreen() {
                   key={option.status}
                   style={[
                     styles.statusChip,
+                    { backgroundColor: colors.card, borderColor: colors.border },
                     isActive && {
                       backgroundColor: `${option.color}22`,
                       borderColor: `${option.color}88`,
@@ -2944,7 +2947,7 @@ export default function PlaceDetailScreen() {
             })}
           </View>
 
-          <View style={styles.stateBadgePanel}>
+          <View style={[styles.stateBadgePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.stateBadgeHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.stateBadgeKicker}>BADGE DEL POSTO</Text>
@@ -2970,7 +2973,7 @@ export default function PlaceDetailScreen() {
                 {stateBadgesPreview.map((badge) => (
                   <PressableScale
                     key={badge}
-                    style={styles.stateBadgeChip}
+                    style={[styles.stateBadgeChip, { backgroundColor: colors.card2, borderColor: colors.border }]}
                     onPress={() => toggleBadge(badge)}
                   >
                     <View
@@ -3006,7 +3009,7 @@ export default function PlaceDetailScreen() {
             )}
           </View>
 
-          <View style={styles.customListsPanel}>
+          <View style={[styles.customListsPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.stateBadgeHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.stateBadgeKicker}>LISTE PERSONALIZZATE</Text>
@@ -3030,7 +3033,7 @@ export default function PlaceDetailScreen() {
             {customListsForPlace.length > 0 ? (
               <View style={styles.savedCustomListWrap}>
                 {customListsForPlace.map((list) => (
-                  <View key={list.id} style={styles.savedCustomListChip}>
+                  <View key={list.id} style={[styles.savedCustomListChip, { backgroundColor: colors.black, borderColor: colors.border }]}>
                     <View
                       style={[
                         styles.savedCustomListDot,
@@ -3070,7 +3073,7 @@ export default function PlaceDetailScreen() {
             onAction={() => openSheet("details")}
           >
             {infoRows.length > 0 ? (
-              <View style={styles.infoCard}>
+              <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 {infoRows.map((row, index) => (
                   <View key={row.label}>
                     {index > 0 ? <View style={styles.divider} /> : null}
@@ -3268,7 +3271,7 @@ export default function PlaceDetailScreen() {
               Vota per categoria. La media diventa il tuo Mellory Score.
             </Text>
 
-            <View style={styles.scoreCard}>
+            <View style={[styles.scoreCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <SmoothScoreCircle
                 key={`score-${scoreColor}-${score ?? "empty"}`}
                 score={score}
@@ -3318,7 +3321,7 @@ export default function PlaceDetailScreen() {
               experience.notes.map((noteEntry) => (
                 <PressableScale
                   key={noteEntry.id}
-                  style={styles.noteCard}
+                  style={[styles.noteCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() => {
                     setSelectedNoteId(noteEntry.id);
                     setDraftNote(noteEntry.text);
@@ -3343,7 +3346,7 @@ export default function PlaceDetailScreen() {
                   Quando torni, scrivi com&apos;è andata.
                 </Text>
                 <PressableScale
-                  style={styles.diaryEmptyCard}
+                  style={[styles.diaryEmptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() => openSheet("experience")}
                 >
                   <Text style={styles.diaryEmptyIcon}>▣</Text>
@@ -3358,7 +3361,7 @@ export default function PlaceDetailScreen() {
               experience.experiences.map((entry) => (
                 <PressableScale
                   key={entry.id}
-                  style={styles.timelineCard}
+                  style={[styles.timelineCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() => {
                     setSelectedEntryId(entry.id);
                     openSheet("experienceDetail");
@@ -3405,7 +3408,7 @@ export default function PlaceDetailScreen() {
                 {allEditorialRecognitions.map((recognition) => (
                   <PressableScale
                     key={recognition.id}
-                    style={styles.editorialCard}
+                    style={[styles.editorialCard, { backgroundColor: colors.card }]}
                     onPress={() => openEditorialRecognition(recognition)}
                   >
                     <View style={styles.awardIcon}>
@@ -3499,7 +3502,7 @@ export default function PlaceDetailScreen() {
                   : undefined
             }
           >
-            <View style={[styles.sheet, { maxHeight: windowHeight * 0.84 }]}>
+            <View style={[styles.sheet, { maxHeight: windowHeight * 0.84, backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sheetHandle} />
 
               <ScrollView
