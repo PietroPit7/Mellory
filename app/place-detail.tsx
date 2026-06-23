@@ -1100,7 +1100,6 @@ export default function PlaceDetailScreen() {
   const [customLists, setCustomLists] = useState<CustomList[]>([]);
   const [activeSheet, setActiveSheet] = useState<SheetType>("none");
   const [isHoursExpanded, setIsHoursExpanded] = useState(false);
-  const [isRecapExpanded, setIsRecapExpanded] = useState(false);
   const [hasLoadedExperience, setHasLoadedExperience] = useState(false);
 
   const [draftNote, setDraftNote] = useState("");
@@ -1266,7 +1265,6 @@ export default function PlaceDetailScreen() {
     [experience.customBadges, standardBadges]
   );
 
-  const coverBadges = experience.badges.slice(0, 3);
   const stateBadgesPreview = experience.badges.slice(0, 6);
   const customListsForPlace = customLists.filter((list) =>
     list.placeIds.includes(placeId)
@@ -1557,14 +1555,42 @@ export default function PlaceDetailScreen() {
     const existingIndex = experience.badges.findIndex(
       (b) => b.toLowerCase() === lowerBadge
     );
+    const isAdding = existingIndex < 0;
+    const nextBadges = isAdding
+      ? [...experience.badges, badge]
+      : experience.badges.filter((_, i) => i !== existingIndex);
 
-    await saveExperience({
-      ...experience,
-      badges:
-        existingIndex >= 0
-          ? experience.badges.filter((_, i) => i !== existingIndex)
-          : [...experience.badges, badge],
-    });
+    await saveExperience({ ...experience, badges: nextBadges });
+
+    const lists = await readCustomLists();
+    const existingList = lists.find((l) => l.title.toLowerCase() === lowerBadge);
+
+    if (isAdding) {
+      if (!existingList) {
+        const badgeInfo = allBadges.find((b) => b.label.toLowerCase() === lowerBadge);
+        const newList: CustomList = {
+          id: createId(),
+          title: badge,
+          description: "",
+          color: badgeInfo?.color ?? colors.pink,
+          placeIds: [placeId],
+          createdAt: new Date().toISOString(),
+        };
+        await saveCustomLists([newList, ...lists]);
+      } else if (!existingList.placeIds.includes(placeId)) {
+        await saveCustomLists(
+          lists.map((l) =>
+            l.id === existingList.id ? { ...l, placeIds: [placeId, ...l.placeIds] } : l
+          )
+        );
+      }
+    } else if (existingList) {
+      await saveCustomLists(
+        lists.map((l) =>
+          l.id === existingList.id ? { ...l, placeIds: l.placeIds.filter((id) => id !== placeId) } : l
+        )
+      );
+    }
   }
 
   async function toggleCustomList(listId: string) {
@@ -2673,9 +2699,6 @@ export default function PlaceDetailScreen() {
               <View style={styles.coverOrbAccent} />
               <View style={styles.coverLineOne} />
               <View style={styles.coverLineTwo} />
-              <View style={styles.coverInitialBadge}>
-                <Text style={styles.coverInitialBadgeText}>{getInitial(effectiveName)}</Text>
-              </View>
             </View>
           )}
 
@@ -2717,22 +2740,6 @@ export default function PlaceDetailScreen() {
               </View>
             ) : null}
 
-            {activeStatuses.length > 0 ? (
-              <View style={styles.coverStatusRow}>
-                {activeStatuses.map((s) => {
-                  const opt = listOptions.find((o) => o.status === s);
-                  if (!opt) return null;
-                  return (
-                    <View key={s} style={[styles.coverStatusPill, { borderColor: `${opt.color}55` }]}>
-                      <Text style={[styles.coverStatusPillText, { color: opt.color }]}>
-                        {opt.emoji}{"  "}{opt.title}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : null}
-
             <Text style={styles.placeArea}>
               {effectiveCategory.toUpperCase()}
             </Text>
@@ -2744,99 +2751,45 @@ export default function PlaceDetailScreen() {
             <Text numberOfLines={1} style={styles.placeAddress}>
               {effectiveDetail}
             </Text>
-
-            {coverBadges.length > 0 && (
-              <View style={styles.coverBadgeRow}>
-                {coverBadges.map((badge) => (
-                  <View key={badge} style={styles.coverBadgeChip}>
-                    <View
-                      style={[
-                        styles.coverBadgeDot,
-                        { backgroundColor: getBadgeColor(badge, standardBadges, colors.pink) },
-                      ]}
-                    >
-                      <Text style={styles.coverBadgeIcon}>
-                        {getBadgeIcon(badge, experience.customBadges, standardBadges)}
-                      </Text>
-                    </View>
-
-                    <Text style={styles.coverBadgeChipText}>{badge}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
           </View>
         </View>
 
         <View style={styles.mainPanel}>
           <View style={styles.recapPanel}>
-            <PressableScale
-              style={styles.recapHeader}
-              onPress={() => {
-                void Haptics.selectionAsync();
-                setIsRecapExpanded((v) => !v);
-              }}
-            >
-              <View style={styles.recapTitleBlock}>
-                <Text style={styles.recapKicker}>RECAP PERSONALE</Text>
-                <Text style={styles.recapTitle}>Tutto a colpo d’occhio</Text>
-                {!isRecapExpanded ? (
-                  <View style={styles.recapMiniRow}>
-                    {activeStatuses.length > 0 ? (
-                      activeStatuses.map((s) => {
-                        const opt = listOptions.find((o) => o.status === s);
-                        return opt ? (
-                          <View key={s} style={[styles.recapMiniStatus, { backgroundColor: `${opt.color}22` }]}>
-                            <Text style={[styles.recapMiniStatusEmoji, { color: opt.color }]}>{opt.emoji}</Text>
-                          </View>
-                        ) : null;
-                      })
-                    ) : (
-                      <Text style={styles.recapMiniNone}>Nessuno stato</Text>
-                    )}
-                    {score ? (
-                      <View style={styles.recapMiniScore}>
-                        <Text style={[styles.recapMiniScoreText, { color: scoreColor }]}>{score.toFixed(1)}</Text>
-                        <Text style={styles.recapMiniScoreOf}>/10</Text>
+            <View style={styles.recapHeader}>
+              <Text style={styles.recapKicker}>RECAP PERSONALE</Text>
+              <Text style={styles.recapTitle}>Tutto a colpo d’occhio</Text>
+            </View>
+
+            <View style={styles.recapGrid}>
+              {recapItems.map((item) => (
+                <View key={item.id} style={styles.recapItem}>
+                  <View style={styles.recapItemTop}>
+                    <View style={[styles.recapDot, { backgroundColor: item.color }]} />
+                    <Text style={styles.recapItemLabel}>{item.label}</Text>
+                  </View>
+
+                  {item.id === "status" ? (
+                    activeStatuses.length > 0 ? (
+                      <View style={styles.recapStatusDots}>
+                        {activeStatuses.map((s) => {
+                          const opt = listOptions.find((o) => o.status === s);
+                          return opt ? (
+                            <View key={s} style={[styles.recapStatusBubble, { backgroundColor: `${opt.color}22` }]}>
+                              <Text style={[styles.recapStatusEmoji, { color: opt.color }]}>{opt.emoji}</Text>
+                            </View>
+                          ) : null;
+                        })}
                       </View>
-                    ) : null}
-                  </View>
-                ) : null}
-              </View>
-              <Text style={styles.recapChevron}>{isRecapExpanded ? "∧" : "∨"}</Text>
-            </PressableScale>
-
-            {isRecapExpanded ? (
-              <View style={styles.recapGrid}>
-                {recapItems.map((item) => (
-                  <View key={item.id} style={styles.recapItem}>
-                    <View style={styles.recapItemTop}>
-                      <View style={[styles.recapDot, { backgroundColor: item.color }]} />
-                      <Text style={styles.recapItemLabel}>{item.label}</Text>
-                    </View>
-
-                    {item.id === "status" ? (
-                      activeStatuses.length > 0 ? (
-                        <View style={styles.recapStatusDots}>
-                          {activeStatuses.map((s) => {
-                            const opt = listOptions.find((o) => o.status === s);
-                            return opt ? (
-                              <View key={s} style={[styles.recapStatusBubble, { backgroundColor: `${opt.color}22` }]}>
-                                <Text style={[styles.recapStatusEmoji, { color: opt.color }]}>{opt.emoji}</Text>
-                              </View>
-                            ) : null;
-                          })}
-                        </View>
-                      ) : (
-                        <Text style={[styles.recapItemValue, { color: colors.muted }]}>—</Text>
-                      )
                     ) : (
-                      <Text numberOfLines={1} style={styles.recapItemValue}>{item.value}</Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-            ) : null}
+                      <Text style={[styles.recapItemValue, { color: colors.muted }]}>—</Text>
+                    )
+                  ) : (
+                    <Text numberOfLines={1} style={styles.recapItemValue}>{item.value}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
           </View>
 
           <Text style={styles.sectionKickerStandalone}>IL TUO STATO</Text>
@@ -3691,40 +3644,6 @@ const styles = StyleSheet.create({
     bottom: 112,
     transform: [{ rotate: "24deg" }],
   },
-  coverInitialBadge: {
-    width: 80,
-    height: 80,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,248,239,0.07)",
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coverInitialBadgeText: {
-    color: "rgba(255,248,239,0.55)",
-    fontSize: 36,
-    fontWeight: "900",
-    letterSpacing: -1,
-  },
-  coverStatusRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginBottom: 10,
-  },
-  coverStatusPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: "rgba(7,6,4,0.45)",
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-  },
-  coverStatusPillText: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-  },
   coverOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.42)",
@@ -3847,41 +3766,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-  coverBadgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 10,
-  },
-  coverBadgeChip: {
-    minHeight: 34,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,248,239,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.2)",
-    paddingLeft: 6,
-    paddingRight: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-  },
-  coverBadgeDot: {
-    width: 23,
-    height: 23,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coverBadgeIcon: {
-    color: colors.black,
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  coverBadgeChipText: {
-    color: colors.cream,
-    fontSize: 12,
-    fontWeight: "900",
-  },
   mainPanel: {
     backgroundColor: colors.black,
     borderTopLeftRadius: 34,
@@ -3898,14 +3782,7 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   recapHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     marginBottom: 4,
-  },
-  recapTitleBlock: {
-    flex: 1,
-    marginRight: 10,
   },
   recapKicker: {
     color: colors.muted,
@@ -3922,51 +3799,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -0.3,
     marginBottom: 8,
-  },
-  recapChevron: {
-    color: colors.muted,
-    fontSize: 16,
-    fontWeight: "900",
-    paddingLeft: 8,
-    paddingTop: 2,
-  },
-  recapMiniRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  recapMiniStatus: {
-    width: 30,
-    height: 30,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  recapMiniStatusEmoji: {
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  recapMiniNone: {
-    color: colors.muted,
-    fontSize: 13,
-    fontStyle: "italic",
-  },
-  recapMiniScore: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 1,
-    marginLeft: 4,
-  },
-  recapMiniScoreText: {
-    fontSize: 15,
-    fontWeight: "900",
-    letterSpacing: -0.3,
-  },
-  recapMiniScoreOf: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "700",
   },
   recapStatusDots: {
     flexDirection: "row",
@@ -4070,21 +3902,20 @@ const styles = StyleSheet.create({
   },
   statusGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 9,
+    gap: 8,
     marginBottom: 14,
   },
   statusChip: {
-    minHeight: 44,
-    borderRadius: 999,
+    flex: 1,
+    height: 68,
+    borderRadius: 14,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: "rgba(255,248,239,0.08)",
-    paddingLeft: 7,
-    paddingRight: 13,
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
+    gap: 6,
   },
   statusIconBubble: {
     width: 30,
