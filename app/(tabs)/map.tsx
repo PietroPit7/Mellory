@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MelloryMap from "@/components/MelloryMap";
 import { PressableScale } from "@/components/pressable-scale";
+import { useResponsiveLayout } from "@/components/responsive-layout";
 import { melloryDarkColors, useMelloryTheme } from "@/contexts/mellory-theme";
 import {
   fetchCitySuggestions,
@@ -505,6 +506,7 @@ function getUserLocationSuggestion(
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { isLight } = useMelloryTheme();
+  const { isDesktopWeb, desktopRailOffset } = useResponsiveLayout();
   const [mapLayer, setMapLayer] = useState<"streets" | "satellite">("streets");
   const [searchQuery, setSearchQuery] = useState("");
   const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
@@ -1176,13 +1178,24 @@ export default function MapScreen() {
 
       {/* Dark shield sized to match the top overlay so controls don't bleed into map tiles */}
       <View
-        style={[styles.topShield, { height: overlayHeight }]}
+        style={[
+          styles.topShield,
+          isDesktopWeb && styles.topShieldDesktop,
+          { height: isDesktopWeb ? overlayHeight + 24 : overlayHeight },
+        ]}
         pointerEvents="none"
       />
 
       {/* Top floating controls — minimal */}
       <View
-        style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}
+        style={[
+          styles.topOverlay,
+          isDesktopWeb && styles.topOverlayDesktop,
+          {
+            left: isDesktopWeb ? desktopRailOffset + 18 : 0,
+            paddingTop: isDesktopWeb ? 18 : insets.top + 10,
+          },
+        ]}
         onLayout={(e) => setOverlayHeight(e.nativeEvent.layout.height)}
         pointerEvents="box-none"
       >
@@ -1320,7 +1333,9 @@ export default function MapScreen() {
         <Animated.View
           style={[
             styles.previewCard,
-            { bottom: insets.bottom + 104 },
+            isDesktopWeb
+              ? styles.previewCardDesktop
+              : { bottom: insets.bottom + 104 },
             {
               opacity: previewAnim,
               transform: [
@@ -1375,7 +1390,12 @@ export default function MapScreen() {
 
       {/* Floating bottom bar: list pill + empty state */}
       <View
-        style={[styles.floatingBottom, { bottom: insets.bottom + 104 }]}
+        style={[
+          styles.floatingBottom,
+          isDesktopWeb
+            ? { top: insets.top + 24, bottom: undefined, left: desktopRailOffset, right: 0 }
+            : { bottom: insets.bottom + 104 },
+        ]}
         pointerEvents="box-none"
       >
         {!isMapLoading && visiblePlaces.length === 0 && !previewPlace ? (
@@ -1439,7 +1459,17 @@ export default function MapScreen() {
         <Animated.View
           style={[
             styles.listSheet,
-            { paddingBottom: Math.max(insets.bottom + 88, 96) },
+            isDesktopWeb
+              ? [
+                  styles.listSheetDesktop,
+                  {
+                    left: desktopRailOffset + 18,
+                    top: Math.max(insets.top + overlayHeight + 42, 224),
+                    bottom: 24,
+                    paddingBottom: 0,
+                  },
+                ]
+              : { paddingBottom: Math.max(insets.bottom + 88, 96) },
             { transform: [{ translateY: listTranslateY }] },
           ]}
         >
@@ -1511,7 +1541,7 @@ export default function MapScreen() {
         accessibilityLabel={mapLayer === "satellite" ? "Torna alla vista strade" : "Attiva vista satellite"}
         style={[
           styles.layerToggle,
-          { top: overlayHeight + 10 },
+          isDesktopWeb ? styles.layerToggleDesktop : { top: overlayHeight + 10 },
           mapLayer === "satellite" && styles.layerToggleActive,
         ]}
         onPress={() => {
@@ -1544,7 +1574,22 @@ const styles = StyleSheet.create({
     zIndex: 9,
     backgroundColor: "rgba(7,6,4,0.60)",
   },
+  topShieldDesktop: {
+    right: "auto",
+    width: 466,
+    backgroundColor: "transparent",
+  },
   topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, paddingHorizontal: 12, paddingBottom: 14, gap: 10 },
+  topOverlayDesktop: {
+    right: "auto",
+    width: 430,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderRadius: 28,
+    backgroundColor: "rgba(17,13,9,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.12)",
+  },
 
   searchRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   searchBox: { flex: 1, height: 46, borderRadius: 23, backgroundColor: "rgba(23,19,15,0.90)", borderWidth: 1, borderColor: "rgba(255,248,239,0.12)", paddingLeft: 14, paddingRight: 10, flexDirection: "row", alignItems: "center", gap: 8 },
@@ -1568,6 +1613,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     zIndex: 11,
+  },
+  layerToggleDesktop: {
+    top: 24,
+    right: 24,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "rgba(17,13,9,0.92)",
   },
   layerToggleActive: {
     borderColor: colors.blue,
@@ -1624,6 +1677,13 @@ const styles = StyleSheet.create({
 
   // ── Floating preview card ─────────────────────────────────────────────
   previewCard: { position: "absolute", left: 12, right: 12, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.softBorder, overflow: "hidden", zIndex: 20 },
+  previewCardDesktop: {
+    left: "auto",
+    right: 28,
+    bottom: 28,
+    width: 430,
+    borderRadius: 24,
+  },
   previewAccentBar: { height: 3, width: "100%" },
   previewContent: { padding: 14 },
   previewTop: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 14 },
@@ -1656,6 +1716,15 @@ const styles = StyleSheet.create({
 
   // ── Slide-up list sheet ───────────────────────────────────────────────
   listSheet: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 30, backgroundColor: "rgba(17,13,9,0.98)", borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderTopColor: "rgba(255,248,239,0.10)", maxHeight: "72%" },
+  listSheetDesktop: {
+    right: "auto",
+    width: 430,
+    maxHeight: undefined,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.12)",
+    borderTopWidth: 1,
+  },
   sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,248,239,0.18)", alignSelf: "center", marginTop: 12, marginBottom: 4 },
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 18, paddingTop: 10, paddingBottom: 14 },
   sheetKicker: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 2 },

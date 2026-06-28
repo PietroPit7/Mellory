@@ -15,6 +15,7 @@ import {
 } from "react-native";
 
 import { PressableScale } from "@/components/pressable-scale";
+import { useResponsiveLayout } from "@/components/responsive-layout";
 import {
   type MelloryThemeColors,
   useMelloryTheme,
@@ -287,7 +288,11 @@ function getStatusColor(status: PlaceStatus, colors: MelloryThemeColors) {
 export default function ListsScreen() {
   const { colors } = useMelloryTheme();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset } = useResponsiveLayout();
+  const styles = useMemo(
+    () => createStyles(colors, { isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset }),
+    [colors, isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset]
+  );
   const statusCollections = useMemo(() => getStatusCollections(colors), [colors]);
   const customListColors = useMemo(
     () => [colors.pink, colors.gold, colors.green, colors.orange, colors.blue],
@@ -895,15 +900,26 @@ export default function ListsScreen() {
   );
 }
 
-function createStyles(colors: MelloryThemeColors) {
+function createStyles(
+  colors: MelloryThemeColors,
+  layout: {
+    isDesktopWeb: boolean;
+    contentMaxWidth: number;
+    desktopGutter: number;
+    desktopRailOffset: number;
+  }
+) {
   return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.black,
   },
   content: {
-    paddingHorizontal: 20,
-    maxWidth: 560,
+    paddingLeft: layout.isDesktopWeb
+      ? layout.desktopRailOffset + layout.desktopGutter
+      : 20,
+    paddingRight: layout.isDesktopWeb ? layout.desktopGutter : 20,
+    maxWidth: layout.contentMaxWidth + (layout.isDesktopWeb ? layout.desktopRailOffset : 0),
     width: "100%",
     alignSelf: "center",
   },
@@ -911,7 +927,8 @@ function createStyles(colors: MelloryThemeColors) {
     height: 16,
   },
   header: {
-    marginBottom: 22,
+    marginBottom: layout.isDesktopWeb ? 30 : 22,
+    paddingTop: layout.isDesktopWeb ? 18 : 0,
   },
   kicker: {
     color: colors.muted,
@@ -923,10 +940,10 @@ function createStyles(colors: MelloryThemeColors) {
   },
   title: {
     color: colors.cream,
-    fontSize: 38,
+    fontSize: layout.isDesktopWeb ? 50 : 38,
     fontWeight: "900",
     letterSpacing: -1.4,
-    lineHeight: 42,
+    lineHeight: layout.isDesktopWeb ? 56 : 42,
     marginBottom: 4,
   },
   stats: {
@@ -1073,6 +1090,7 @@ function createStyles(colors: MelloryThemeColors) {
     borderColor: colors.softBorder,
     overflow: "hidden",
     marginBottom: 20,
+    maxWidth: layout.isDesktopWeb ? 860 : undefined,
   },
   placeRow: {
     flexDirection: "row",

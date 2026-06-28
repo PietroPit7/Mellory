@@ -18,6 +18,7 @@ import {
 } from "react-native";
 
 import { PressableScale } from "@/components/pressable-scale";
+import { useResponsiveLayout } from "@/components/responsive-layout";
 import {
   type MelloryThemeColors,
   useMelloryTheme,
@@ -779,6 +780,7 @@ function createCustomPlaceId() {
 export default function HomeScreen() {
   const { colors } = useMelloryTheme();
   const { height: windowHeight } = useWindowDimensions();
+  const { isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCityLabel, setSelectedCityLabel] = useState("");
@@ -797,7 +799,10 @@ export default function HomeScreen() {
   const [savedPlaces, setSavedPlaces] = useState<DashboardPlace[]>([]);
   const loadingPulse = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(
+    () => createStyles(colors, { isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset }),
+    [colors, isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset]
+  );
 
   // Add place manually
   const [showAddPlaceSheet, setShowAddPlaceSheet] = useState(false);
@@ -1549,12 +1554,12 @@ export default function HomeScreen() {
         </Animated.View>
       )}
 
-      <View style={{ height: 88 + insets.bottom + 16 }} />
+      <View style={{ height: (isDesktopWeb ? 40 : 88) + insets.bottom + 16 }} />
     </ScrollView>
 
     {hasDashboard && hasPlaces && (
       <PressableScale
-        style={[styles.floatingMapPill, { bottom: insets.bottom + 96 }]}
+        style={[styles.floatingMapPill, { bottom: insets.bottom + (isDesktopWeb ? 28 : 96) }]}
         onPress={openContextSearch}
       >
         <Text style={styles.floatingMapPillIcon}>⊞</Text>
@@ -1698,7 +1703,15 @@ export default function HomeScreen() {
   );
 }
 
-function createStyles(colors: MelloryThemeColors) {
+function createStyles(
+  colors: MelloryThemeColors,
+  layout: {
+    isDesktopWeb: boolean;
+    contentMaxWidth: number;
+    desktopGutter: number;
+    desktopRailOffset: number;
+  }
+) {
   return StyleSheet.create({
     screen: {
       flex: 1,
@@ -1708,8 +1721,11 @@ function createStyles(colors: MelloryThemeColors) {
       flex: 1,
     },
     content: {
-      paddingHorizontal: 20,
-      maxWidth: 560,
+      paddingLeft: layout.isDesktopWeb
+        ? layout.desktopRailOffset + layout.desktopGutter
+        : 20,
+      paddingRight: layout.isDesktopWeb ? layout.desktopGutter : 20,
+      maxWidth: layout.contentMaxWidth + (layout.isDesktopWeb ? layout.desktopRailOffset : 0),
       width: "100%",
       alignSelf: "center",
     },
@@ -1747,7 +1763,8 @@ function createStyles(colors: MelloryThemeColors) {
       justifyContent: "space-between",
       alignItems: "flex-start",
       gap: 18,
-      marginBottom: 16,
+      marginBottom: layout.isDesktopWeb ? 28 : 16,
+      paddingTop: layout.isDesktopWeb ? 18 : 0,
     },
     brandBlock: {
       flex: 1,
@@ -1772,8 +1789,8 @@ function createStyles(colors: MelloryThemeColors) {
     },
     logo: {
       color: colors.cream,
-      fontSize: 46,
-      lineHeight: 50,
+      fontSize: layout.isDesktopWeb ? 58 : 46,
+      lineHeight: layout.isDesktopWeb ? 62 : 50,
       fontWeight: "900",
       letterSpacing: -1.4,
     },
@@ -1786,7 +1803,8 @@ function createStyles(colors: MelloryThemeColors) {
       marginBottom: 14,
     },
     hero: {
-      marginBottom: 32,
+      marginBottom: layout.isDesktopWeb ? 38 : 32,
+      maxWidth: layout.isDesktopWeb ? 760 : undefined,
     },
     overline: {
       color: colors.muted,
@@ -1798,8 +1816,8 @@ function createStyles(colors: MelloryThemeColors) {
     },
     headline: {
       color: colors.cream,
-      fontSize: 34,
-      lineHeight: 39,
+      fontSize: layout.isDesktopWeb ? 48 : 34,
+      lineHeight: layout.isDesktopWeb ? 54 : 39,
       fontWeight: "900",
       letterSpacing: -1.5,
     },
@@ -1807,8 +1825,8 @@ function createStyles(colors: MelloryThemeColors) {
       color: colors.pink,
     },
     searchBox: {
-      height: 50,
-      borderRadius: 25,
+      height: layout.isDesktopWeb ? 58 : 50,
+      borderRadius: layout.isDesktopWeb ? 29 : 25,
       backgroundColor: colors.card,
       borderWidth: 0.5,
       borderColor: colors.softBorder,
@@ -1818,6 +1836,7 @@ function createStyles(colors: MelloryThemeColors) {
       alignItems: "center",
       gap: 10,
       marginBottom: 14,
+      maxWidth: layout.isDesktopWeb ? 760 : undefined,
     },
     searchIcon: {
       color: colors.textMuted,
@@ -1855,6 +1874,7 @@ function createStyles(colors: MelloryThemeColors) {
       borderColor: colors.softBorder,
       marginBottom: 14,
       overflow: "hidden",
+      maxWidth: layout.isDesktopWeb ? 760 : undefined,
     },
     suggestionGroup: {
       paddingTop: 12,
@@ -2027,6 +2047,7 @@ function createStyles(colors: MelloryThemeColors) {
       borderColor: colors.softBorder,
       overflow: "hidden",
       marginBottom: 6,
+      maxWidth: layout.isDesktopWeb ? 860 : undefined,
     },
     placeRow: {
       flexDirection: "row",
@@ -2111,7 +2132,7 @@ function createStyles(colors: MelloryThemeColors) {
     },
     collectionCard: {
       flex: 1,
-      minWidth: "47%",
+      minWidth: layout.isDesktopWeb ? "31%" : "47%",
       borderRadius: 18,
       backgroundColor: colors.card,
       borderWidth: 0.5,

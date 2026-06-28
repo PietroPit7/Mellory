@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { PressableScale } from "@/components/pressable-scale";
+import { useResponsiveLayout } from "@/components/responsive-layout";
 import {
   type MelloryThemeColors,
   type MelloryThemePreference,
@@ -53,6 +54,7 @@ interface UserProfile {
 export default function SettingsScreen() {
   const { clearPreferenceForReset, colors, preference, setPreference } =
     useMelloryTheme();
+  const { isDesktopWeb } = useResponsiveLayout();
   const [isResetting, setIsResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [backupMessage, setBackupMessage] = useState("");
@@ -64,7 +66,7 @@ export default function SettingsScreen() {
     city: "",
   });
   const [profileSaved, setProfileSaved] = useState(false);
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, isDesktopWeb), [colors, isDesktopWeb]);
   const screenFade = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
@@ -492,18 +494,21 @@ export default function SettingsScreen() {
   );
 }
 
-function createStyles(colors: MelloryThemeColors) {
+function createStyles(colors: MelloryThemeColors, isDesktopWeb: boolean) {
   return StyleSheet.create({
     screen: {
       flex: 1,
       backgroundColor: colors.black,
     },
     content: {
-      paddingHorizontal: 34,
+      paddingHorizontal: isDesktopWeb ? 56 : 34,
       paddingBottom: 40,
+      width: "100%",
+      maxWidth: isDesktopWeb ? 920 : undefined,
+      alignSelf: "center",
     },
     safeTop: {
-      height: 64,
+      height: isDesktopWeb ? 34 : 64,
     },
     header: {
       minHeight: 66,
@@ -531,8 +536,8 @@ function createStyles(colors: MelloryThemeColors) {
     },
     title: {
       color: colors.cream,
-      fontSize: 41,
-      lineHeight: 48,
+      fontSize: isDesktopWeb ? 48 : 41,
+      lineHeight: isDesktopWeb ? 54 : 48,
       fontFamily: undefined,
       fontWeight: "900",
       letterSpacing: -1.2,

@@ -6,6 +6,7 @@ import { Animated, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PressableScale } from "@/components/pressable-scale";
+import { useResponsiveLayout } from "@/components/responsive-layout";
 import {
   type MelloryThemeColors,
   useMelloryTheme,
@@ -453,7 +454,11 @@ function mergePlacesWithStatuses({
 export default function MyMelloryScreen() {
   const { colors } = useMelloryTheme();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset } = useResponsiveLayout();
+  const styles = useMemo(
+    () => createStyles(colors, { isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset }),
+    [colors, isDesktopWeb, contentMaxWidth, desktopGutter, desktopRailOffset]
+  );
 
   const screenFade = useRef(new Animated.Value(0)).current;
 
@@ -1228,15 +1233,26 @@ export default function MyMelloryScreen() {
   );
 }
 
-function createStyles(colors: MelloryThemeColors) {
+function createStyles(
+  colors: MelloryThemeColors,
+  layout: {
+    isDesktopWeb: boolean;
+    contentMaxWidth: number;
+    desktopGutter: number;
+    desktopRailOffset: number;
+  }
+) {
   return StyleSheet.create({
     screen: {
       flex: 1,
       backgroundColor: colors.black,
     },
     content: {
-      paddingHorizontal: 22,
-      maxWidth: 560,
+      paddingLeft: layout.isDesktopWeb
+        ? layout.desktopRailOffset + layout.desktopGutter
+        : 22,
+      paddingRight: layout.isDesktopWeb ? layout.desktopGutter : 22,
+      maxWidth: layout.contentMaxWidth + (layout.isDesktopWeb ? layout.desktopRailOffset : 0),
       width: "100%",
       alignSelf: "center",
     },
@@ -1250,7 +1266,8 @@ function createStyles(colors: MelloryThemeColors) {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 16,
-      marginBottom: 26,
+      marginBottom: layout.isDesktopWeb ? 34 : 26,
+      paddingTop: layout.isDesktopWeb ? 18 : 0,
     },
     headerText: {
       flex: 1,
@@ -1264,8 +1281,8 @@ function createStyles(colors: MelloryThemeColors) {
     },
     title: {
       color: colors.cream,
-      fontSize: 52,
-      lineHeight: 56,
+      fontSize: layout.isDesktopWeb ? 64 : 52,
+      lineHeight: layout.isDesktopWeb ? 68 : 56,
       fontWeight: "900",
       letterSpacing: -1.8,
     },
@@ -1274,7 +1291,7 @@ function createStyles(colors: MelloryThemeColors) {
       fontSize: 19,
       lineHeight: 26,
       marginTop: 7,
-      maxWidth: 315,
+      maxWidth: layout.isDesktopWeb ? 520 : 315,
     },
     settingsButton: {
       width: 58,

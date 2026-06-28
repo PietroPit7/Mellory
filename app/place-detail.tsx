@@ -21,6 +21,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "@/components/pressable-scale";
+import { useResponsiveLayout } from "@/components/responsive-layout";
 import {
   melloryDarkColors,
   melloryThemeVars,
@@ -1090,6 +1091,7 @@ async function readGlobalStatuses(placeId: string) {
 export default function PlaceDetailScreen() {
   const { colors } = useMelloryTheme();
   const { height: windowHeight } = useWindowDimensions();
+  const { isDesktopWeb } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
   const listOptions = useMemo(() => makeListOptions(colors), [colors]);
   const standardBadges = useMemo(() => makeStandardBadges(colors), [colors]);
@@ -1148,7 +1150,9 @@ export default function PlaceDetailScreen() {
   const scoreLabel = getScoreLabel(score);
   const scoreColor = getScoreColor(score);
 
-  const coverCardHeight = Math.min(320, Math.round(windowHeight * 0.44));
+  const coverCardHeight = isDesktopWeb
+    ? Math.min(520, Math.round(windowHeight * 0.54))
+    : Math.min(320, Math.round(windowHeight * 0.44));
 
   const effectiveName = experience.personalDetails.name.trim() || name;
   const effectiveCategory =
@@ -2788,10 +2792,13 @@ export default function PlaceDetailScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.black }]}>
-      <ScrollView style={[styles.screen, { backgroundColor: colors.black }]} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={[styles.screen, { backgroundColor: colors.black }]}
+        contentContainerStyle={[styles.content, isDesktopWeb && styles.contentDesktop]}
+      >
         <View style={{ height: insets.top + 8 }} />
 
-        <View style={[styles.coverCard, { height: coverCardHeight }]}>
+        <View style={[styles.coverCard, isDesktopWeb && styles.coverCardDesktop, { height: coverCardHeight }]}>
           {hasCover ? (
             <Image source={{ uri: coverDisplayUri }} style={styles.coverImage} />
           ) : (
@@ -2856,7 +2863,7 @@ export default function PlaceDetailScreen() {
           </View>
         </View>
 
-        <View style={[styles.mainPanel, { backgroundColor: colors.black }]}>
+        <View style={[styles.mainPanel, isDesktopWeb && styles.mainPanelDesktop, { backgroundColor: colors.black }]}>
           <View style={[styles.recapPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.recapHeader}>
               <Text style={styles.recapKicker}>RECAP PERSONALE</Text>
@@ -3450,7 +3457,7 @@ export default function PlaceDetailScreen() {
         <View style={{ height: insets.bottom + 90 }} />
       </ScrollView>
 
-      <View style={[styles.bottomBar, { bottom: insets.bottom + 12 }]}>
+      <View style={[styles.bottomBar, isDesktopWeb && styles.bottomBarDesktop, { bottom: insets.bottom + 12 }]}>
         <PressableScale
           style={[
             styles.bottomAction,
@@ -3712,6 +3719,10 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
   },
+  contentDesktop: {
+    maxWidth: 1060,
+    paddingHorizontal: 44,
+  },
   safeTop: {
     height: 18,
   },
@@ -3720,6 +3731,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     overflow: "hidden",
     marginBottom: -24,
+  },
+  coverCardDesktop: {
+    borderRadius: 38,
+    marginBottom: -34,
   },
   coverImage: {
     width: "100%",
@@ -3908,6 +3923,12 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 34,
     paddingTop: 26,
     paddingHorizontal: 4,
+  },
+  mainPanelDesktop: {
+    borderTopLeftRadius: 38,
+    borderTopRightRadius: 38,
+    paddingTop: 34,
+    paddingHorizontal: 10,
   },
   recapPanel: {
     backgroundColor: colors.card,
@@ -4752,6 +4773,12 @@ const styles = StyleSheet.create({
     padding: 8,
     flexDirection: "row",
     gap: 8,
+  },
+  bottomBarDesktop: {
+    left: "50%",
+    right: "auto",
+    width: 520,
+    transform: [{ translateX: -260 }],
   },
   bottomAction: {
     flex: 1,

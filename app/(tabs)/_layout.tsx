@@ -2,6 +2,7 @@ import { Tabs } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 
+import { useResponsiveLayout } from "@/components/responsive-layout";
 import { type MelloryThemeColors, useMelloryTheme } from "@/contexts/mellory-theme";
 
 type TabIconName = "discover" | "list" | "map" | "bookmark";
@@ -121,28 +122,47 @@ function TabIcon({
 
 export default function TabLayout() {
   const { colors } = useMelloryTheme();
+  const { isDesktopWeb } = useResponsiveLayout();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarPosition: isDesktopWeb ? "left" : "bottom",
         tabBarActiveTintColor: colors.pink,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelPosition: "below-icon",
-        tabBarStyle: {
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 88,
-          backgroundColor: colors.card,
-          borderTopWidth: 0.5,
-          borderTopColor: colors.border,
-          paddingTop: 10,
-          paddingBottom: 20,
-          elevation: 0,
-          shadowOpacity: 0,
-        },
+        tabBarStyle: isDesktopWeb
+          ? {
+              position: "absolute",
+              left: 18,
+              top: 18,
+              bottom: 18,
+              width: 78,
+              height: undefined,
+              borderRadius: 30,
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: colors.border,
+              paddingTop: 18,
+              paddingBottom: 18,
+              elevation: 0,
+              shadowOpacity: 0,
+            }
+          : {
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 88,
+              backgroundColor: colors.card,
+              borderTopWidth: 0.5,
+              borderTopColor: colors.border,
+              paddingTop: 10,
+              paddingBottom: 20,
+              elevation: 0,
+              shadowOpacity: 0,
+            },
         tabBarIconStyle: {
           width: 34,
           height: 30,
@@ -151,12 +171,12 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: "700",
-          letterSpacing: 0.8,
+          letterSpacing: isDesktopWeb ? 0.4 : 0.8,
           textTransform: "uppercase",
           marginTop: 3,
         },
         tabBarItemStyle: {
-          height: 62,
+          height: isDesktopWeb ? 76 : 62,
           paddingTop: 2,
           paddingBottom: 0,
           alignItems: "center",
