@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, StyleSheet, View } from "react-native";
 
 import { type MelloryThemeColors, useMelloryTheme } from "@/contexts/mellory-theme";
 
@@ -15,23 +16,41 @@ function TabIcon({
   colors: MelloryThemeColors;
 }) {
   const tint = focused ? colors.pink : colors.muted;
+  const scale = useRef(new Animated.Value(focused ? 1 : 0.88)).current;
+  const opacity = useRef(new Animated.Value(focused ? 1 : 0.65)).current;
+
+  useEffect(() => {
+    Animated.spring(scale, {
+      toValue: focused ? 1 : 0.88,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: focused ? 10 : 0,
+    }).start();
+    Animated.timing(opacity, {
+      toValue: focused ? 1 : 0.65,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [focused, scale, opacity]);
+
+  const animStyle = { transform: [{ scale }], opacity } as const;
 
   if (name === "discover") {
     return (
-      <View style={styles.iconBox}>
+      <Animated.View style={[styles.iconBox, animStyle]}>
         <View style={[styles.compassCircle, { borderColor: tint }]}>
           <View style={styles.compassNeedleWrap}>
             <View style={[styles.compassNeedleTop, { borderBottomColor: tint }]} />
             <View style={[styles.compassNeedleBottom, { borderTopColor: tint }]} />
           </View>
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   if (name === "list") {
     return (
-      <View style={styles.iconBox}>
+      <Animated.View style={[styles.iconBox, animStyle]}>
         <View style={styles.listIcon}>
           <View style={[styles.listDot, { backgroundColor: tint }]} />
           <View style={[styles.listLine, { backgroundColor: tint }]} />
@@ -40,13 +59,13 @@ function TabIcon({
           <View style={[styles.listDot, { backgroundColor: tint }]} />
           <View style={[styles.listLine, { backgroundColor: tint }]} />
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   if (name === "map") {
     return (
-      <View style={styles.iconBox}>
+      <Animated.View style={[styles.iconBox, animStyle]}>
         <View style={styles.mapIcon}>
           <View
             style={[
@@ -70,12 +89,12 @@ function TabIcon({
             ]}
           />
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={styles.iconBox}>
+    <Animated.View style={[styles.iconBox, animStyle]}>
       <View style={[styles.bookmarkIcon, { borderColor: tint }]}>
         <View
           style={[
@@ -96,7 +115,7 @@ function TabIcon({
           ]}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -115,28 +134,29 @@ export default function TabLayout() {
           left: 0,
           right: 0,
           bottom: 0,
-          height: 98,
+          height: 88,
           backgroundColor: colors.card,
-          borderTopWidth: 1,
+          borderTopWidth: 0.5,
           borderTopColor: colors.border,
-          paddingTop: 12,
-          paddingBottom: 24,
+          paddingTop: 10,
+          paddingBottom: 20,
           elevation: 0,
           shadowOpacity: 0,
         },
         tabBarIconStyle: {
           width: 34,
-          height: 34,
-          marginBottom: 2,
+          height: 30,
+          marginBottom: 0,
         },
         tabBarLabelStyle: {
-          fontSize: 13,
-          fontWeight: "800",
-          letterSpacing: 0.3,
-          marginTop: 1,
+          fontSize: 10,
+          fontWeight: "700",
+          letterSpacing: 0.8,
+          textTransform: "uppercase",
+          marginTop: 3,
         },
         tabBarItemStyle: {
-          height: 70,
+          height: 62,
           paddingTop: 2,
           paddingBottom: 0,
           alignItems: "center",

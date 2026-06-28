@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  Camera,
-  Map,
+import { useEffect, useRef } from "react";
+import MapView, {
   Marker,
-  type StyleSpecification,
-} from "@maplibre/maplibre-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+  PROVIDER_DEFAULT,
+  type Region,
+} from "react-native-maps";
+import { StyleSheet, Text, View } from "react-native";
 
 import { melloryThemeVars } from "@/contexts/mellory-theme";
 
@@ -25,95 +24,26 @@ type MelloryMapCenter = {
   zoom: number;
 };
 
-type MelloryMapLayer = "streets" | "satellite";
-
 type MelloryMapProps = {
   markers: MelloryMapMarker[];
   center: MelloryMapCenter;
   onMarkerPress: (placeId: string) => void;
   onRegionChange?: (center: MelloryMapCenter) => void;
+  onPoiPress?: (poi: {
+    name: string;
+    placeId: string;
+    latitude: number;
+    longitude: number;
+  }) => void;
+  fullScreen?: boolean;
+  mapLayer?: "streets" | "satellite";
+  isLight?: boolean;
 };
 
 const colors = melloryThemeVars;
-const MAP_LAYER_OPTIONS: { id: MelloryMapLayer; label: string }[] = [
-  { id: "streets", label: "Strade" },
-  { id: "satellite", label: "Satellite" },
-];
-const MIN_ZOOM = 3;
-const MAX_ZOOM = 18;
 
-function createMelloryMapStyle(mapLayer: MelloryMapLayer): StyleSpecification {
-  const isSatellite = mapLayer === "satellite";
-
-  return {
-  version: 8,
-  sources: {
-    streets: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors © CARTO",
-    },
-    satellite: {
-      type: "raster",
-      tiles: [
-        "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      attribution:
-        "Tiles © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-    },
-    labels: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors © CARTO",
-    },
-  },
-  layers: [
-    {
-      id: "streets",
-      type: "raster",
-      source: "streets",
-      layout: {
-        visibility: isSatellite ? "none" : "visible",
-      },
-      paint: {
-        "raster-opacity": 0.78,
-      },
-    },
-    {
-      id: "satellite",
-      type: "raster",
-      source: "satellite",
-      layout: {
-        visibility: isSatellite ? "visible" : "none",
-      },
-      paint: {
-        "raster-opacity": 0.86,
-        "raster-saturation": -0.18,
-      },
-    },
-    {
-      id: "labels",
-      type: "raster",
-      source: "labels",
-      paint: {
-        "raster-opacity": 0.9,
-      },
-    },
-  ],
-  };
+function zoomToLatDelta(zoom: number): number {
+  return 360 / Math.pow(2, zoom);
 }
 
 export default function MelloryMap({
@@ -121,156 +51,108 @@ export default function MelloryMap({
   center,
   onMarkerPress,
   onRegionChange,
+  onPoiPress,
+  fullScreen = false,
+  mapLayer = "streets",
 }: MelloryMapProps) {
-  const [hasMapError, setHasMapError] = useState(false);
-  const [mapLayer, setMapLayer] = useState<MelloryMapLayer>("streets");
-  const [viewCenter, setViewCenter] = useState(center);
-  const mapStyle = useMemo(() => createMelloryMapStyle(mapLayer), [mapLayer]);
+  const mapRef = useRef<MapView>(null);
+  const currentZoomRef = useRef(center.zoom);
+  const prevCenterRef = useRef({ ...center });
 
   useEffect(() => {
-    setViewCenter({
-      latitude: center.latitude,
-      longitude: center.longitude,
-      zoom: center.zoom,
-    });
+    const prev = prevCenterRef.current;
+    if (
+      prev.latitude === center.latitude &&
+      prev.longitude === center.longitude &&
+      prev.zoom === center.zoom
+    ) {
+      return;
+    }
+    prevCenterRef.current = { ...center };
+    const delta = zoomToLatDelta(center.zoom);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: center.latitude,
+        longitude: center.longitude,
+        latitudeDelta: delta,
+        longitudeDelta: delta,
+      },
+      650
+    );
   }, [center.latitude, center.longitude, center.zoom]);
 
-  function handleZoom(delta: number) {
-    setViewCenter((currentCenter) => ({
-      ...currentCenter,
-      zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentCenter.zoom + delta)),
-    }));
+  function handleRegionChangeComplete(region: Region) {
+    const zoom = Math.log2(360 / region.latitudeDelta);
+    currentZoomRef.current = zoom;
+    onRegionChange?.({
+      latitude: region.latitude,
+      longitude: region.longitude,
+      zoom,
+    });
   }
 
+  const initialDelta = zoomToLatDelta(center.zoom);
+
   return (
-    <View style={styles.frame}>
-      <Map
+    <View
+      style={[
+        styles.frame,
+        fullScreen && StyleSheet.absoluteFill,
+        fullScreen && { borderRadius: 0 },
+      ]}
+    >
+      <MapView
+        ref={mapRef}
         style={styles.map}
-        mapStyle={mapStyle}
-        logo={false}
-        compass={false}
-        attribution
-        attributionPosition={{ top: 14, left: 14 }}
-        onDidFailLoadingMap={() => setHasMapError(true)}
-        onRegionDidChange={(event) => {
-          const [longitude, latitude] = event.nativeEvent.center;
-
-          if (
-            typeof latitude !== "number" ||
-            typeof longitude !== "number"
-          ) {
-            return;
-          }
-
-          const nextCenter = {
-            latitude,
-            longitude,
-            zoom: event.nativeEvent.zoom,
-          };
-
-          setViewCenter(nextCenter);
-          onRegionChange?.({
-            latitude: nextCenter.latitude,
-            longitude: nextCenter.longitude,
-            zoom: nextCenter.zoom,
+        provider={PROVIDER_DEFAULT}
+        mapType={mapLayer === "satellite" ? "satellite" : "standard"}
+        initialRegion={{
+          latitude: center.latitude,
+          longitude: center.longitude,
+          latitudeDelta: initialDelta,
+          longitudeDelta: initialDelta,
+        }}
+        showsUserLocation
+        showsPointsOfInterests
+        showsBuildings
+        showsCompass={false}
+        showsScale={false}
+        toolbarEnabled={false}
+        legalLabelInsets={{ bottom: -500, left: 0, right: 0, top: 0 }}
+        onRegionChangeComplete={handleRegionChangeComplete}
+        onPoiClick={(event) => {
+          const { name, placeId, coordinate } = event.nativeEvent;
+          onPoiPress?.({
+            name,
+            placeId,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
           });
         }}
       >
-        <Camera
-          center={[viewCenter.longitude, viewCenter.latitude]}
-          zoom={viewCenter.zoom}
-          duration={650}
-        />
-
-        {markers.map((marker) => (
-          <Marker
-            key={`${marker.id}-${marker.latitude}-${marker.longitude}`}
-            id={marker.id}
-            lngLat={[marker.longitude, marker.latitude]}
-            onPress={() => onMarkerPress(marker.id)}
-          >
-            <View
-              style={[
-                styles.marker,
-                {
-                  backgroundColor: marker.color || colors.pink,
-                },
-              ]}
+        {markers.map((marker) => {
+          const markerColor = marker.color || colors.pink;
+          const letter = marker.name.trim().charAt(0).toUpperCase() || "M";
+          return (
+            <Marker
+              key={`${marker.id}-${marker.latitude}-${marker.longitude}`}
+              coordinate={{
+                latitude: marker.latitude,
+                longitude: marker.longitude,
+              }}
+              anchor={{ x: 0.5, y: 1 }}
+              onPress={() => onMarkerPress(marker.id)}
             >
-              <View style={styles.markerInner}>
-                <Text style={styles.markerInitial}>
-                  {marker.name.trim().charAt(0).toUpperCase() || "M"}
-                </Text>
+              <View style={styles.markerContainer}>
+                <View style={[styles.markerBubble, { backgroundColor: markerColor }]}>
+                  <Text style={styles.markerInitial}>{letter}</Text>
+                </View>
+                <View style={[styles.markerTail, { backgroundColor: markerColor }]} />
               </View>
-            </View>
-          </Marker>
-        ))}
-      </Map>
-
-      <View pointerEvents="box-none" style={styles.controlDeck}>
-        <View style={styles.layerControl}>
-          {MAP_LAYER_OPTIONS.map((option) => {
-            const isActive = mapLayer === option.id;
-
-            return (
-              <Pressable
-                key={option.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Mostra ${option.label}`}
-                style={[
-                  styles.layerButton,
-                  isActive && styles.layerButtonActive,
-                ]}
-                onPress={() => setMapLayer(option.id)}
-              >
-                <View
-                  style={[
-                    styles.layerSwatch,
-                    option.id === "satellite" && styles.layerSwatchSatellite,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.layerButtonText,
-                    isActive && styles.layerButtonTextActive,
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={styles.zoomControl}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Avvicina"
-            style={styles.zoomButton}
-            onPress={() => handleZoom(1)}
-          >
-            <Text style={styles.zoomButtonText}>+</Text>
-          </Pressable>
-          <View style={styles.zoomDivider} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Allontana"
-            style={styles.zoomButton}
-            onPress={() => handleZoom(-1)}
-          >
-            <Text style={styles.zoomButtonText}>-</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {hasMapError ? (
-        <View style={styles.fallback}>
-          <Text style={styles.fallbackTitle}>Mappa non disponibile</Text>
-          <Text style={styles.fallbackText}>
-            Riprova tra poco: i luoghi restano comunque nella lista.
-          </Text>
-        </View>
-      ) : null}
+            </Marker>
+          );
+        })}
+      </MapView>
     </View>
   );
 }
@@ -286,126 +168,29 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  controlDeck: {
-    position: "absolute",
-    top: 14,
-    left: 14,
-    right: 14,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "center",
-  },
-  layerControl: {
-    flexDirection: "row",
-    gap: 4,
-    padding: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.16)",
-    backgroundColor: "rgba(7,6,4,0.74)",
-    boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
-  },
-  layerButton: {
-    minHeight: 38,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    flexDirection: "row",
+  markerContainer: {
     alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
   },
-  layerButtonActive: {
-    backgroundColor: colors.paper,
-  },
-  layerSwatch: {
-    width: 13,
-    height: 13,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(7,6,4,0.18)",
-    backgroundColor: colors.pink,
-  },
-  layerSwatchSatellite: {
-    backgroundColor: "#6C8D72",
-  },
-  layerButtonText: {
-    color: colors.cream,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "900",
-  },
-  layerButtonTextActive: {
-    color: colors.black,
-  },
-  zoomControl: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: 42,
+  markerBubble: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.16)",
-    backgroundColor: "rgba(7,6,4,0.74)",
-    boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
-  },
-  zoomButton: {
-    width: 42,
-    height: 40,
+    borderWidth: 2.5,
+    borderColor: "rgba(255,255,255,0.9)",
     alignItems: "center",
     justifyContent: "center",
   },
-  zoomButtonText: {
-    color: colors.cream,
-    fontSize: 22,
-    lineHeight: 24,
-    fontWeight: "800",
-  },
-  zoomDivider: {
-    height: 1,
-    backgroundColor: "rgba(255,248,239,0.14)",
-  },
-  marker: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    borderWidth: 3,
-    borderColor: colors.paper,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  markerInner: {
-    width: 24,
-    height: 24,
-    borderRadius: 999,
-    backgroundColor: colors.paper,
-    alignItems: "center",
-    justifyContent: "center",
+  markerTail: {
+    width: 8,
+    height: 8,
+    marginTop: -4,
+    transform: [{ rotate: "45deg" }],
+    borderBottomRightRadius: 2,
   },
   markerInitial: {
-    color: colors.paperText,
-    fontSize: 12,
+    color: "#fff",
+    fontSize: 13,
     fontWeight: "900",
-  },
-  fallback: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    gap: 8,
-  },
-  fallbackTitle: {
-    color: colors.cream,
-    fontSize: 20,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  fallbackText: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "700",
-    textAlign: "center",
+    letterSpacing: -0.3,
   },
 });

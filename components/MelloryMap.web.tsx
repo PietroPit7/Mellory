@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import maplibregl, { type StyleSpecification } from "maplibre-gl";
+import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { melloryThemeVars } from "@/contexts/mellory-theme";
+import type { MelloryMapLayer } from "./MelloryMap";
 
 type MelloryMapMarker = {
   id: string;
@@ -20,21 +21,84 @@ type MelloryMapCenter = {
   zoom: number;
 };
 
-type MelloryMapLayer = "streets" | "satellite";
-
 type MelloryMapProps = {
   markers: MelloryMapMarker[];
   center: MelloryMapCenter;
   onMarkerPress: (placeId: string) => void;
   onRegionChange?: (center: MelloryMapCenter) => void;
+  onPoiPress?: (poi: {
+    name: string;
+    placeId: string;
+    latitude: number;
+    longitude: number;
+  }) => void;
+  fullScreen?: boolean;
+  mapLayer?: MelloryMapLayer;
+  isLight?: boolean;
 };
 
 const colors = melloryThemeVars;
 
 const MELLORY_SOURCE_ID = "mellory-places";
 const USER_ATTRIBUTION_TOGGLE_WINDOW_MS = 500;
-const MIN_ZOOM = 3;
-const MAX_ZOOM = 18;
+
+// Tutti e tre gli stili sono definiti all'avvio: cambiare layer significa solo
+// accendere/spegnere la visibility senza ricreare la mappa o i marker.
+const MAP_STYLE = {
+  version: 8 as const,
+  sources: {
+    "streets-dark": {
+      type: "raster" as const,
+      tiles: [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors © CARTO",
+    },
+    "streets-light": {
+      type: "raster" as const,
+      tiles: [
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors © CARTO",
+    },
+    satellite: {
+      type: "raster" as const,
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      attribution: "Tiles © Esri",
+    },
+  },
+  layers: [
+    {
+      id: "streets-dark-layer",
+      type: "raster" as const,
+      source: "streets-dark",
+      layout: { visibility: "visible" as const },
+    },
+    {
+      id: "streets-light-layer",
+      type: "raster" as const,
+      source: "streets-light",
+      layout: { visibility: "none" as const },
+    },
+    {
+      id: "satellite-layer",
+      type: "raster" as const,
+      source: "satellite",
+      layout: { visibility: "none" as const },
+    },
+  ],
+};
 
 function collapseAttributionControl(container: HTMLDivElement | null) {
   container
@@ -50,11 +114,7 @@ function setupAttributionControlGuard(container: HTMLDivElement | null) {
 
   const markUserToggle = () => {
     isUserToggling = true;
-
-    if (resetUserToggleTimer !== null) {
-      window.clearTimeout(resetUserToggleTimer);
-    }
-
+    if (resetUserToggleTimer !== null) window.clearTimeout(resetUserToggleTimer);
     resetUserToggleTimer = window.setTimeout(() => {
       isUserToggling = false;
       resetUserToggleTimer = null;
@@ -62,9 +122,7 @@ function setupAttributionControlGuard(container: HTMLDivElement | null) {
   };
 
   const collapseIfAutomatic = () => {
-    if (!isUserToggling) {
-      collapseAttributionControl(container);
-    }
+    if (!isUserToggling) collapseAttributionControl(container);
   };
 
   const handlePointerDown = (event: PointerEvent) => {
@@ -87,23 +145,13 @@ function setupAttributionControlGuard(container: HTMLDivElement | null) {
   };
 
   const observer = new MutationObserver(collapseIfAutomatic);
-
-  observer.observe(container, {
-    attributes: true,
-    attributeFilter: ["class"],
-    childList: true,
-    subtree: true,
-  });
-
+  observer.observe(container, { attributes: true, attributeFilter: ["class"], childList: true, subtree: true });
   container.addEventListener("pointerdown", handlePointerDown, true);
   container.addEventListener("keydown", handleKeyDown, true);
   collapseIfAutomatic();
 
   return () => {
-    if (resetUserToggleTimer !== null) {
-      window.clearTimeout(resetUserToggleTimer);
-    }
-
+    if (resetUserToggleTimer !== null) window.clearTimeout(resetUserToggleTimer);
     observer.disconnect();
     container.removeEventListener("pointerdown", handlePointerDown, true);
     container.removeEventListener("keydown", handleKeyDown, true);
@@ -111,151 +159,42 @@ function setupAttributionControlGuard(container: HTMLDivElement | null) {
 }
 
 function createPointElement(color: string, initial: string, title: string) {
-  const element = document.createElement("button");
-  element.type = "button";
-  element.title = title;
-  element.style.width = "42px";
-  element.style.height = "42px";
-  element.style.borderRadius = "999px";
-  element.style.border = `3px solid ${colors.paper}`;
-  element.style.background = color;
-  element.style.display = "flex";
-  element.style.alignItems = "center";
-  element.style.justifyContent = "center";
-  element.style.padding = "0";
-  element.style.cursor = "pointer";
-  element.style.boxShadow = "0 14px 28px rgba(7, 6, 4, 0.28)";
-
-  const inner = document.createElement("span");
-  inner.textContent = initial;
-  inner.style.width = "24px";
-  inner.style.height = "24px";
-  inner.style.borderRadius = "999px";
-  inner.style.background = colors.paper;
-  inner.style.color = colors.paperText;
-  inner.style.display = "flex";
-  inner.style.alignItems = "center";
-  inner.style.justifyContent = "center";
-  inner.style.fontSize = "12px";
-  inner.style.fontWeight = "900";
-  inner.style.fontFamily =
-    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-
-  element.appendChild(inner);
-  return element;
+  const el = document.createElement("button");
+  el.type = "button";
+  el.title = title;
+  Object.assign(el.style, {
+    width: "36px", height: "36px", borderRadius: "50%",
+    border: `2.5px solid rgba(255,255,255,0.9)`,
+    background: color, display: "flex", alignItems: "center",
+    justifyContent: "center", padding: "0", cursor: "pointer",
+    boxShadow: "0 8px 20px rgba(7,6,4,0.32)",
+  });
+  const span = document.createElement("span");
+  span.textContent = initial;
+  Object.assign(span.style, {
+    color: "#fff", fontSize: "13px", fontWeight: "900",
+    fontFamily: "system-ui,-apple-system,sans-serif",
+  });
+  el.appendChild(span);
+  return el;
 }
 
 function createClusterElement(count: string) {
-  const size = count.length > 2 ? 56 : 48;
-  const element = document.createElement("button");
-  element.type = "button";
-  element.title = `${count} locali`;
-  element.style.width = `${size}px`;
-  element.style.height = `${size}px`;
-  element.style.borderRadius = "999px";
-  element.style.border = `2px solid ${colors.paper}`;
-  element.style.background = colors.pink;
-  element.style.color = colors.paper;
-  element.style.display = "flex";
-  element.style.alignItems = "center";
-  element.style.justifyContent = "center";
-  element.style.cursor = "pointer";
-  element.style.fontSize = "16px";
-  element.style.fontWeight = "900";
-  element.style.fontFamily =
-    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-  element.style.boxShadow = "0 16px 30px rgba(7, 6, 4, 0.34)";
-  element.textContent = count;
-  return element;
-}
-
-function createMelloryMapStyle(mapLayer: MelloryMapLayer): StyleSpecification {
-  const isSatellite = mapLayer === "satellite";
-
-  return {
-  version: 8,
-  sources: {
-    streets: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors © CARTO",
-    },
-    satellite: {
-      type: "raster",
-      tiles: [
-        "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      attribution:
-        "Tiles © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-    },
-    labels: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors © CARTO",
-    },
-  },
-  layers: [
-    {
-      id: "streets",
-      type: "raster",
-      source: "streets",
-      layout: {
-        visibility: isSatellite ? "none" : "visible",
-      },
-      paint: {
-        "raster-opacity": 0.78,
-      },
-    },
-    {
-      id: "satellite",
-      type: "raster",
-      source: "satellite",
-      layout: {
-        visibility: isSatellite ? "visible" : "none",
-      },
-      paint: {
-        "raster-opacity": 0.86,
-        "raster-saturation": -0.18,
-      },
-    },
-    {
-      id: "labels",
-      type: "raster",
-      source: "labels",
-      paint: {
-        "raster-opacity": 0.9,
-      },
-    },
-  ],
-  };
-}
-
-function applyMapLayer(map: maplibregl.Map, mapLayer: MelloryMapLayer) {
-  if (!map.getLayer("streets") || !map.getLayer("satellite")) return;
-
-  map.setLayoutProperty(
-    "streets",
-    "visibility",
-    mapLayer === "satellite" ? "none" : "visible"
-  );
-  map.setLayoutProperty(
-    "satellite",
-    "visibility",
-    mapLayer === "satellite" ? "visible" : "none"
-  );
+  const size = count.length > 2 ? 52 : 44;
+  const el = document.createElement("button");
+  el.type = "button";
+  el.title = `${count} locali`;
+  Object.assign(el.style, {
+    width: `${size}px`, height: `${size}px`, borderRadius: "50%",
+    border: `2px solid rgba(255,255,255,0.9)`, background: colors.pink,
+    color: "#fff", display: "flex", alignItems: "center",
+    justifyContent: "center", cursor: "pointer",
+    fontSize: "15px", fontWeight: "900",
+    fontFamily: "system-ui,-apple-system,sans-serif",
+    boxShadow: "0 10px 24px rgba(7,6,4,0.36)",
+  });
+  el.textContent = count;
+  return el;
 }
 
 export default function MelloryMap({
@@ -263,17 +202,16 @@ export default function MelloryMap({
   center,
   onMarkerPress,
   onRegionChange,
+  fullScreen = false,
+  mapLayer = "streets",
+  isLight = false,
 }: MelloryMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRefs = useRef<maplibregl.Marker[]>([]);
   const initialCenterRef = useRef(center);
-  const [mapLayer, setMapLayer] = useState<MelloryMapLayer>("streets");
   const [hasMapError, setHasMapError] = useState(false);
 
-  // La mappa viene creata una sola volta: ricrearla a ogni cambio di centro
-  // causava flicker e perdita dell'interazione. I cambi di centro sono gestiti
-  // in modo fluido dall'effetto easeTo qui sotto.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -282,7 +220,7 @@ export default function MelloryMap({
     try {
       mapRef.current = new maplibregl.Map({
         container: containerRef.current,
-        style: createMelloryMapStyle("streets"),
+        style: MAP_STYLE,
         center: [initialCenter.longitude, initialCenter.latitude],
         zoom: initialCenter.zoom,
         attributionControl: false,
@@ -292,41 +230,21 @@ export default function MelloryMap({
       return;
     }
 
-    // Attribuzione OSM/CARTO/Esri: richiesta dalle licenze delle tile.
-    // In alto a sinistra così non finisce sotto la preview del locale.
+    // Attribution is required by OSM/CARTO licence — compact, bottom-right (covered by tab bar).
     mapRef.current.addControl(
       new maplibregl.AttributionControl({ compact: true }),
-      "top-left"
+      "bottom-right"
     );
-    const cleanupAttributionControlGuard = setupAttributionControlGuard(
-      containerRef.current
-    );
+    const cleanupAttributionGuard = setupAttributionControlGuard(containerRef.current);
 
     return () => {
-      cleanupAttributionControlGuard();
-      markerRefs.current.forEach((marker) => marker.remove());
+      cleanupAttributionGuard();
+      markerRefs.current.forEach((m) => m.remove());
       markerRefs.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
   }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const updateLayer = () => applyMapLayer(map, mapLayer);
-
-    if (map.isStyleLoaded()) {
-      updateLayer();
-    } else {
-      map.once("load", updateLayer);
-    }
-
-    return () => {
-      map.off("load", updateLayer);
-    };
-  }, [mapLayer]);
 
   useEffect(() => {
     mapRef.current?.easeTo({
@@ -338,23 +256,37 @@ export default function MelloryMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map) return;
+    let cancelled = false;
+
+    const applyLayers = () => {
+      if (cancelled) return;
+      const wantSatellite = mapLayer === "satellite";
+      map.setLayoutProperty("streets-dark-layer", "visibility", !wantSatellite && !isLight ? "visible" : "none");
+      map.setLayoutProperty("streets-light-layer", "visibility", !wantSatellite && isLight ? "visible" : "none");
+      map.setLayoutProperty("satellite-layer", "visibility", wantSatellite ? "visible" : "none");
+    };
+
+    if (map.isStyleLoaded()) {
+      applyLayers();
+    } else {
+      map.once("load", applyLayers);
+    }
+
+    return () => { cancelled = true; };
+  }, [mapLayer, isLight]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || !onRegionChange) return;
 
     const handleMoveEnd = () => {
-      const nextCenter = map.getCenter();
-
-      onRegionChange({
-        latitude: nextCenter.lat,
-        longitude: nextCenter.lng,
-        zoom: map.getZoom(),
-      });
+      const c = map.getCenter();
+      onRegionChange({ latitude: c.lat, longitude: c.lng, zoom: map.getZoom() });
     };
 
     map.on("moveend", handleMoveEnd);
-
-    return () => {
-      map.off("moveend", handleMoveEnd);
-    };
+    return () => { map.off("moveend", handleMoveEnd); };
   }, [onRegionChange]);
 
   useEffect(() => {
@@ -367,10 +299,7 @@ export default function MelloryMap({
       type: "FeatureCollection" as const,
       features: markers.map((marker) => ({
         type: "Feature" as const,
-        geometry: {
-          type: "Point" as const,
-          coordinates: [marker.longitude, marker.latitude],
-        },
+        geometry: { type: "Point" as const, coordinates: [marker.longitude, marker.latitude] },
         properties: {
           id: marker.id,
           color: marker.color || colors.pink,
@@ -382,11 +311,9 @@ export default function MelloryMap({
 
     function renderMarkers() {
       const activeMap = mapRef.current;
-      if (cancelled || !activeMap || !activeMap.getSource(MELLORY_SOURCE_ID)) {
-        return;
-      }
+      if (cancelled || !activeMap || !activeMap.getSource(MELLORY_SOURCE_ID)) return;
 
-      markerRefs.current.forEach((marker) => marker.remove());
+      markerRefs.current.forEach((m) => m.remove());
       markerRefs.current = [];
 
       const features = activeMap.querySourceFeatures(MELLORY_SOURCE_ID);
@@ -394,49 +321,40 @@ export default function MelloryMap({
       const seenPoints = new Set<string>();
 
       features.forEach((feature) => {
-        const properties = feature.properties || {};
-        const geometry = feature.geometry;
-        if (!geometry || geometry.type !== "Point") return;
-        const coordinates = geometry.coordinates as [number, number];
+        const props = feature.properties || {};
+        const geom = feature.geometry;
+        if (!geom || geom.type !== "Point") return;
+        const coords = geom.coordinates as [number, number];
 
-        if (properties.cluster) {
-          const clusterId = properties.cluster_id as number;
+        if (props.cluster) {
+          const clusterId = props.cluster_id as number;
           if (seenClusters.has(clusterId)) return;
           seenClusters.add(clusterId);
 
-          const count =
-            properties.point_count_abbreviated ?? properties.point_count ?? "";
-          const element = createClusterElement(String(count));
-          element.addEventListener("click", () => {
-            const source = activeMap.getSource(
-              MELLORY_SOURCE_ID
-            ) as maplibregl.GeoJSONSource;
+          const count = props.point_count_abbreviated ?? props.point_count ?? "";
+          const el = createClusterElement(String(count));
+          el.addEventListener("click", () => {
+            const source = activeMap.getSource(MELLORY_SOURCE_ID) as maplibregl.GeoJSONSource;
             source.getClusterExpansionZoom(clusterId).then((zoom) => {
-              activeMap.easeTo({ center: coordinates, zoom, duration: 500 });
+              activeMap.easeTo({ center: coords, zoom, duration: 500 });
             });
           });
-
           markerRefs.current.push(
-            new maplibregl.Marker({ element, anchor: "center" })
-              .setLngLat(coordinates)
-              .addTo(activeMap)
+            new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat(coords).addTo(activeMap)
           );
         } else {
-          const id = String(properties.id ?? "");
+          const id = String(props.id ?? "");
           if (!id || seenPoints.has(id)) return;
           seenPoints.add(id);
 
-          const element = createPointElement(
-            String(properties.color || colors.pink),
-            String(properties.initial || "M"),
-            String(properties.title || "")
+          const el = createPointElement(
+            String(props.color || colors.pink),
+            String(props.initial || "M"),
+            String(props.title || "")
           );
-          element.addEventListener("click", () => onMarkerPress(id));
-
+          el.addEventListener("click", () => onMarkerPress(id));
           markerRefs.current.push(
-            new maplibregl.Marker({ element, anchor: "center" })
-              .setLngLat(coordinates)
-              .addTo(activeMap)
+            new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat(coords).addTo(activeMap)
           );
         }
       });
@@ -446,9 +364,7 @@ export default function MelloryMap({
       const activeMap = mapRef.current;
       if (cancelled || !activeMap) return;
 
-      const existing = activeMap.getSource(MELLORY_SOURCE_ID) as
-        | maplibregl.GeoJSONSource
-        | undefined;
+      const existing = activeMap.getSource(MELLORY_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
 
       if (existing) {
         existing.setData(featureCollection);
@@ -460,7 +376,6 @@ export default function MelloryMap({
           clusterRadius: 55,
           clusterMaxZoom: 15,
         });
-        // Layer invisibile: serve solo perché querySourceFeatures abbia i tile.
         activeMap.addLayer({
           id: `${MELLORY_SOURCE_ID}-hidden`,
           type: "circle",
@@ -473,10 +388,7 @@ export default function MelloryMap({
     }
 
     const handleSourceData = (event: maplibregl.MapSourceDataEvent) => {
-      if (
-        event.sourceId === MELLORY_SOURCE_ID &&
-        mapRef.current?.isSourceLoaded(MELLORY_SOURCE_ID)
-      ) {
+      if (event.sourceId === MELLORY_SOURCE_ID && mapRef.current?.isSourceLoaded(MELLORY_SOURCE_ID)) {
         renderMarkers();
       }
     };
@@ -494,86 +406,22 @@ export default function MelloryMap({
       cancelled = true;
       map.off("sourcedata", handleSourceData);
       map.off("moveend", renderMarkers);
-      markerRefs.current.forEach((marker) => marker.remove());
+      markerRefs.current.forEach((m) => m.remove());
       markerRefs.current = [];
     };
   }, [markers, onMarkerPress]);
 
-  function handleZoom(delta: number) {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const nextZoom = Math.max(
-      MIN_ZOOM,
-      Math.min(MAX_ZOOM, map.getZoom() + delta)
-    );
-
-    map.easeTo({ zoom: nextZoom, duration: 260 });
-  }
+  const frameStyle: CSSProperties = fullScreen
+    ? { position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "hidden", backgroundColor: colors.black }
+    : { position: "relative", height: 640, width: "100%", borderRadius: 28, overflow: "hidden", backgroundColor: colors.black };
 
   return (
-    <div style={styles.frame}>
-      <div ref={containerRef} style={styles.mapCanvas} />
-
-      <div style={styles.controlColumn}>
-        <button
-          type="button"
-          title={mapLayer === "satellite" ? "Mostra strade" : "Mostra satellite"}
-          aria-label={
-            mapLayer === "satellite" ? "Mostra strade" : "Mostra satellite"
-          }
-          style={{
-            ...styles.controlCard,
-            ...styles.iconButton,
-            ...(mapLayer === "satellite" ? styles.iconButtonActive : {}),
-          }}
-          onClick={() =>
-            setMapLayer(mapLayer === "streets" ? "satellite" : "streets")
-          }
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 3 2 8l10 5 10-5-10-5Z" />
-            <path d="m2 13 10 5 10-5" />
-            <path d="m2 18 10 5 10-5" />
-          </svg>
-        </button>
-
-        <div style={{ ...styles.controlCard, ...styles.zoomGroup }}>
-          <button
-            type="button"
-            title="Avvicina"
-            aria-label="Avvicina"
-            style={styles.zoomButton}
-            onClick={() => handleZoom(1)}
-          >
-            +
-          </button>
-          <div style={styles.zoomDivider} />
-          <button
-            type="button"
-            title="Allontana"
-            aria-label="Allontana"
-            style={styles.zoomButton}
-            onClick={() => handleZoom(-1)}
-          >
-            −
-          </button>
-        </div>
-      </div>
-
+    <div style={frameStyle}>
+      <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
       {hasMapError ? (
-        <div style={styles.fallback}>
-          <div style={styles.fallbackTitle}>Mappa non disponibile</div>
-          <div style={styles.fallbackText}>
+        <div style={fallbackStyle}>
+          <div style={{ color: colors.cream, fontSize: 20, fontWeight: 900 }}>Mappa non disponibile</div>
+          <div style={{ maxWidth: 280, color: colors.muted, fontSize: 14, lineHeight: 1.45, fontWeight: 700 }}>
             Riprova tra poco: i luoghi restano comunque nella lista.
           </div>
         </div>
@@ -582,98 +430,10 @@ export default function MelloryMap({
   );
 }
 
-const styles = {
-  frame: {
-    position: "relative",
-    height: 640,
-    width: "100%",
-    borderRadius: 28,
-    overflow: "hidden",
-    backgroundColor: colors.black,
-  },
-  mapCanvas: {
-    position: "absolute",
-    inset: 0,
-  },
-  controlColumn: {
-    position: "absolute",
-    top: 14,
-    right: 14,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: 10,
-    pointerEvents: "none",
-    zIndex: 2,
-  },
-  controlCard: {
-    border: "1px solid rgba(255,248,239,0.16)",
-    background: "rgba(7,6,4,0.72)",
-    boxShadow: "0 12px 24px rgba(0,0,0,0.28)",
-    backdropFilter: "blur(10px)",
-    pointerEvents: "auto",
-  },
-  iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: colors.cream,
-    cursor: "pointer",
-  },
-  iconButtonActive: {
-    background: colors.paper,
-    color: colors.paperText,
-  },
-  zoomGroup: {
-    width: 42,
-    overflow: "hidden",
-    borderRadius: 16,
-    display: "flex",
-    flexDirection: "column",
-  },
-  zoomButton: {
-    width: 42,
-    height: 40,
-    border: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "transparent",
-    color: colors.cream,
-    cursor: "pointer",
-    fontSize: 22,
-    lineHeight: "22px",
-    fontWeight: 800,
-  },
-  zoomDivider: {
-    height: 1,
-    background: "rgba(255,248,239,0.14)",
-  },
-  fallback: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    padding: 24,
-    textAlign: "center",
-    backgroundColor: colors.black,
-  },
-  fallbackTitle: {
-    color: colors.cream,
-    fontSize: 20,
-    fontWeight: 900,
-  },
-  fallbackText: {
-    maxWidth: 280,
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 1.45,
-    fontWeight: 700,
-  },
-} satisfies Record<string, CSSProperties>;
+const fallbackStyle: CSSProperties = {
+  position: "absolute", inset: 0,
+  display: "flex", flexDirection: "column",
+  alignItems: "center", justifyContent: "center",
+  gap: 8, padding: 24, textAlign: "center",
+  backgroundColor: melloryThemeVars.black,
+};

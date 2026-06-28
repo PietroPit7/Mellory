@@ -66,53 +66,53 @@ export const melloryDarkColors: MelloryThemeColors = {
 };
 
 export const melloryLightColors: MelloryThemeColors = {
-  black: "#F7F1EA",
-  card: "#FFFDFC",
-  card2: "#FFFDFC",
-  cream: "#181411",
-  paper: "#FFFDFC",
-  paperText: "#181411",
-  muted: "#A99E95",
-  textMuted: "#3F372F",
-  pink: "#B24F68",
-  gold: "#9B7842",
-  yellow: "#B89035",
-  green: "#607F4A",
-  orange: "#B65343",
-  red: "#A94E3F",
-  blue: "#557C98",
-  violet: "#805C9F",
-  sage: "#66865E",
-  border: "rgba(155, 120, 66, 0.22)",
-  softBorder: "rgba(155, 120, 66, 0.16)",
-  overlay: "rgba(247, 241, 234, 0.72)",
+  black: "#F3F0EA",
+  card: "#FFFFFF",
+  card2: "#FAF8F4",
+  cream: "#1C1B19",
+  paper: "#FFFFFF",
+  paperText: "#1C1B19",
+  muted: "#9C958B",
+  textMuted: "#615A50",
+  pink: "#C01A2F",
+  gold: "#9A7B45",
+  yellow: "#C8902B",
+  green: "#5E7D49",
+  orange: "#C2622E",
+  red: "#C01A2F",
+  blue: "#4F7A98",
+  violet: "#7E5C9E",
+  sage: "#6B8A63",
+  border: "rgba(28, 27, 25, 0.10)",
+  softBorder: "rgba(28, 27, 25, 0.06)",
+  overlay: "rgba(243, 240, 234, 0.72)",
 };
 
 export const melloryThemeVars: MelloryThemeColors =
   Platform.OS === "web"
     ? {
-        black: "var(--mellory-black, #070604)",
-        card: "var(--mellory-card, #17130F)",
-        card2: "var(--mellory-card-2, #211C17)",
-        cream: "var(--mellory-cream, #FFF8EF)",
-        paper: "var(--mellory-paper, #FFF8EF)",
-        paperText: "var(--mellory-paper-text, #070604)",
-        muted: "var(--mellory-muted, #817A74)",
-        textMuted: "var(--mellory-text-muted, #AFA69C)",
-        pink: "var(--mellory-pink, #D84E7F)",
-        gold: "var(--mellory-gold, #C7A85B)",
-        yellow: "var(--mellory-yellow, #E2BD35)",
-        green: "var(--mellory-green, #6F934B)",
-        orange: "var(--mellory-orange, #E9754D)",
-        red: "var(--mellory-red, #B94747)",
-        blue: "var(--mellory-blue, #6B8FA8)",
-        violet: "var(--mellory-violet, #9B78B6)",
-        sage: "var(--mellory-sage, #7A9B72)",
-        border: "var(--mellory-border, rgba(255, 248, 239, 0.08))",
-        softBorder: "var(--mellory-soft-border, rgba(255, 248, 239, 0.12))",
-        overlay: "var(--mellory-overlay, rgba(7, 6, 4, 0.48))",
+        black: "var(--mellory-black, #F3F0EA)",
+        card: "var(--mellory-card, #FFFFFF)",
+        card2: "var(--mellory-card-2, #FAF8F4)",
+        cream: "var(--mellory-cream, #1C1B19)",
+        paper: "var(--mellory-paper, #FFFFFF)",
+        paperText: "var(--mellory-paper-text, #1C1B19)",
+        muted: "var(--mellory-muted, #9C958B)",
+        textMuted: "var(--mellory-text-muted, #615A50)",
+        pink: "var(--mellory-pink, #C01A2F)",
+        gold: "var(--mellory-gold, #9A7B45)",
+        yellow: "var(--mellory-yellow, #C8902B)",
+        green: "var(--mellory-green, #5E7D49)",
+        orange: "var(--mellory-orange, #C2622E)",
+        red: "var(--mellory-red, #C01A2F)",
+        blue: "var(--mellory-blue, #4F7A98)",
+        violet: "var(--mellory-violet, #7E5C9E)",
+        sage: "var(--mellory-sage, #6B8A63)",
+        border: "var(--mellory-border, rgba(28, 27, 25, 0.10))",
+        softBorder: "var(--mellory-soft-border, rgba(28, 27, 25, 0.06))",
+        overlay: "var(--mellory-overlay, rgba(243, 240, 234, 0.72))",
       }
-    : melloryDarkColors;
+    : melloryLightColors;
 
 type MelloryThemeContextValue = {
   preference: MelloryThemePreference;
@@ -159,7 +159,7 @@ function applyWebThemeVariables(colors: MelloryThemeColors) {
 
 export function MelloryThemeProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] =
-    useState<MelloryThemePreference>("dark");
+    useState<MelloryThemePreference>("light");
 
   const resolvedTheme = preference;
   const colors =
@@ -178,7 +178,7 @@ export function MelloryThemeProvider({ children }: { children: ReactNode }) {
         ? storedPreference
         : isThemePreference(legacyPreference)
           ? legacyPreference
-          : "dark";
+          : "light";
 
       if (!isActive) return;
 
@@ -215,12 +215,12 @@ export function MelloryThemeProvider({ children }: { children: ReactNode }) {
   );
 
   const resetPreference = useCallback(async () => {
-    setPreferenceState("dark");
-    await AsyncStorage.setItem(MELLORY_THEME_STORAGE_KEY, "dark");
+    setPreferenceState("light");
+    await AsyncStorage.setItem(MELLORY_THEME_STORAGE_KEY, "light");
   }, []);
 
   const clearPreferenceForReset = useCallback(() => {
-    setPreferenceState("dark");
+    setPreferenceState("light");
   }, []);
 
   const value = useMemo(

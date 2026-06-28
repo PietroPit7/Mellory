@@ -1,15 +1,20 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import * as Haptics from "expo-haptics";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Platform,
   ScrollView,
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
+
+import { PROFILE_KEY } from "./onboarding";
 
 import { PressableScale } from "@/components/pressable-scale";
 import {
@@ -41,6 +46,12 @@ const appearanceOptions: {
   },
 ];
 
+interface UserProfile {
+  firstName: string;
+  lastName: string;
+  city: string;
+}
+
 export default function SettingsScreen() {
   const { clearPreferenceForReset, colors, preference, setPreference } =
     useMelloryTheme();
@@ -49,11 +60,51 @@ export default function SettingsScreen() {
   const [backupMessage, setBackupMessage] = useState("");
   const [navigationService, setNavigationService] =
     useState<NavigationService>("automatic");
+  const [profile, setProfile] = useState<UserProfile>({
+    firstName: "",
+    lastName: "",
+    city: "",
+  });
+  const [profileSaved, setProfileSaved] = useState(false);
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const screenFade = useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFade.setValue(0);
+      Animated.timing(screenFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    }, [screenFade])
+  );
   const availableNavigationOptions = useMemo(
     () => getAvailableNavigationServiceOptions(),
     []
   );
+
+  useEffect(() => {
+    AsyncStorage.getItem(PROFILE_KEY)
+      .then((value) => {
+        if (value) {
+          const parsed = JSON.parse(value) as Partial<UserProfile>;
+          setProfile({
+            firstName: parsed.firstName ?? "",
+            lastName: parsed.lastName ?? "",
+            city: parsed.city ?? "",
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function saveProfile() {
+    try {
+      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2000);
+    } catch {
+      // silent
+    }
+  }
 
   useEffect(() => {
     let isActive = true;
@@ -82,11 +133,13 @@ export default function SettingsScreen() {
   }, [availableNavigationOptions]);
 
   async function saveAppearanceMode(nextMode: MelloryThemePreference) {
+    void Haptics.selectionAsync();
     setResetMessage("");
     await setPreference(nextMode);
   }
 
   async function saveNavigationService(nextService: NavigationService) {
+    void Haptics.selectionAsync();
     setNavigationService(nextService);
     await setPreferredNavigationService(nextService);
   }
@@ -231,7 +284,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <Animated.ScrollView style={[styles.screen, { opacity: screenFade }]} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.safeTop} />
 
       <View style={styles.header}>
@@ -240,6 +293,67 @@ export default function SettingsScreen() {
         </PressableScale>
 
         <Text style={styles.title}>Impostazioni</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>PROFILO</Text>
+
+        <View style={styles.profileCard}>
+          <View style={styles.profileField}>
+            <Text style={styles.profileFieldLabel}>Nome</Text>
+            <TextInput
+              style={styles.profileInput}
+              value={profile.firstName}
+              onChangeText={(text) =>
+                setProfile((p) => ({ ...p, firstName: text }))
+              }
+              placeholder="Il tuo nome"
+              placeholderTextColor={colors.muted}
+              returnKeyType="next"
+              autoCapitalize="words"
+              autoComplete="given-name"
+            />
+          </View>
+
+          <View style={[styles.profileField, styles.profileFieldDivider]}>
+            <Text style={styles.profileFieldLabel}>Cognome</Text>
+            <TextInput
+              style={styles.profileInput}
+              value={profile.lastName}
+              onChangeText={(text) =>
+                setProfile((p) => ({ ...p, lastName: text }))
+              }
+              placeholder="Il tuo cognome"
+              placeholderTextColor={colors.muted}
+              returnKeyType="next"
+              autoCapitalize="words"
+              autoComplete="family-name"
+            />
+          </View>
+
+          <View style={[styles.profileField, styles.profileFieldDivider]}>
+            <Text style={styles.profileFieldLabel}>Città</Text>
+            <TextInput
+              style={styles.profileInput}
+              value={profile.city}
+              onChangeText={(text) =>
+                setProfile((p) => ({ ...p, city: text }))
+              }
+              placeholder="La tua città"
+              placeholderTextColor={colors.muted}
+              returnKeyType="done"
+              autoCapitalize="words"
+              autoComplete="postal-address-locality"
+              onSubmitEditing={saveProfile}
+            />
+          </View>
+        </View>
+
+        <PressableScale style={styles.profileSaveButton} onPress={saveProfile}>
+          <Text style={styles.profileSaveText}>
+            {profileSaved ? "Salvato ✓" : "Salva profilo"}
+          </Text>
+        </PressableScale>
       </View>
 
       <View style={styles.section}>
@@ -376,7 +490,7 @@ export default function SettingsScreen() {
           Trova sempre il posto giusto per te.
         </Text>
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -421,7 +535,7 @@ function createStyles(colors: MelloryThemeColors) {
       color: colors.cream,
       fontSize: 41,
       lineHeight: 48,
-      fontFamily: "serif",
+      fontFamily: undefined,
       fontWeight: "900",
       letterSpacing: -1.2,
     },
@@ -588,7 +702,7 @@ function createStyles(colors: MelloryThemeColors) {
       color: colors.cream,
       fontSize: 43,
       lineHeight: 50,
-      fontFamily: "serif",
+      fontFamily: undefined,
       fontWeight: "900",
       letterSpacing: -1,
       marginBottom: 8,
@@ -597,7 +711,7 @@ function createStyles(colors: MelloryThemeColors) {
       color: colors.muted,
       fontSize: 17,
       lineHeight: 23,
-      fontFamily: "serif",
+      fontFamily: undefined,
       fontStyle: "italic",
     },
     resetFeedback: {
@@ -607,6 +721,50 @@ function createStyles(colors: MelloryThemeColors) {
       fontWeight: "800",
       textAlign: "center",
       marginTop: 12,
+    },
+    profileCard: {
+      backgroundColor: colors.card2,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+      marginBottom: 14,
+    },
+    profileField: {
+      minHeight: 72,
+      paddingHorizontal: 28,
+      paddingVertical: 16,
+      justifyContent: "center",
+      gap: 4,
+    },
+    profileFieldDivider: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    profileFieldLabel: {
+      color: colors.muted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 2.5,
+    },
+    profileInput: {
+      color: colors.cream,
+      fontSize: 20,
+      fontWeight: "700",
+      paddingVertical: 0,
+    },
+    profileSaveButton: {
+      minHeight: 58,
+      borderRadius: 999,
+      backgroundColor: colors.gold,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    profileSaveText: {
+      color: colors.black,
+      fontSize: 17,
+      fontWeight: "900",
+      letterSpacing: 0.3,
     },
   });
 }

@@ -1,17 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Keyboard,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -20,6 +22,7 @@ import {
   type MelloryThemeColors,
   useMelloryTheme,
 } from "@/contexts/mellory-theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   fetchCitySuggestions as fetchGeoapifyCitySuggestions,
   fetchNearbyPlaces as fetchGeoapifyNearbyPlaces,
@@ -37,11 +40,7 @@ const OVERPASS_ENDPOINTS = [
 ];
 
 type SearchMode = "nearby" | "city";
-type CarouselKey = "places";
 
-const CAROUSEL_STEP: Record<CarouselKey, number> = {
-  places: 254,
-};
 const HOME_DASHBOARD_LIMIT = 100;
 
 type Coordinates = {
@@ -479,7 +478,7 @@ async function fetchLocationLabel(latitude: number, longitude: number) {
 async function fetchCitySuggestions(query: string): Promise<CitySuggestion[]> {
   const cleanedQuery = query.trim();
 
-  if (cleanedQuery.length < 3 || !hasGeoapifyApiKey()) return [];
+  if (cleanedQuery.length < 3) return [];
 
   try {
     return await fetchGeoapifyCitySuggestions(cleanedQuery);
@@ -488,31 +487,32 @@ async function fetchCitySuggestions(query: string): Promise<CitySuggestion[]> {
   }
 }
 
-async function fetchOverpassElements(query: string) {
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const response = await fetch(endpoint, {
+async function fetchOverpassElements(query: string): Promise<OverpassElement[]> {
+  return new Promise<OverpassElement[]>((resolve, reject) => {
+    let rejected = 0;
+    OVERPASS_ENDPOINTS.forEach((endpoint) => {
+      fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=UTF-8",
-        },
-        body: query,
-      });
-
-      if (!response.ok) continue;
-
-      const data = await response.json();
-      const elements = Array.isArray(data.elements)
-        ? (data.elements as OverpassElement[])
-        : [];
-
-      return elements;
-    } catch {
-      // Prova il prossimo endpoint senza mostrare errori tecnici in app.
-    }
-  }
-
-  throw new Error(getFriendlyMessage());
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `data=${encodeURIComponent(query)}`,
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error("not ok");
+          return r.json() as Promise<{ elements?: unknown[] }>;
+        })
+        .then((data) => {
+          const elements = Array.isArray(data.elements)
+            ? (data.elements as OverpassElement[])
+            : [];
+          resolve(elements);
+        })
+        .catch(() => {
+          rejected += 1;
+          if (rejected === OVERPASS_ENDPOINTS.length)
+            reject(new Error(getFriendlyMessage()));
+        });
+    });
+  });
 }
 
 async function fetchDashboardData(context: SearchContext) {
@@ -535,7 +535,7 @@ async function fetchDashboardData(context: SearchContext) {
     Promise.race([
       fetchOverpassElements(query).catch(() => [] as OverpassElement[]),
       new Promise<OverpassElement[]>((resolve) =>
-        setTimeout(() => resolve([]), 6500)
+        setTimeout(() => resolve([]), 12000)
       ),
     ]),
     fetchGeoapifyNearbyPlaces(context.latitude, context.longitude, {
@@ -758,8 +758,28 @@ function openPlaceDetail(place: DashboardPlace) {
   } as never);
 }
 
+const ADD_PLACE_CATEGORIES = [
+  "Ristorante",
+  "Bar",
+  "Caffè",
+  "Pizzeria",
+  "Osteria",
+  "Trattoria",
+  "Pub",
+  "Gelateria",
+  "Pasticceria",
+  "Cocktail bar",
+  "Altro",
+];
+
+function createCustomPlaceId() {
+  return `mellory-custom-${Date.now()}-${Math.round(Math.random() * 99999)}`;
+}
+
 export default function HomeScreen() {
   const { colors } = useMelloryTheme();
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCityLabel, setSelectedCityLabel] = useState("");
   const [citySuggestions, setCitySuggestions] = useState<CitySuggestion[]>([]);
@@ -775,13 +795,17 @@ export default function HomeScreen() {
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [places, setPlaces] = useState<DashboardPlace[]>([]);
   const [savedPlaces, setSavedPlaces] = useState<DashboardPlace[]>([]);
-  const placesScrollRef = useRef<ScrollView>(null);
   const loadingPulse = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const carouselOffsets = useRef<Record<CarouselKey, number>>({
-    places: 0,
-  });
+
+  // Add place manually
+  const [showAddPlaceSheet, setShowAddPlaceSheet] = useState(false);
+  const [draftAddName, setDraftAddName] = useState("");
+  const [draftAddCategory, setDraftAddCategory] = useState("Ristorante");
+  const [draftAddAddress, setDraftAddAddress] = useState("");
+  const [draftAddPhone, setDraftAddPhone] = useState("");
+  const [draftAddWebsite, setDraftAddWebsite] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -844,29 +868,35 @@ export default function HomeScreen() {
     const timeout = setTimeout(async () => {
       setIsSuggesting(true);
 
-      const origin = activeContext
-        ? {
-            latitude: activeContext.latitude,
-            longitude: activeContext.longitude,
-          }
-        : undefined;
-      const [suggestions, placeResults] = await Promise.all([
-        fetchCitySuggestions(query),
-        fetchGeoapifyPlaceSuggestions(query, origin).catch(() => []),
-      ]);
-      const visiblePlaceResults = hasPreciseCitySuggestion(query, suggestions)
-        ? []
-        : placeResults;
+      try {
+        const origin = activeContext
+          ? {
+              latitude: activeContext.latitude,
+              longitude: activeContext.longitude,
+            }
+          : undefined;
+        const [suggestions, placeResults] = await Promise.all([
+          fetchCitySuggestions(query),
+          fetchGeoapifyPlaceSuggestions(query, origin).catch(() => []),
+        ]);
+        const visiblePlaceResults = hasPreciseCitySuggestion(query, suggestions)
+          ? []
+          : placeResults;
 
-      if (isActive) {
-        setCitySuggestions(suggestions);
-        setPlaceSuggestions(
-          visiblePlaceResults.map(geoapifyPlaceToDashboardPlace)
-        );
-        setShowSuggestions(
-          suggestions.length > 0 || visiblePlaceResults.length > 0
-        );
-        setIsSuggesting(false);
+        if (isActive) {
+          setCitySuggestions(suggestions);
+          setPlaceSuggestions(
+            visiblePlaceResults.map(geoapifyPlaceToDashboardPlace)
+          );
+          setShowSuggestions(
+            suggestions.length > 0 || visiblePlaceResults.length > 0
+          );
+          setIsSuggesting(false);
+        }
+      } catch {
+        if (isActive) {
+          setIsSuggesting(false);
+        }
       }
     }, 350);
 
@@ -935,7 +965,7 @@ export default function HomeScreen() {
       setPlaces(dashboard.places);
 
       if (dashboard.places.length === 0) {
-        setMessage("Ho trovato pochi dati qui. Prova una zona più centrale.");
+        setMessage("Nessun locale trovato. Il server potrebbe essere lento — riprova tra qualche secondo.");
       }
     } catch {
       setMessage(getFriendlyMessage());
@@ -945,6 +975,7 @@ export default function HomeScreen() {
   }
 
   async function handleUsePosition() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setMessage("");
     setShowSuggestions(false);
     setCitySuggestions([]);
@@ -1106,6 +1137,44 @@ export default function HomeScreen() {
     openMap();
   }
 
+  function openAddPlaceSheet() {
+    void Haptics.selectionAsync();
+    setDraftAddName("");
+    setDraftAddCategory("Ristorante");
+    setDraftAddAddress("");
+    setDraftAddPhone("");
+    setDraftAddWebsite("");
+    setShowAddPlaceSheet(true);
+  }
+
+  function createAndOpenCustomPlace() {
+    const name = draftAddName.trim();
+    if (!name) return;
+
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const id = createCustomPlaceId();
+    setShowAddPlaceSheet(false);
+
+    router.push({
+      pathname: "/place-detail",
+      params: {
+        id,
+        name,
+        category: draftAddCategory,
+        detail: draftAddAddress.trim(),
+        distance: "",
+        distanceMeters: "",
+        status: "try",
+        website: draftAddWebsite.trim(),
+        phone: draftAddPhone.trim(),
+        openingHours: "",
+        editorialAwards: "",
+        latitude: "",
+        longitude: "",
+      },
+    } as never);
+  }
+
   function renderSuggestionGroup(title: string, items: CitySuggestion[]) {
     if (items.length === 0) return null;
 
@@ -1164,1297 +1233,1026 @@ export default function HomeScreen() {
     );
   }
 
-  function renderPlaceCard(place: DashboardPlace) {
+  function renderPlaceRow(place: DashboardPlace) {
     return (
       <PressableScale
         key={place.id}
-        style={styles.placeCard}
+        style={styles.placeRow}
         onPress={() => openPlaceDetail(place)}
       >
-        <View style={styles.placeTop}>
-          <View style={styles.placeInitial}>
-            <Text style={styles.placeInitialText}>
-              {place.name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+        <View style={styles.placeAccentBar} />
 
-          <Text style={styles.placeDistance}>{place.distance}</Text>
+        <View style={styles.placeAvatar}>
+          <Text style={styles.placeAvatarText}>
+            {place.name.charAt(0).toUpperCase()}
+          </Text>
         </View>
 
-        <Text numberOfLines={2} style={styles.placeName}>
-          {place.name}
-        </Text>
-
-        <Text numberOfLines={1} style={styles.placeCategory}>
-          {place.category}
-        </Text>
-
-        <Text numberOfLines={2} style={styles.placeDetail}>
-          {place.detail}
-        </Text>
-
-        <View style={styles.placeFooter}>
-          <Text style={styles.placeFooterText}>Apri scheda</Text>
+        <View style={styles.placeRowInfo}>
+          <Text numberOfLines={1} style={styles.placeRowName}>
+            {place.name}
+          </Text>
+          <Text numberOfLines={1} style={styles.placeRowSub}>
+            {place.category}
+            {place.distance ? ` · ${place.distance}` : ""}
+          </Text>
         </View>
+
+        <Text style={styles.placeRowChevron}>›</Text>
       </PressableScale>
     );
   }
 
-  function getCarouselRef(_key: CarouselKey) {
-    return placesScrollRef;
-  }
-
-  function scrollCarousel(key: CarouselKey, direction: "left" | "right") {
-    const currentOffset = carouselOffsets.current[key];
-    const delta = direction === "left" ? -CAROUSEL_STEP[key] : CAROUSEL_STEP[key];
-    const nextOffset = Math.max(0, currentOffset + delta);
-
-    carouselOffsets.current[key] = nextOffset;
-    getCarouselRef(key).current?.scrollTo({
-      x: nextOffset,
-      animated: true,
-    });
-  }
-
-  function handleCarouselScroll(key: CarouselKey) {
-    return (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      carouselOffsets.current[key] = event.nativeEvent.contentOffset.x;
-    };
-  }
-
-  function renderCarouselControls(key: CarouselKey) {
-    return (
-      <View style={styles.carouselControls}>
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel="Scorri a sinistra"
-          style={styles.carouselButton}
-          onPress={() => scrollCarousel(key, "left")}
-        >
-          <Text style={styles.carouselButtonText}>‹</Text>
-        </PressableScale>
-
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel="Scorri a destra"
-          style={styles.carouselButton}
-          onPress={() => scrollCarousel(key, "right")}
-        >
-          <Text style={styles.carouselButtonText}>›</Text>
-        </PressableScale>
-      </View>
-    );
-  }
-
-  const loadingScale = loadingPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.96, 1.05],
-  });
-  const loadingOpacity = loadingPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.58, 1],
-  });
-
   return (
+    <View style={styles.screen}>
     <ScrollView
-      style={styles.screen}
+      style={styles.scrollFill}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       nestedScrollEnabled
       directionalLockEnabled
     >
-      <View style={styles.topRule} />
+      <View style={{ height: insets.top + 8 }} />
 
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.brandBlock}>
           <Text style={styles.logo}>Mellory</Text>
           <View style={styles.brandUnderline} />
-          <Text style={styles.brandSubtitle}>
-            La tua guida personale dei posti in cui sei stato bene.
-          </Text>
         </View>
-
         <PressableScale
-          style={styles.settingsButton}
-          onPress={() => router.push("/settings" as never)}
+          style={styles.addPlaceHeaderBtn}
+          onPress={openAddPlaceSheet}
+          accessibilityRole="button"
+          accessibilityLabel="Aggiungi locale"
         >
-          <Text style={styles.settingsIcon}>⚙</Text>
+          <Text style={styles.addPlaceHeaderBtnText}>＋</Text>
         </PressableScale>
       </View>
 
+      {/* Hero */}
       <View style={styles.hero}>
         <Text style={styles.overline}>
           GUIDA GASTRONOMICA · EDIZIONE PERSONALE
         </Text>
-
         <Text style={styles.headline}>
-          Trova sempre{"\n"}il posto{" "}
-          <Text style={styles.headlineAccent}>giusto</Text>.
+          Ricorda dove sei stato bene,{" "}
+          <Text style={styles.headlineAccent}>sempre</Text>.
         </Text>
       </View>
 
-      <View style={styles.searchBlock}>
-        <View style={styles.searchBox}>
-          <View style={styles.searchLens}>
-            <View style={styles.searchLensCircle} />
-            <View style={styles.searchLensHandle} />
-          </View>
+      {/* Search bar */}
+      <View style={styles.searchBox}>
+        <Text style={styles.searchIcon}>⌕</Text>
 
-          <TextInput
-            value={searchQuery}
-            onChangeText={(text) => {
-              setSearchQuery(text);
-              setMessage("");
+        <TextInput
+          value={searchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            setMessage("");
+            if (text.trim() !== selectedCityLabel) {
+              setSelectedCityLabel("");
+            }
+          }}
+          placeholder="Cerca città o locale"
+          placeholderTextColor={colors.textMuted}
+          style={styles.searchInput}
+          autoCorrect={false}
+          autoCapitalize="words"
+          inputMode="search"
+          clearButtonMode="while-editing"
+          onFocus={() => {
+            if (
+              (citySuggestions.length > 0 || placeSuggestions.length > 0) &&
+              searchQuery.trim() !== selectedCityLabel
+            ) {
+              setShowSuggestions(true);
+            }
+          }}
+          onSubmitEditing={handleSubmitSearch}
+          returnKeyType="search"
+        />
 
-              if (text.trim() !== selectedCityLabel) {
-                setSelectedCityLabel("");
-              }
-            }}
-            placeholder="Cerca località o locale"
-            placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
-            autoCorrect={false}
-            autoCapitalize="words"
-            onFocus={() => {
-              if (
-                (citySuggestions.length > 0 || placeSuggestions.length > 0) &&
-                searchQuery.trim() !== selectedCityLabel
-              ) {
-                setShowSuggestions(true);
-              }
-            }}
-            onSubmitEditing={handleSubmitSearch}
-            returnKeyType="search"
-          />
+        {isSuggesting && !isLoading ? (
+          <View style={styles.suggestingDot} />
+        ) : null}
 
-          {isSuggesting && !isLoading ? (
-            <ActivityIndicator color={colors.pink} />
-          ) : null}
-
-          <PressableScale
-            accessibilityRole="button"
-            accessibilityLabel="Usa la mia posizione"
-            style={[styles.positionButton, isLoading && styles.disabled]}
-            onPress={handleUsePosition}
-            disabled={isLoading}
-          >
-            <View style={styles.positionIcon}>
-              <View
-                style={[
-                  styles.positionDot,
-                  isLoading && styles.positionDotLoading,
-                ]}
-              />
-            </View>
-            <Text numberOfLines={1} style={styles.positionText}>
-              {isLoading
-                ? "Preparo"
-                : hasDashboard
-                  ? "Aggiorna"
-                  : "Mia posizione"}
-            </Text>
-          </PressableScale>
-        </View>
-
-        {showSuggestions && (
-          <View style={styles.suggestionsBox}>
-            {renderPlaceSuggestionGroup(placeSuggestions)}
-            {renderSuggestionGroup("Località", groupedSuggestions.cities)}
-            {renderSuggestionGroup("Zone", groupedSuggestions.areas)}
-          </View>
-        )}
-
-        {message.length > 0 && (
-          <View style={styles.messageCard}>
-            <Text style={styles.messageText}>{message}</Text>
-          </View>
-        )}
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Usa la mia posizione"
+          style={[styles.locationButton, isLoading && styles.disabled]}
+          onPress={handleUsePosition}
+          disabled={isLoading}
+        >
+          <View style={styles.locationDot} />
+        </PressableScale>
       </View>
 
-      {savedPlaces.length > 0 && (
-        <View style={styles.placesPanel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelKicker}>DALLA TUA GUIDA</Text>
-            <Text style={styles.panelTitle}>I posti che hai scelto</Text>
-            <Text style={styles.panelText}>
-              La tua selezione personale, sempre a portata.
-            </Text>
-          </View>
-
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            directionalLockEnabled
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.placesRow}
-          >
-            {savedPlaces.map(renderPlaceCard)}
-          </ScrollView>
+      {/* Suggestions */}
+      {showSuggestions && (
+        <View style={styles.suggestionsBox}>
+          {renderPlaceSuggestionGroup(placeSuggestions)}
+          {renderSuggestionGroup("Località", groupedSuggestions.cities)}
+          {renderSuggestionGroup("Zone", groupedSuggestions.areas)}
         </View>
       )}
 
+      {message.length > 0 && (
+        <View style={styles.messageRow}>
+          <Text style={styles.messageText}>{message}</Text>
+          {activeContext && (
+            <PressableScale
+              style={styles.retryButton}
+              onPress={() => loadDashboard(activeContext)}
+            >
+              <Text style={styles.retryButtonText}>Riprova</Text>
+            </PressableScale>
+          )}
+        </View>
+      )}
+
+      {/* Loading */}
       {isLoading && (
-        <View style={styles.loadingCard}>
-          <View style={styles.loadingTopRow}>
-            <Animated.View
-              style={[
-                styles.loadingMark,
-                {
-                  opacity: loadingOpacity,
-                  transform: [{ scale: loadingScale }],
-                },
-              ]}
-            >
-              <View style={styles.loadingMarkRing} />
-              <View style={styles.loadingMarkDot} />
-            </Animated.View>
-
-            <View style={styles.loadingCopy}>
-              <Text style={styles.loadingTitle}>Preparo la selezione</Text>
-              <Text style={styles.loadingText}>
-                Sto scegliendo i locali migliori intorno alla tua zona.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.loadingTrail}>
-            <Animated.View
-              style={[
-                styles.loadingTrailGlow,
-                {
-                  opacity: loadingOpacity,
-                },
-              ]}
-            />
-          </View>
+        <View style={styles.loadingRow}>
+          <Animated.View style={[styles.loadingDot, {
+            opacity: loadingPulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
+            transform: [{ scale: loadingPulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1.1] }) }],
+          }]} />
+          <Text style={styles.loadingText}>Preparo la selezione…</Text>
         </View>
       )}
 
+      {/* Content */}
       {!isLoading && (
-        <Animated.View
-          style={{
-            opacity: contentFade,
-            transform: [
-              {
-                translateY: contentFade.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [12, 0],
-                }),
-              },
-            ],
-          }}
-        >
-          <View style={styles.dashboardHeader}>
-            <Text style={styles.overlineMuted}>
-              {hasDashboard ? "DASHBOARD DI ZONA" : "SCORCIATOIE"}
-            </Text>
+        <Animated.View style={{ opacity: contentFade }}>
+          {hasDashboard && (
+            <>
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>{dashboardCityLabel}</Text>
+                <Text style={styles.sectionCount}>
+                  {filteredPlaces.length} posti
+                </Text>
+              </View>
 
-            <Text style={styles.dashboardTitle}>
-              {hasDashboard
-                ? dashboardCityLabel
-                : "Categorie essenziali, locali reali."}
-            </Text>
-          </View>
-
-          <View style={styles.categoryPanel}>
-            <ScrollView
-              horizontal
-              nestedScrollEnabled
-              directionalLockEnabled
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.categoryRow}
-            >
-              {categories.map((category) => {
-                const isSelected = selectedCategoryId === category.id;
-
-                return (
-                  <PressableScale
-                    key={category.id}
-                    style={[
-                      styles.categoryChip,
-                      isSelected && styles.categoryChipSelected,
-                    ]}
-                    onPress={() => {
-                      setSelectedCategoryId(category.id);
-                      setActiveThemeId(null);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryIcon,
-                        isSelected && styles.categoryIconSelected,
-                      ]}
-                    >
-                      {category.icon}
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.categoryText,
-                        isSelected && styles.categoryTextSelected,
-                      ]}
-                    >
-                      {category.label}
-                    </Text>
-
-                    {category.count > 0 && (
-                      <Text
-                        style={[
-                          styles.categoryCount,
-                          isSelected && styles.categoryCountSelected,
-                        ]}
-                      >
-                        {category.count}
-                      </Text>
-                    )}
-                  </PressableScale>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {zoneLists.length > 0 && (
-            <View style={styles.zoneSection}>
-              <Text style={styles.zoneKicker}>RACCOLTE DI ZONA</Text>
-              <Text style={styles.zoneHeading}>Liste pronte, dai dati reali</Text>
-              <Text style={styles.zoneSubtitle}>
-                Costruite al volo dai locali trovati qui intorno.
-              </Text>
-
+              {/* Category filter pills */}
               <ScrollView
                 horizontal
                 nestedScrollEnabled
                 directionalLockEnabled
                 showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
                 keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.zoneRow}
+                contentContainerStyle={styles.pillRow}
+                style={styles.pillScroll}
               >
-                {zoneLists.map((list) => {
-                  const isActive = activeThemeId === list.id;
-                  const topPlace = list.places[0]?.name ?? "";
-
+                {categories.map((category) => {
+                  const isSelected = selectedCategoryId === category.id;
                   return (
                     <PressableScale
-                      key={list.id}
+                      key={category.id}
                       style={[
-                        styles.zoneCard,
-                        isActive && styles.zoneCardActive,
+                        styles.filterPill,
+                        isSelected && styles.filterPillSelected,
                       ]}
                       onPress={() => {
-                        setActiveThemeId((current) =>
-                          current === list.id ? null : list.id
-                        );
-                        setSelectedCategoryId("all");
+                        setSelectedCategoryId(category.id);
+                        setActiveThemeId(null);
                       }}
                     >
-                      <View style={styles.zoneCardTop}>
-                        <View
-                          style={[
-                            styles.zoneIconWrap,
-                            isActive && styles.zoneIconWrapActive,
-                          ]}
-                        >
-                          <Text style={styles.zoneIcon}>{list.icon}</Text>
-                        </View>
-
-                        <Text
-                          style={[
-                            styles.zoneCount,
-                            isActive && styles.zoneCountActive,
-                          ]}
-                        >
-                          {list.count}
-                        </Text>
-                      </View>
-
                       <Text
-                        numberOfLines={1}
                         style={[
-                          styles.zoneTitle,
-                          isActive && styles.zoneTitleActive,
+                          styles.filterPillIcon,
+                          isSelected && styles.filterPillIconSelected,
                         ]}
                       >
-                        {list.title}
+                        {category.icon}
                       </Text>
-
                       <Text
-                        numberOfLines={1}
                         style={[
-                          styles.zoneHint,
-                          isActive && styles.zoneHintActive,
+                          styles.filterPillText,
+                          isSelected && styles.filterPillTextSelected,
                         ]}
                       >
-                        {list.hint}
+                        {category.label}
                       </Text>
-
-                      {topPlace ? (
-                        <View style={styles.zoneFooter}>
-                          <View
-                            style={[
-                              styles.zoneFooterDot,
-                              isActive && styles.zoneFooterDotActive,
-                            ]}
-                          />
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.zonePreview,
-                              isActive && styles.zonePreviewActive,
-                            ]}
-                          >
-                            {topPlace}
-                          </Text>
-                        </View>
-                      ) : null}
                     </PressableScale>
                   );
                 })}
               </ScrollView>
-            </View>
+
+              {/* Zone pills */}
+              {zoneLists.length > 0 && (
+                <ScrollView
+                  horizontal
+                  nestedScrollEnabled
+                  directionalLockEnabled
+                  showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.pillRow}
+                  style={styles.pillScroll}
+                >
+                  {zoneLists.map((list) => {
+                    const isActive = activeThemeId === list.id;
+                    return (
+                      <PressableScale
+                        key={list.id}
+                        style={[
+                          styles.zonePill,
+                          isActive && styles.zonePillActive,
+                        ]}
+                        onPress={() => {
+                          setActiveThemeId((current) =>
+                            current === list.id ? null : list.id
+                          );
+                          setSelectedCategoryId("all");
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.zonePillText,
+                            isActive && styles.zonePillTextActive,
+                          ]}
+                        >
+                          {list.title}
+                        </Text>
+                      </PressableScale>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              {/* Place list */}
+              {hasPlaces && (
+                <View style={styles.placeList}>
+                  {filteredPlaces.map(renderPlaceRow)}
+                </View>
+              )}
+
+              {/* Map link */}
+              <PressableScale style={styles.mapRow} onPress={openContextSearch}>
+                <Text style={styles.mapRowText}>Vedi sulla mappa</Text>
+                <Text style={styles.mapRowChevron}>›</Text>
+              </PressableScale>
+            </>
           )}
 
-          {hasPlaces && (
-            <View style={styles.placesPanel}>
-              <View style={styles.panelHeader}>
-                {renderCarouselControls("places")}
+          {!hasDashboard && (
+            <>
+              {savedPlaces.length > 0 && (
+                <>
+                  <View style={styles.sectionRow}>
+                    <Text style={styles.sectionTitle}>I tuoi posti</Text>
+                    <Text style={styles.sectionCount}>
+                      {savedPlaces.length}
+                    </Text>
+                  </View>
 
-                <Text style={styles.panelKicker}>
-                  {activeTheme ? "RACCOLTA DI ZONA" : "SELEZIONE REALE"}
-                </Text>
-                <Text style={styles.panelTitle}>
-                  {activeTheme ? activeTheme.title : "Scorri i suggerimenti"}
-                </Text>
-                <Text style={styles.panelText}>
-                  {activeTheme
-                    ? activeTheme.hint
-                    : "I locali cambiano in base alla categoria scelta."}
-                </Text>
+                  <View style={styles.placeList}>
+                    {savedPlaces.slice(0, 8).map(renderPlaceRow)}
+                  </View>
+                </>
+              )}
+
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>Le tue raccolte</Text>
               </View>
 
-              <ScrollView
-                ref={placesScrollRef}
-                horizontal
-                nestedScrollEnabled
-                directionalLockEnabled
-                showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                onScroll={handleCarouselScroll("places")}
-                scrollEventThrottle={16}
-                contentContainerStyle={styles.placesRow}
-              >
-                {filteredPlaces.map(renderPlaceCard)}
-              </ScrollView>
-            </View>
-          )}
+              <View style={styles.collectionGrid}>
+                {collections.map((item) => (
+                  <PressableScale
+                    key={item.title}
+                    style={styles.collectionCard}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/lists",
+                        params: { focus: item.focus },
+                      } as never)
+                    }
+                  >
+                    <Text style={styles.collectionIcon}>
+                      {getCollectionIcon(item)}
+                    </Text>
+                    <Text style={styles.collectionTitle}>{item.title}</Text>
+                  </PressableScale>
+                ))}
+              </View>
 
+              <PressableScale
+                style={styles.mapButton}
+                onPress={() => openMap()}
+              >
+                <Text style={styles.mapButtonText}>Esplora sulla mappa</Text>
+              </PressableScale>
+            </>
+          )}
         </Animated.View>
       )}
 
-      <View style={styles.realSearchCard}>
-        <Text style={styles.realSearchKicker}>RICERCA REALE</Text>
-        <Text style={styles.realSearchTitle}>
-          {hasDashboard ? "Vuoi filtrare meglio?" : "Trova posti veri, vicino a te."}
-        </Text>
-        <Text style={styles.realSearchText}>
-          Apri la mappa per esplorare la zona, vedere i locali intorno a te e
-          costruire la tua guida personale.
-        </Text>
-
-        <PressableScale
-          style={styles.realSearchButton}
-          onPress={openContextSearch}
-        >
-          <Text style={styles.realSearchButtonText}>Apri la mappa</Text>
-        </PressableScale>
-      </View>
-
-      <View style={styles.myMelloryCard}>
-        <Text style={styles.cardKicker}>MY MELLORY</Text>
-
-        <Text style={styles.cardTitle}>
-          Il recensore sei tu.{"\n"}La guida è la tua.
-        </Text>
-
-        <Text style={styles.cardText}>
-          Scopri locali reali, salvali con gusto e costruisci un archivio
-          personale fatto di note, liste, ricordi e posti da ritrovare.
-        </Text>
-      </View>
-
-      <View style={styles.collectionGrid}>
-        {collections.map((item) => (
-          <PressableScale
-            key={item.title}
-            style={styles.collectionCard}
-            onPress={() =>
-              router.push({
-                pathname: "/lists",
-                params: { focus: item.focus },
-              } as never)
-            }
-          >
-            <View style={styles.collectionIconWrap}>
-              <Text style={styles.collectionIcon}>{getCollectionIcon(item)}</Text>
-            </View>
-
-            <View>
-              <Text style={styles.collectionTitle}>{item.title}</Text>
-              <Text style={styles.collectionText}>{item.text}</Text>
-            </View>
-          </PressableScale>
-        ))}
-      </View>
-
-      <View style={styles.bottomSpace} />
+      <View style={{ height: 88 + insets.bottom + 16 }} />
     </ScrollView>
+
+    {hasDashboard && hasPlaces && (
+      <PressableScale
+        style={[styles.floatingMapPill, { bottom: insets.bottom + 96 }]}
+        onPress={openContextSearch}
+      >
+        <Text style={styles.floatingMapPillIcon}>⊞</Text>
+        <Text style={styles.floatingMapPillText}>Mappa</Text>
+      </PressableScale>
+    )}
+
+    <Modal
+      transparent
+      visible={showAddPlaceSheet}
+      animationType="slide"
+      onRequestClose={() => setShowAddPlaceSheet(false)}
+    >
+      <View style={styles.modalBackdrop}>
+        <PressableScale
+          style={styles.modalBackdropPressable}
+          onPress={() => setShowAddPlaceSheet(false)}
+        />
+
+        <KeyboardAvoidingView
+          behavior={
+            Platform.OS === "ios"
+              ? "padding"
+              : Platform.OS === "android"
+                ? "height"
+                : undefined
+          }
+        >
+          <View style={[styles.addPlaceSheet, { maxHeight: windowHeight * 0.9 }]}>
+            <View style={styles.sheetHandle} />
+
+            <ScrollView
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.addPlaceContent}
+            >
+              <View style={styles.addPlaceSheetHeader}>
+                <Text style={styles.addPlaceSheetTitle}>Aggiungi locale</Text>
+                <PressableScale onPress={() => setShowAddPlaceSheet(false)}>
+                  <Text style={styles.addPlaceSheetClose}>×</Text>
+                </PressableScale>
+              </View>
+
+              <Text style={styles.addPlaceSheetDesc}>
+                Inserisci un locale non trovato nella ricerca, visto su Maps o
+                suggerito da un amico.
+              </Text>
+
+              <Text style={styles.addPlaceInputLabel}>Nome *</Text>
+              <TextInput
+                value={draftAddName}
+                onChangeText={setDraftAddName}
+                placeholder="Nome del locale"
+                placeholderTextColor={colors.muted}
+                autoFocus
+                returnKeyType="next"
+                style={styles.addPlaceInput}
+              />
+
+              <Text style={styles.addPlaceInputLabel}>Categoria</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryChipsRow}
+              >
+                {ADD_PLACE_CATEGORIES.map((cat) => (
+                  <PressableScale
+                    key={cat}
+                    style={[
+                      styles.categoryChip,
+                      draftAddCategory === cat && styles.categoryChipActive,
+                    ]}
+                    onPress={() => setDraftAddCategory(cat)}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        draftAddCategory === cat && styles.categoryChipTextActive,
+                      ]}
+                    >
+                      {cat}
+                    </Text>
+                  </PressableScale>
+                ))}
+              </ScrollView>
+
+              <Text style={styles.addPlaceInputLabel}>Indirizzo o zona</Text>
+              <TextInput
+                value={draftAddAddress}
+                onChangeText={setDraftAddAddress}
+                placeholder="Via, quartiere, città..."
+                placeholderTextColor={colors.muted}
+                returnKeyType="next"
+                style={styles.addPlaceInput}
+              />
+
+              <Text style={styles.addPlaceInputLabel}>Telefono</Text>
+              <TextInput
+                value={draftAddPhone}
+                onChangeText={setDraftAddPhone}
+                placeholder="Numero di telefono"
+                placeholderTextColor={colors.muted}
+                keyboardType="phone-pad"
+                inputMode="tel"
+                returnKeyType="next"
+                style={styles.addPlaceInput}
+              />
+
+              <Text style={styles.addPlaceInputLabel}>Sito web</Text>
+              <TextInput
+                value={draftAddWebsite}
+                onChangeText={setDraftAddWebsite}
+                placeholder="sito.it"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="none"
+                keyboardType="url"
+                inputMode="url"
+                returnKeyType="done"
+                style={styles.addPlaceInput}
+              />
+
+              <PressableScale
+                style={[
+                  styles.addPlaceButton,
+                  !draftAddName.trim() && styles.addPlaceButtonDisabled,
+                ]}
+                onPress={createAndOpenCustomPlace}
+                disabled={!draftAddName.trim()}
+              >
+                <Text style={styles.addPlaceButtonText}>
+                  Crea scheda locale
+                </Text>
+              </PressableScale>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+    </View>
   );
 }
 
 function createStyles(colors: MelloryThemeColors) {
   return StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.black,
-  },
-  content: {
-    paddingHorizontal: 22,
-    paddingTop: 0,
-  },
-  topRule: {
-    height: 1,
-    backgroundColor: colors.yellow,
-    opacity: 0.95,
-    marginBottom: 26,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 18,
-    marginBottom: 30,
-  },
-  brandBlock: {
-    flex: 1,
-  },
-  logo: {
-    color: colors.cream,
-    fontSize: 54,
-    lineHeight: 58,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -1.6,
-  },
-  brandUnderline: {
-    width: 60,
-    height: 1,
-    backgroundColor: colors.yellow,
-    marginTop: 14,
-    marginBottom: 14,
-  },
-  brandSubtitle: {
-    color: colors.cream,
-    opacity: 0.88,
-    fontSize: 19,
-    lineHeight: 25,
-    fontFamily: "serif",
-    fontStyle: "italic",
-    fontWeight: "700",
-    marginTop: 4,
-    maxWidth: 320,
-  },
-  settingsButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 999,
-    backgroundColor: "rgba(255, 248, 239, 0.03)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.42)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-  settingsIcon: {
-    color: colors.cream,
-    fontSize: 25,
-    lineHeight: 28,
-    fontWeight: "700",
-  },
-  hero: {
-    marginBottom: 36,
-  },
-  overline: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 18,
-  },
-  headline: {
-    color: colors.cream,
-    fontSize: 50,
-    lineHeight: 54,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -1.5,
-  },
-  headlineAccent: {
-    color: colors.pink,
-    fontStyle: "italic",
-  },
-  searchBlock: {
-    marginBottom: 30,
-  },
-  searchBox: {
-    minHeight: 92,
-    borderRadius: 999,
-    backgroundColor: colors.paper,
-    paddingLeft: 24,
-    paddingRight: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 14,
-  },
-  searchLens: {
-    width: 26,
-    height: 26,
-    position: "relative",
-  },
-  searchLensCircle: {
-    width: 17,
-    height: 17,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: colors.muted,
-    position: "absolute",
-    left: 2,
-    top: 2,
-  },
-  searchLensHandle: {
-    width: 10,
-    height: 2,
-    borderRadius: 999,
-    backgroundColor: colors.muted,
-    position: "absolute",
-    right: 2,
-    bottom: 5,
-    transform: [{ rotate: "45deg" }],
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    color: colors.paperText,
-    fontSize: 20,
-    lineHeight: 27,
-    fontWeight: "600",
-  },
-  suggestionsBox: {
-    backgroundColor: colors.card,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.1)",
-    marginBottom: 14,
-    overflow: "hidden",
-  },
-  suggestionGroup: {
-    paddingTop: 14,
-  },
-  suggestionGroupTitle: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 2.4,
-    paddingHorizontal: 18,
-    marginBottom: 3,
-    textTransform: "uppercase",
-  },
-  suggestionItem: {
-    minHeight: 68,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 248, 239, 0.06)",
-  },
-  suggestionDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 999,
-    backgroundColor: colors.pink,
-  },
-  suggestionTextBlock: {
-    flex: 1,
-  },
-  suggestionTitle: {
-    color: colors.cream,
-    fontSize: 17,
-    fontWeight: "900",
-    marginBottom: 3,
-  },
-  suggestionDetail: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  positionButton: {
-    minHeight: 54,
-    borderRadius: 999,
-    backgroundColor: colors.paperText,
-    borderWidth: 1,
-    borderColor: colors.softBorder,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    flexShrink: 0,
-    maxWidth: 148,
-  },
-  positionIcon: {
-    width: 21,
-    height: 21,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: colors.paper,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  positionDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: colors.paper,
-  },
-  positionDotLoading: {
-    backgroundColor: colors.pink,
-  },
-  positionText: {
-    color: colors.paper,
-    fontSize: 13,
-    fontWeight: "900",
-    flexShrink: 1,
-  },
-  disabled: {
-    opacity: 0.72,
-  },
-  messageCard: {
-    backgroundColor: "rgba(255, 248, 239, 0.08)",
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.12)",
-    padding: 16,
-    marginTop: 13,
-  },
-  messageText: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: "700",
-  },
-  loadingCard: {
-    backgroundColor: colors.card,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    padding: 24,
-    marginBottom: 18,
-    gap: 18,
-    overflow: "hidden",
-  },
-  loadingTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  loadingMark: {
-    width: 58,
-    height: 58,
-    borderRadius: 999,
-    backgroundColor: "rgba(216, 78, 127, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(226, 189, 53, 0.32)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingMarkRing: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: colors.yellow,
-    opacity: 0.92,
-  },
-  loadingMarkDot: {
-    position: "absolute",
-    width: 9,
-    height: 9,
-    borderRadius: 999,
-    backgroundColor: colors.pink,
-  },
-  loadingCopy: {
-    flex: 1,
-  },
-  loadingTitle: {
-    color: colors.cream,
-    fontSize: 26,
-    lineHeight: 31,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  loadingText: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  loadingTrail: {
-    height: 3,
-    borderRadius: 999,
-    backgroundColor: "rgba(255, 248, 239, 0.08)",
-    overflow: "hidden",
-  },
-  loadingTrailGlow: {
-    width: "62%",
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: colors.pink,
-  },
-  dashboardHeader: {
-    marginBottom: 16,
-  },
-  overlineMuted: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 4,
-    marginBottom: 12,
-  },
-  dashboardTitle: {
-    color: colors.cream,
-    fontSize: 30,
-    lineHeight: 35,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -0.8,
-  },
-  carouselControls: {
-    position: "absolute",
-    top: 0,
-    right: 22,
-    zIndex: 3,
-    flexDirection: "row",
-    gap: 8,
-  },
-  carouselButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 999,
-    backgroundColor: colors.black,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  carouselButtonText: {
-    color: colors.cream,
-    fontSize: 30,
-    lineHeight: 31,
-    fontWeight: "900",
-    marginTop: -2,
-  },
-  categoryPanel: {
-    marginBottom: 18,
-  },
-  categoryRow: {
-    gap: 10,
-    paddingRight: 24,
-    paddingLeft: 0,
-  },
-  categoryChip: {
-    minHeight: 54,
-    borderRadius: 999,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  categoryChipSelected: {
-    backgroundColor: colors.paper,
-    borderColor: colors.paper,
-  },
-  categoryIcon: {
-    color: colors.pink,
-    fontSize: 17,
-    fontWeight: "900",
-  },
-  categoryIconSelected: {
-    color: colors.pink,
-  },
-  categoryText: {
-    color: colors.cream,
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  categoryTextSelected: {
-    color: colors.paperText,
-  },
-  categoryCount: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  categoryCountSelected: {
-    color: colors.paperText,
-  },
-  placesPanel: {
-    backgroundColor: colors.card,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    paddingVertical: 22,
-    paddingLeft: 22,
-    marginBottom: 14,
-  },
-  panelHeader: {
-    paddingRight: 22,
-    marginBottom: 16,
-    position: "relative",
-  },
-  panelKicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 12,
-  },
-  panelTitle: {
-    color: colors.cream,
-    fontSize: 30,
-    lineHeight: 35,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 8,
-  },
-  panelText: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  placesRow: {
-    gap: 14,
-    paddingRight: 24,
-    paddingLeft: 0,
-  },
-  placeCard: {
-    width: 240,
-    minHeight: 238,
-    borderRadius: 26,
-    backgroundColor: colors.card2,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    padding: 18,
-  },
-  placeTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 18,
-  },
-  placeInitial: {
-    width: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: "rgba(216, 78, 127, 0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(216, 78, 127, 0.32)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeInitialText: {
-    color: colors.pink,
-    fontSize: 22,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  placeDistance: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  placeName: {
-    color: colors.cream,
-    fontSize: 22,
-    lineHeight: 26,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 8,
-  },
-  placeCategory: {
-    color: colors.pink,
-    fontSize: 14,
-    fontWeight: "900",
-    marginBottom: 8,
-  },
-  placeDetail: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  placeFooter: {
-    marginTop: "auto",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 248, 239, 0.08)",
-    paddingTop: 12,
-  },
-  placeFooterText: {
-    color: colors.cream,
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  zoneSection: {
-    marginBottom: 18,
-  },
-  zoneKicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 12,
-  },
-  zoneHeading: {
-    color: colors.cream,
-    fontSize: 27,
-    lineHeight: 31,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -0.6,
-    marginBottom: 8,
-  },
-  zoneSubtitle: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  zoneRow: {
-    gap: 12,
-    paddingRight: 24,
-    paddingLeft: 0,
-  },
-  zoneCard: {
-    width: 196,
-    minHeight: 162,
-    borderRadius: 25,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    padding: 18,
-  },
-  zoneFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: "auto",
-    paddingTop: 12,
-  },
-  zoneFooterDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: colors.pink,
-  },
-  zoneFooterDotActive: {
-    backgroundColor: colors.pink,
-  },
-  zonePreview: {
-    flex: 1,
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  zonePreviewActive: {
-    color: colors.paperText,
-    opacity: 0.78,
-  },
-  zoneCardActive: {
-    backgroundColor: colors.paper,
-    borderColor: colors.paper,
-  },
-  zoneCardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  zoneIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    backgroundColor: "rgba(216, 78, 127, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(216, 78, 127, 0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  zoneIconWrapActive: {
-    backgroundColor: "rgba(216, 78, 127, 0.16)",
-  },
-  zoneIcon: {
-    color: colors.pink,
-    fontSize: 21,
-    fontWeight: "900",
-  },
-  zoneCount: {
-    color: colors.muted,
-    fontSize: 22,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  zoneCountActive: {
-    color: colors.paperText,
-  },
-  zoneTitle: {
-    color: colors.cream,
-    fontSize: 21,
-    lineHeight: 25,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 5,
-  },
-  zoneTitleActive: {
-    color: colors.paperText,
-  },
-  zoneHint: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  zoneHintActive: {
-    color: colors.paperText,
-    opacity: 0.7,
-  },
-  realSearchCard: {
-    backgroundColor: colors.paper,
-    borderRadius: 30,
-    padding: 24,
-    marginBottom: 14,
-  },
-  realSearchKicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 14,
-  },
-  realSearchTitle: {
-    color: colors.paperText,
-    fontSize: 31,
-    lineHeight: 36,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -0.8,
-    marginBottom: 12,
-  },
-  realSearchText: {
-    color: colors.paperText,
-    fontSize: 16,
-    lineHeight: 25,
-    marginBottom: 20,
-  },
-  realSearchButton: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.paperText,
-    borderRadius: 999,
-    paddingVertical: 14,
-    paddingHorizontal: 22,
-  },
-  realSearchButtonText: {
-    color: colors.paper,
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  myMelloryCard: {
-    backgroundColor: colors.card,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    padding: 24,
-    marginBottom: 14,
-  },
-  cardKicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 22,
-  },
-  cardTitle: {
-    color: colors.cream,
-    fontSize: 35,
-    lineHeight: 39,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -0.9,
-    marginBottom: 14,
-  },
-  cardText: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 25,
-  },
-  collectionGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 14,
-  },
-  collectionCard: {
-    flex: 1,
-    minWidth: "47%",
-    minHeight: 158,
-    borderRadius: 25,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    padding: 18,
-    justifyContent: "space-between",
-  },
-  collectionIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    backgroundColor: "rgba(216, 78, 127, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(216, 78, 127, 0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  collectionIcon: {
-    color: colors.pink,
-    fontSize: 22,
-    fontWeight: "900",
-  },
-  collectionTitle: {
-    color: colors.cream,
-    fontSize: 24,
-    lineHeight: 28,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 7,
-  },
-  collectionText: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  bottomSpace: {
-    height: 118,
-  },
+    screen: {
+      flex: 1,
+      backgroundColor: colors.black,
+    },
+    scrollFill: {
+      flex: 1,
+    },
+    content: {
+      paddingHorizontal: 20,
+      maxWidth: 560,
+      width: "100%",
+      alignSelf: "center",
+    },
+    floatingMapPill: {
+      position: "absolute",
+      alignSelf: "center",
+      left: "50%",
+      transform: [{ translateX: -54 }],
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      height: 42,
+      paddingHorizontal: 20,
+      borderRadius: 24,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+    },
+    floatingMapPillIcon: {
+      color: colors.pink,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    floatingMapPillText: {
+      color: colors.cream,
+      fontSize: 14,
+      fontWeight: "700",
+      letterSpacing: 0.2,
+    },
+    safeTop: {
+      height: 16,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      gap: 18,
+      marginBottom: 16,
+    },
+    brandBlock: {
+      flex: 1,
+    },
+    addPlaceHeaderBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 4,
+    },
+    addPlaceHeaderBtnText: {
+      color: colors.cream,
+      fontSize: 22,
+      lineHeight: 26,
+      fontWeight: "300",
+      includeFontPadding: false,
+    },
+    logo: {
+      color: colors.cream,
+      fontSize: 46,
+      lineHeight: 50,
+      fontWeight: "900",
+      letterSpacing: -1.4,
+    },
+    brandUnderline: {
+      width: 36,
+      height: 2.5,
+      borderRadius: 999,
+      backgroundColor: colors.pink,
+      marginTop: 14,
+      marginBottom: 14,
+    },
+    hero: {
+      marginBottom: 32,
+    },
+    overline: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 2,
+      marginBottom: 12,
+      textTransform: "uppercase",
+    },
+    headline: {
+      color: colors.cream,
+      fontSize: 34,
+      lineHeight: 39,
+      fontWeight: "900",
+      letterSpacing: -1.5,
+    },
+    headlineAccent: {
+      color: colors.pink,
+    },
+    searchBox: {
+      height: 50,
+      borderRadius: 25,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      paddingLeft: 18,
+      paddingRight: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 14,
+    },
+    searchIcon: {
+      color: colors.textMuted,
+      fontSize: 22,
+      lineHeight: 24,
+    },
+    searchInput: {
+      flex: 1,
+      minWidth: 0,
+      color: colors.cream,
+      fontSize: 16,
+      fontWeight: "500",
+    },
+    locationButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.pink,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    locationDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#fff",
+    },
+    disabled: {
+      opacity: 0.6,
+    },
+    suggestionsBox: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      marginBottom: 14,
+      overflow: "hidden",
+    },
+    suggestionGroup: {
+      paddingTop: 12,
+    },
+    suggestionGroupTitle: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 2,
+      paddingHorizontal: 18,
+      marginBottom: 4,
+      textTransform: "uppercase",
+    },
+    suggestionItem: {
+      paddingHorizontal: 18,
+      paddingVertical: 13,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      borderBottomWidth: 0.5,
+      borderBottomColor: colors.softBorder,
+    },
+    suggestionDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.pink,
+    },
+    suggestionTextBlock: {
+      flex: 1,
+    },
+    suggestionTitle: {
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "600",
+      marginBottom: 2,
+    },
+    suggestionDetail: {
+      color: colors.muted,
+      fontSize: 13,
+    },
+    messageRow: {
+      marginBottom: 12,
+      gap: 10,
+    },
+    messageText: {
+      color: colors.muted,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    retryButton: {
+      alignSelf: "flex-start",
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+    },
+    retryButtonText: {
+      color: colors.cream,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    loadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingVertical: 28,
+    },
+    loadingDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.pink,
+    },
+    suggestingDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: colors.pink,
+      opacity: 0.7,
+    },
+    loadingText: {
+      color: colors.muted,
+      fontSize: 15,
+    },
+    sectionRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 12,
+      marginTop: 24,
+    },
+    sectionTitle: {
+      color: colors.cream,
+      fontSize: 22,
+      fontWeight: "800",
+      letterSpacing: -0.6,
+    },
+    sectionCount: {
+      color: colors.muted,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    pillScroll: {
+      marginBottom: 12,
+    },
+    pillRow: {
+      gap: 7,
+      paddingRight: 20,
+    },
+    filterPill: {
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      paddingHorizontal: 14,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 5,
+    },
+    filterPillSelected: {
+      backgroundColor: colors.cream,
+      borderColor: colors.cream,
+    },
+    filterPillIcon: {
+      color: colors.pink,
+      fontSize: 12,
+    },
+    filterPillIconSelected: {
+      color: colors.black,
+    },
+    filterPillText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    filterPillTextSelected: {
+      color: colors.black,
+    },
+    zonePill: {
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: "transparent",
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      paddingHorizontal: 13,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    zonePillActive: {
+      backgroundColor: colors.pink,
+      borderColor: colors.pink,
+    },
+    zonePillText: {
+      color: colors.muted,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    zonePillTextActive: {
+      color: "#fff",
+    },
+    placeList: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      overflow: "hidden",
+      marginBottom: 6,
+    },
+    placeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingLeft: 0,
+      paddingRight: 18,
+      paddingVertical: 15,
+      gap: 12,
+      borderBottomWidth: 0.5,
+      borderBottomColor: colors.softBorder,
+    },
+    placeAccentBar: {
+      width: 3,
+      alignSelf: "stretch",
+      borderRadius: 99,
+      backgroundColor: colors.pink,
+      marginLeft: 16,
+      flexShrink: 0,
+    },
+    placeAvatar: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: colors.card2,
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    placeAvatarText: {
+      color: colors.pink,
+      fontSize: 15,
+      fontWeight: "800",
+    },
+    placeRowInfo: {
+      flex: 1,
+      minWidth: 0,
+    },
+    placeRowName: {
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "700",
+      marginBottom: 2,
+      letterSpacing: -0.1,
+    },
+    placeRowSub: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "500",
+    },
+    placeRowChevron: {
+      color: colors.softBorder,
+      fontSize: 20,
+    },
+    mapRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
+      marginTop: 6,
+      marginBottom: 24,
+    },
+    mapRowText: {
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+    mapRowChevron: {
+      color: colors.pink,
+      fontSize: 20,
+    },
+    collectionGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      marginBottom: 14,
+      marginTop: 4,
+    },
+    collectionCard: {
+      flex: 1,
+      minWidth: "47%",
+      borderRadius: 18,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      padding: 18,
+      gap: 10,
+    },
+    collectionIcon: {
+      color: colors.pink,
+      fontSize: 20,
+    },
+    collectionTitle: {
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "700",
+      letterSpacing: -0.2,
+    },
+    mapButton: {
+      backgroundColor: colors.cream,
+      borderRadius: 16,
+      paddingVertical: 17,
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    mapButtonText: {
+      color: colors.black,
+      fontSize: 15,
+      fontWeight: "800",
+      letterSpacing: 0.2,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "flex-end",
+    },
+    modalBackdropPressable: {
+      flex: 1,
+    },
+    addPlaceSheet: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      minHeight: 420,
+    },
+    sheetHandle: {
+      width: 38,
+      height: 4,
+      borderRadius: 999,
+      backgroundColor: "rgba(255,248,239,0.18)",
+      alignSelf: "center",
+      marginTop: 12,
+      marginBottom: 4,
+    },
+    addPlaceContent: {
+      paddingHorizontal: 22,
+      paddingBottom: 40,
+    },
+    addPlaceSheetHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 16,
+    },
+    addPlaceSheetTitle: {
+      color: colors.cream,
+      fontSize: 20,
+      fontWeight: "900",
+      letterSpacing: -0.4,
+    },
+    addPlaceSheetClose: {
+      color: colors.muted,
+      fontSize: 28,
+      lineHeight: 30,
+      fontWeight: "400",
+      paddingHorizontal: 4,
+    },
+    addPlaceSheetDesc: {
+      color: colors.textMuted,
+      fontSize: 14,
+      lineHeight: 21,
+      marginBottom: 22,
+    },
+    addPlaceInputLabel: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      marginBottom: 7,
+      marginTop: 16,
+    },
+    addPlaceInput: {
+      backgroundColor: colors.black,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: "rgba(255,248,239,0.10)",
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "500",
+      paddingHorizontal: 15,
+      paddingVertical: 13,
+    },
+    categoryChipsRow: {
+      gap: 8,
+      paddingBottom: 4,
+    },
+    categoryChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.black,
+      borderWidth: 1,
+      borderColor: "rgba(255,248,239,0.12)",
+    },
+    categoryChipActive: {
+      backgroundColor: `${colors.pink}22`,
+      borderColor: `${colors.pink}80`,
+    },
+    categoryChipText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    categoryChipTextActive: {
+      color: colors.cream,
+    },
+    addPlaceButton: {
+      backgroundColor: colors.cream,
+      borderRadius: 16,
+      paddingVertical: 17,
+      alignItems: "center",
+      marginTop: 28,
+    },
+    addPlaceButtonDisabled: {
+      opacity: 0.4,
+    },
+    addPlaceButtonText: {
+      color: colors.black,
+      fontSize: 15,
+      fontWeight: "900",
+      letterSpacing: 0.2,
+    },
   });
 }

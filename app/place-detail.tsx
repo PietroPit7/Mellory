@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
 import { router, useLocalSearchParams } from "expo-router";
@@ -7,16 +8,30 @@ import {
   Alert,
   Animated,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PressableScale } from "@/components/pressable-scale";
-import { melloryThemeVars } from "@/contexts/mellory-theme";
+import {
+  melloryDarkColors,
+  melloryThemeVars,
+  type MelloryThemeColors,
+  useMelloryTheme,
+} from "@/contexts/mellory-theme";
+
+// On web, melloryThemeVars uses CSS variables so the StyleSheet responds to
+// theme changes automatically. On native melloryThemeVars === melloryLightColors;
+// the component overrides key elements via inline styles from useMelloryTheme().
+const colors = melloryThemeVars;
 import { openPreferredNavigation } from "@/services/navigation-preferences";
 
 type PlaceStatus = "try" | "favorite" | "visited" | "retry";
@@ -26,6 +41,7 @@ type SheetType =
   | "lists"
   | "note"
   | "experience"
+  | "experienceDetail"
   | "badges"
   | "gallery"
   | "editorial"
@@ -51,6 +67,12 @@ type ExperienceEntry = {
   dish: string;
   spend: string;
   wouldReturn: boolean | null;
+  createdAt: string;
+};
+
+type NoteEntry = {
+  id: string;
+  text: string;
   createdAt: string;
 };
 
@@ -200,7 +222,7 @@ function getOpenNowStateFromHoursValue(value: string): boolean | null {
 }
 
 type PlaceExperience = {
-  note: string;
+  notes: NoteEntry[];
   coverImageUri: string;
   galleryImageUris: string[];
   statuses: PlaceStatus[];
@@ -260,8 +282,6 @@ type CustomList = {
   createdAt: string;
 };
 
-const colors = melloryThemeVars;
-
 const FAVORITES_STORAGE_KEY = "mellory:favorites";
 const TRY_STORAGE_KEY = "mellory:try";
 const VISITED_STORAGE_KEY = "mellory:visited";
@@ -300,7 +320,7 @@ const emptyPersonalDetails: PersonalDetails = {
 };
 
 const emptyExperience: PlaceExperience = {
-  note: "",
+  notes: [],
   coverImageUri: "",
   galleryImageUris: [],
   statuses: [],
@@ -312,42 +332,44 @@ const emptyExperience: PlaceExperience = {
   personalDetails: emptyPersonalDetails,
 };
 
-const listOptions: {
+function makeListOptions(colors: MelloryThemeColors): {
   status: PlaceStatus;
   emoji: string;
   title: string;
   text: string;
   color: string;
-}[] = [
-  {
-    status: "try",
-    emoji: "✦",
-    title: "Da provare",
-    text: "Posti che vuoi visitare prossimamente.",
-    color: colors.yellow,
-  },
-  {
-    status: "favorite",
-    emoji: "♥",
-    title: "Preferito",
-    text: "Posti in cui torneresti senza pensarci.",
-    color: colors.pink,
-  },
-  {
-    status: "visited",
-    emoji: "✓",
-    title: "Visitato",
-    text: "Posti dove sei già stato e vuoi ricordare.",
-    color: colors.green,
-  },
-  {
-    status: "retry",
-    emoji: "↻",
-    title: "Da rivalutare",
-    text: "Posti da riprovare prima di decidere.",
-    color: colors.orange,
-  },
-];
+}[] {
+  return [
+    {
+      status: "try",
+      emoji: "✦",
+      title: "Da provare",
+      text: "Posti che vuoi visitare prossimamente.",
+      color: colors.yellow,
+    },
+    {
+      status: "favorite",
+      emoji: "♥",
+      title: "Preferito",
+      text: "Posti in cui torneresti senza pensarci.",
+      color: colors.pink,
+    },
+    {
+      status: "visited",
+      emoji: "✓",
+      title: "Visitato",
+      text: "Posti dove sei già stato e vuoi ricordare.",
+      color: colors.green,
+    },
+    {
+      status: "retry",
+      emoji: "↻",
+      title: "Da rivalutare",
+      text: "Posti da riprovare prima di decidere.",
+      color: colors.orange,
+    },
+  ];
+}
 
 const scoreRows: { key: ScoreKey; label: string }[] = [
   { key: "food", label: "Cibo" },
@@ -361,92 +383,19 @@ const scoreRows: { key: ScoreKey; label: string }[] = [
   { key: "return", label: "Voglia di tornarci" },
 ];
 
-const standardBadges: StandardBadge[] = [
-  {
-    id: "romantico",
-    label: "romantico",
-    icon: "♡",
-    category: "occasione",
-    color: colors.pink,
-  },
-  {
-    id: "amici",
-    label: "amici",
-    icon: "♢",
-    category: "occasione",
-    color: colors.gold,
-  },
-  {
-    id: "business",
-    label: "business",
-    icon: "◆",
-    category: "occasione",
-    color: colors.blue,
-  },
-  {
-    id: "famiglia",
-    label: "famiglia",
-    icon: "⌂",
-    category: "occasione",
-    color: colors.sage,
-  },
-  {
-    id: "gourmet",
-    label: "gourmet",
-    icon: "✦",
-    category: "gusto",
-    color: colors.yellow,
-  },
-  {
-    id: "vino",
-    label: "vino",
-    icon: "♕",
-    category: "gusto",
-    color: colors.red,
-  },
-  {
-    id: "cocktail",
-    label: "cocktail",
-    icon: "◒",
-    category: "gusto",
-    color: colors.violet,
-  },
-  {
-    id: "dolci",
-    label: "dolci",
-    icon: "◌",
-    category: "gusto",
-    color: colors.orange,
-  },
-  {
-    id: "hidden-gem",
-    label: "hidden gem",
-    icon: "◇",
-    category: "personale",
-    color: colors.gold,
-  },
-  {
-    id: "vista",
-    label: "vista bella",
-    icon: "◐",
-    category: "atmosfera",
-    color: colors.blue,
-  },
-  {
-    id: "design",
-    label: "design",
-    icon: "▧",
-    category: "atmosfera",
-    color: colors.violet,
-  },
-  {
-    id: "verde",
-    label: "verde",
-    icon: "♧",
-    category: "atmosfera",
-    color: colors.green,
-  },
-];
+function makeStandardBadges(colors: MelloryThemeColors): StandardBadge[] {
+  return [
+    { id: "romantico", label: "Romantico", icon: "♡", category: "occasione", color: colors.pink },
+    { id: "amici", label: "Amici", icon: "♢", category: "occasione", color: colors.gold },
+    { id: "business", label: "Business", icon: "◆", category: "occasione", color: colors.blue },
+    { id: "gourmet", label: "Gourmet", icon: "✦", category: "gusto", color: colors.yellow },
+    { id: "vino", label: "Vino", icon: "♕", category: "gusto", color: colors.red },
+    { id: "cocktail", label: "Cocktail", icon: "◒", category: "gusto", color: colors.violet },
+    { id: "nascosto", label: "Nascosto", icon: "◇", category: "personale", color: colors.gold },
+    { id: "vista", label: "Vista", icon: "◐", category: "atmosfera", color: colors.blue },
+    { id: "design", label: "Design", icon: "▧", category: "atmosfera", color: colors.violet },
+  ];
+}
 
 const badgeEmojis = [
   "✦",
@@ -469,15 +418,17 @@ const badgeEmojis = [
   "✨",
 ];
 
-const customListColors = [
-  colors.pink,
-  colors.yellow,
-  colors.green,
-  colors.orange,
-  colors.blue,
-  colors.violet,
-  colors.gold,
-];
+function makeCustomListColors(colors: MelloryThemeColors) {
+  return [
+    colors.pink,
+    colors.yellow,
+    colors.green,
+    colors.orange,
+    colors.blue,
+    colors.violet,
+    colors.gold,
+  ];
+}
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -504,6 +455,7 @@ function isPlaceStatus(value: unknown): value is PlaceStatus {
 }
 
 function parseOptionalNumber(value: string) {
+  if (!value.trim()) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
@@ -620,7 +572,8 @@ function formatOpeningHoursValue(value: string) {
 }
 
 function isClosedOpeningHoursValue(value: string) {
-  return value.trim().toLowerCase() === "chiuso";
+  const v = value.trim().toLowerCase();
+  return v === "chiuso" || v === "chiusa";
 }
 
 function getOpeningHoursSegments(openingHours: string) {
@@ -718,6 +671,19 @@ function getEditorialRecognitionsFromParams(rawValue: string) {
   });
 }
 
+function formatEntryDate(isoDate: string) {
+  if (!isoDate) return "";
+  try {
+    return new Date(isoDate).toLocaleDateString("it-IT", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
 function normalizeUrl(url: string) {
   const trimmed = url.trim();
 
@@ -729,25 +695,36 @@ function normalizeUrl(url: string) {
   return `https://${trimmed}`;
 }
 
-function getStandardBadge(label: string) {
-  return standardBadges.find((badge) => badge.label === label);
+function getStandardBadge(label: string, badges: StandardBadge[]) {
+  const lower = label.toLowerCase();
+  return badges.find((badge) => badge.label.toLowerCase() === lower);
 }
 
-function getBadgeIcon(label: string, customBadges: CustomBadge[]) {
+function getBadgeIcon(label: string, customBadges: CustomBadge[], badges: StandardBadge[]) {
   const customBadge = customBadges.find((badge) => badge.label === label);
   if (customBadge) return customBadge.emoji;
 
-  const standardBadge = getStandardBadge(label);
+  const standardBadge = getStandardBadge(label, badges);
   return standardBadge?.icon || "✦";
 }
 
-function getBadgeColor(label: string) {
-  const standardBadge = getStandardBadge(label);
-  return standardBadge?.color || colors.pink;
+function getBadgeColor(label: string, badges: StandardBadge[], pinkColor: string) {
+  const standardBadge = getStandardBadge(label, badges);
+  return standardBadge?.color || pinkColor;
 }
 
-function getBadgeCategory(label: string): BadgeCategory {
-  const standardBadge = getStandardBadge(label);
+function getCategoryLabel(category: BadgeCategory): string {
+  const labels: Record<BadgeCategory, string> = {
+    occasione: "Occasione",
+    gusto: "Gusto & Bere",
+    atmosfera: "Atmosfera",
+    personale: "Personale",
+  };
+  return labels[category] ?? category;
+}
+
+function getBadgeCategory(label: string, badges: StandardBadge[]): BadgeCategory {
+  const standardBadge = getStandardBadge(label, badges);
   if (standardBadge) return standardBadge.category;
 
   const normalized = label.toLowerCase();
@@ -784,12 +761,19 @@ function getBadgeCategory(label: string): BadgeCategory {
   return "personale";
 }
 
-function getStatusLabel(status: PlaceStatus) {
-  return listOptions.find((item) => item.status === status)?.title || status;
+function getStatusLabel(
+  status: PlaceStatus,
+  opts: ReturnType<typeof makeListOptions>
+) {
+  return opts.find((item) => item.status === status)?.title || status;
 }
 
-function getStatusColor(status: PlaceStatus) {
-  return listOptions.find((item) => item.status === status)?.color || colors.pink;
+function getStatusColor(
+  status: PlaceStatus,
+  opts: ReturnType<typeof makeListOptions>,
+  pinkColor: string
+) {
+  return opts.find((item) => item.status === status)?.color || pinkColor;
 }
 
 function getCurrentPlaceSummary({
@@ -1013,6 +997,22 @@ async function writeCustomLists(lists: CustomList[]) {
   await AsyncStorage.setItem(CUSTOM_LISTS_STORAGE_KEY, JSON.stringify(lists));
 }
 
+const BADGE_LABEL_MIGRATIONS: Record<string, string> = {
+  "romantico": "Romantico",
+  "amici": "Amici",
+  "business": "Business",
+  "gourmet": "Gourmet",
+  "vino": "Vino",
+  "cocktail": "Cocktail",
+  "hidden gem": "Nascosto",
+  "vista bella": "Vista",
+  "design": "Design",
+};
+
+function migrateBadgeLabels(badges: string[]): string[] {
+  return badges.map((b) => BADGE_LABEL_MIGRATIONS[b.toLowerCase()] ?? b);
+}
+
 async function readExperienceState(placeId: string) {
   try {
     const stored = await AsyncStorage.getItem(getExperienceStorageKey(placeId));
@@ -1026,13 +1026,20 @@ async function readExperienceState(placeId: string) {
 
     const parsed = JSON.parse(stored);
 
+    const migratedNotes: NoteEntry[] = Array.isArray(parsed.notes)
+      ? parsed.notes
+      : typeof parsed.note === "string" && parsed.note.trim()
+        ? [{ id: createId(), text: parsed.note.trim(), createdAt: new Date().toISOString() }]
+        : [];
+
     return {
       exists: true,
       experience: {
         ...emptyExperience,
         ...parsed,
+        notes: migratedNotes,
         statuses: Array.isArray(parsed.statuses) ? parsed.statuses : [],
-        badges: Array.isArray(parsed.badges) ? parsed.badges : [],
+        badges: migrateBadgeLabels(Array.isArray(parsed.badges) ? parsed.badges : []),
         customBadges: Array.isArray(parsed.customBadges)
           ? parsed.customBadges
           : [],
@@ -1081,6 +1088,12 @@ async function readGlobalStatuses(placeId: string) {
 }
 
 export default function PlaceDetailScreen() {
+  const { colors } = useMelloryTheme();
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const listOptions = useMemo(() => makeListOptions(colors), [colors]);
+  const standardBadges = useMemo(() => makeStandardBadges(colors), [colors]);
+  const customListColors = useMemo(() => makeCustomListColors(colors), [colors]);
   const params = useLocalSearchParams();
 
   const placeId = getParamValue(params.id, "mellory-place");
@@ -1106,6 +1119,8 @@ export default function PlaceDetailScreen() {
   const [hasLoadedExperience, setHasLoadedExperience] = useState(false);
 
   const [draftNote, setDraftNote] = useState("");
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [draftOccasion, setDraftOccasion] = useState("");
   const [draftWithWho, setDraftWithWho] = useState("");
   const [draftDish, setDraftDish] = useState("");
@@ -1118,7 +1133,7 @@ export default function PlaceDetailScreen() {
   const [draftEditorialUrl, setDraftEditorialUrl] = useState("");
   const [draftListTitle, setDraftListTitle] = useState("");
   const [draftListDescription, setDraftListDescription] = useState("");
-  const [draftListColor, setDraftListColor] = useState(colors.pink);
+  const [draftListColor, setDraftListColor] = useState(() => colors.pink);
   const [draftDetailName, setDraftDetailName] = useState("");
   const [draftDetailCategory, setDraftDetailCategory] = useState("");
   const [draftDetailAddress, setDraftDetailAddress] = useState("");
@@ -1132,6 +1147,8 @@ export default function PlaceDetailScreen() {
   const score = getAverageScore(experience.scores);
   const scoreLabel = getScoreLabel(score);
   const scoreColor = getScoreColor(score);
+
+  const coverCardHeight = Math.min(320, Math.round(windowHeight * 0.44));
 
   const effectiveName = experience.personalDetails.name.trim() || name;
   const effectiveCategory =
@@ -1259,14 +1276,13 @@ export default function PlaceDetailScreen() {
           id: customBadge.id,
           label: customBadge.label,
           icon: customBadge.emoji,
-          category: getBadgeCategory(customBadge.label),
+          category: getBadgeCategory(customBadge.label, standardBadges),
           color: colors.pink,
         })),
     ],
-    [experience.customBadges]
+    [experience.customBadges, standardBadges]
   );
 
-  const coverBadges = experience.badges.slice(0, 3);
   const stateBadgesPreview = experience.badges.slice(0, 6);
   const customListsForPlace = customLists.filter((list) =>
     list.placeIds.includes(placeId)
@@ -1278,11 +1294,11 @@ export default function PlaceDetailScreen() {
       label: "Stato",
       value:
         activeStatuses.length > 0
-          ? activeStatuses.map(getStatusLabel).join(", ")
+          ? activeStatuses.map((s) => getStatusLabel(s, listOptions)).join(", ")
           : "Da scegliere",
       color:
         activeStatuses.length > 0
-          ? getStatusColor(activeStatuses[0])
+          ? getStatusColor(activeStatuses[0], listOptions, colors.pink)
           : colors.muted,
     },
     {
@@ -1312,8 +1328,8 @@ export default function PlaceDetailScreen() {
     {
       id: "notes",
       label: "Nota",
-      value: experience.note.trim().length > 0 ? "Scritta" : "Manca",
-      color: experience.note.trim().length > 0 ? colors.green : colors.muted,
+      value: experience.notes.length > 0 ? `${experience.notes.length} ${experience.notes.length === 1 ? "nota" : "note"}` : "Da scrivere",
+      color: experience.notes.length > 0 ? colors.green : colors.muted,
     },
     {
       id: "lists",
@@ -1349,7 +1365,7 @@ export default function PlaceDetailScreen() {
             status,
             badges: nextExperience.badges,
             coverImageUri: nextExperience.coverImageUri,
-            note: nextExperience.note,
+            note: nextExperience.notes[0]?.text ?? "",
             website: effectiveWebsite,
             phone: effectivePhone,
             openingHours: effectiveOpeningHours,
@@ -1389,7 +1405,7 @@ export default function PlaceDetailScreen() {
           status: primaryStatus,
           badges: nextExperience.badges,
           coverImageUri: nextExperience.coverImageUri,
-          note: nextExperience.note,
+          note: nextExperience.notes[0]?.text ?? "",
           website: effectiveWebsite,
           phone: effectivePhone,
           openingHours: effectiveOpeningHours,
@@ -1399,7 +1415,7 @@ export default function PlaceDetailScreen() {
         }),
         badges: nextExperience.badges,
         coverImageUri: nextExperience.coverImageUri,
-        note: nextExperience.note,
+        note: nextExperience.notes[0]?.text ?? "",
         statuses,
         updatedAt: now,
       };
@@ -1448,7 +1464,6 @@ export default function PlaceDetailScreen() {
       if (!isActive) return;
 
       setExperience(nextExperience);
-      setDraftNote(nextExperience.note);
       setCustomLists(storedLists);
       setHasLoadedExperience(true);
 
@@ -1503,8 +1518,9 @@ export default function PlaceDetailScreen() {
   }
 
   function openSheet(sheet: SheetType) {
-    if (sheet === "note") {
-      setDraftNote(experience.note);
+    void Haptics.selectionAsync();
+    if (sheet === "note" && selectedNoteId === null) {
+      setDraftNote("");
     }
 
     if (sheet === "customLists") {
@@ -1537,6 +1553,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function toggleStatus(status: PlaceStatus) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const isActive = activeStatuses.includes(status);
 
     const nextStatuses = isActive
@@ -1550,17 +1567,23 @@ export default function PlaceDetailScreen() {
   }
 
   async function toggleBadge(badge: string) {
-    const isActive = experience.badges.includes(badge);
+    void Haptics.selectionAsync();
+    const lowerBadge = badge.toLowerCase();
+    const existingIndex = experience.badges.findIndex(
+      (b) => b.toLowerCase() === lowerBadge
+    );
 
     await saveExperience({
       ...experience,
-      badges: isActive
-        ? experience.badges.filter((item) => item !== badge)
-        : [...experience.badges, badge],
+      badges:
+        existingIndex >= 0
+          ? experience.badges.filter((_, i) => i !== existingIndex)
+          : [...experience.badges, badge],
     });
   }
 
   async function toggleCustomList(listId: string) {
+    void Haptics.selectionAsync();
     const nextLists = customLists.map((list) => {
       if (list.id !== listId) return list;
 
@@ -1582,6 +1605,7 @@ export default function PlaceDetailScreen() {
 
     if (!title) return;
 
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const newList: CustomList = {
       id: createId(),
       title,
@@ -1599,6 +1623,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function updateScore(key: ScoreKey, value: number) {
+    void Haptics.selectionAsync();
     await saveExperience({
       ...experience,
       scores: {
@@ -1608,16 +1633,55 @@ export default function PlaceDetailScreen() {
     });
   }
 
-  async function saveNote() {
+  async function addNote() {
+    const text = draftNote.trim();
+    if (!text) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const entry: NoteEntry = {
+      id: createId(),
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    await saveExperience({ ...experience, notes: [entry, ...experience.notes] });
+    setDraftNote("");
+    setSelectedNoteId(null);
+    closeSheet();
+  }
+
+  async function updateNote(id: string) {
+    const text = draftNote.trim();
+    if (!text) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await saveExperience({
       ...experience,
-      note: draftNote,
+      notes: experience.notes.map((n) => (n.id === id ? { ...n, text } : n)),
     });
+    setSelectedNoteId(null);
+    closeSheet();
+  }
 
+  async function deleteNote(id: string) {
+    void Haptics.selectionAsync();
+    await saveExperience({
+      ...experience,
+      notes: experience.notes.filter((n) => n.id !== id),
+    });
+    setSelectedNoteId(null);
+    closeSheet();
+  }
+
+  async function deleteExperienceEntry(id: string) {
+    void Haptics.selectionAsync();
+    await saveExperience({
+      ...experience,
+      experiences: experience.experiences.filter((e) => e.id !== id),
+    });
+    setSelectedEntryId(null);
     closeSheet();
   }
 
   async function savePersonalDetails() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await saveExperience({
       ...experience,
       personalDetails: {
@@ -1641,6 +1705,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function saveHours() {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const trimmedDays = draftHoursByDay.map((day) => day.trim());
 
     await saveExperience({
@@ -1656,6 +1721,7 @@ export default function PlaceDetailScreen() {
   }
 
   async function saveExperienceEntry() {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const entry: ExperienceEntry = {
       id: createId(),
       occasion: draftOccasion.trim(),
@@ -1684,6 +1750,7 @@ export default function PlaceDetailScreen() {
 
     if (!label) return;
 
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const newBadge: CustomBadge = {
       id: createId(),
       label,
@@ -1710,6 +1777,7 @@ export default function PlaceDetailScreen() {
 
     if (!title) return;
 
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const newRecognition: EditorialRecognition = {
       id: createId(),
       title,
@@ -1772,6 +1840,41 @@ export default function PlaceDetailScreen() {
     });
   }
 
+  async function pickCoverImage() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Permesso necessario",
+        "Per aggiungere foto, Mellory ha bisogno di accedere alla tua galleria."
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.92,
+      allowsMultipleSelection: false,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const uri = result.assets[0].uri;
+    if (!uri) return;
+
+    const nextGallery = experience.galleryImageUris.includes(uri)
+      ? experience.galleryImageUris
+      : [uri, ...experience.galleryImageUris].slice(0, 12);
+
+    await saveExperience({
+      ...experience,
+      coverImageUri: uri,
+      galleryImageUris: nextGallery,
+    });
+  }
+
   async function setCover(imageUri: string) {
     await saveExperience({
       ...experience,
@@ -1795,11 +1898,15 @@ export default function PlaceDetailScreen() {
 
   async function openMaps() {
     try {
+      const hasValidCoords =
+        (latitude !== 0 || longitude !== 0) &&
+        latitude !== undefined &&
+        longitude !== undefined;
       await openPreferredNavigation({
         name: effectiveName,
         address: effectiveDetail,
-        latitude,
-        longitude,
+        latitude: hasValidCoords ? latitude : undefined,
+        longitude: hasValidCoords ? longitude : undefined,
       });
     } catch {
       Alert.alert(
@@ -1925,6 +2032,7 @@ export default function PlaceDetailScreen() {
               onChangeText={setDraftListTitle}
               placeholder="Nome lista"
               placeholderTextColor={colors.muted}
+              returnKeyType="next"
               style={styles.sheetInput}
             />
 
@@ -1933,6 +2041,7 @@ export default function PlaceDetailScreen() {
               onChangeText={setDraftListDescription}
               placeholder="Descrizione opzionale"
               placeholderTextColor={colors.muted}
+              returnKeyType="done"
               style={styles.sheetInput}
             />
 
@@ -2026,69 +2135,49 @@ export default function PlaceDetailScreen() {
     }
 
     if (activeSheet === "note") {
+      const isEditing = selectedNoteId !== null;
       return (
         <>
-          <SheetHeader title="Nuova nota" onClose={closeSheet} />
+          <SheetHeader
+            title={isEditing ? "Modifica nota" : "Nuova nota"}
+            onClose={closeSheet}
+          />
+
+          {!isEditing && (
+            <Text style={styles.sheetDescription}>
+              Cosa vuoi ricordare di questo posto? Un piatto, un dettaglio, un momento.
+            </Text>
+          )}
 
           <TextInput
             value={draftNote}
             onChangeText={setDraftNote}
-            placeholder="Scrivi cosa ricordare di questo posto..."
+            placeholder="es. Gnocchi al ragù incredibili, chiedere del tavolo vicino alla finestra..."
             placeholderTextColor={colors.muted}
             multiline
             textAlignVertical="top"
-            style={styles.sheetTextArea}
+            style={[styles.sheetTextArea, { minHeight: 160 }]}
+            autoFocus={!isEditing}
           />
 
-          <Text style={styles.sheetSmallTitle}>Badge rapidi</Text>
-
-          <View style={styles.compactBadgeWrap}>
-            {standardBadges.slice(0, 8).map((badge) => {
-              const isActive = experience.badges.includes(badge.label);
-
-              return (
-                <PressableScale
-                  key={badge.id}
-                  style={[
-                    styles.compactBadgeChip,
-                    isActive && styles.compactBadgeChipActive,
-                  ]}
-                  onPress={() => toggleBadge(badge.label)}
-                >
-                  <View
-                    style={[
-                      styles.compactBadgeIconBox,
-                      { backgroundColor: `${badge.color}24` },
-                      isActive && { backgroundColor: badge.color },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.compactBadgeIcon,
-                        { color: badge.color },
-                        isActive && styles.compactBadgeIconActive,
-                      ]}
-                    >
-                      {badge.icon}
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={[
-                      styles.compactBadgeText,
-                      isActive && styles.compactBadgeTextActive,
-                    ]}
-                  >
-                    {badge.label}
-                  </Text>
-                </PressableScale>
-              );
-            })}
-          </View>
-
-          <PressableScale style={styles.sheetPrimaryButton} onPress={saveNote}>
+          <PressableScale
+            style={styles.sheetPrimaryButton}
+            onPress={() => {
+              if (isEditing) void updateNote(selectedNoteId);
+              else void addNote();
+            }}
+          >
             <Text style={styles.sheetPrimaryButtonText}>Salva nota</Text>
           </PressableScale>
+
+          {isEditing && (
+            <PressableScale
+              style={styles.sheetDeleteButton}
+              onPress={() => void deleteNote(selectedNoteId)}
+            >
+              <Text style={styles.sheetDeleteButtonText}>Elimina nota</Text>
+            </PressableScale>
+          )}
         </>
       );
     }
@@ -2104,6 +2193,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftDetailName}
             placeholder="Nome del locale"
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2113,6 +2203,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftDetailCategory}
             placeholder="Ristorante, Bar, Caffè..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2122,6 +2213,8 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftDetailAddress}
             placeholder="Via, zona o riferimento"
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
+            autoComplete="street-address"
             style={styles.sheetInput}
           />
 
@@ -2132,6 +2225,9 @@ export default function PlaceDetailScreen() {
             placeholder="Numero"
             placeholderTextColor={colors.muted}
             keyboardType="phone-pad"
+            inputMode="tel"
+            autoComplete="tel"
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2143,6 +2239,9 @@ export default function PlaceDetailScreen() {
             placeholderTextColor={colors.muted}
             autoCapitalize="none"
             keyboardType="url"
+            inputMode="url"
+            autoComplete="url"
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2182,6 +2281,7 @@ export default function PlaceDetailScreen() {
                 onChangeText={(value) => updateDraftDay(index, value)}
                 placeholder="09:00-18:00"
                 placeholderTextColor={colors.muted}
+                returnKeyType={index < WEEK_DAYS.length - 1 ? "next" : "done"}
                 style={styles.hoursEditInput}
               />
             </View>
@@ -2205,6 +2305,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftOccasion}
             placeholder="Cena di compleanno, pranzo veloce..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2214,6 +2315,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftWithWho}
             placeholder="Con amici, coppia, famiglia..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2223,6 +2325,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftDish}
             placeholder="Cosa ti è piaciuto di più?"
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2233,6 +2336,8 @@ export default function PlaceDetailScreen() {
             placeholder="65"
             placeholderTextColor={colors.muted}
             keyboardType="numeric"
+            inputMode="numeric"
+            returnKeyType="done"
             style={styles.sheetInput}
           />
 
@@ -2279,67 +2384,198 @@ export default function PlaceDetailScreen() {
       );
     }
 
-    if (activeSheet === "badges") {
+    if (activeSheet === "experienceDetail") {
+      const entry = experience.experiences.find((e) => e.id === selectedEntryId);
+      if (!entry) return null;
       return (
         <>
-          <SheetHeader title="Gestisci badge" onClose={closeSheet} />
+          <SheetHeader title="Esperienza" onClose={closeSheet} />
+
+          <Text style={styles.entryDetailDate}>{formatEntryDate(entry.createdAt)}</Text>
+
+          {entry.occasion ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Occasione</Text>
+              <Text style={styles.entryDetailValue}>{entry.occasion}</Text>
+            </View>
+          ) : null}
+
+          {entry.withWho ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Con chi</Text>
+              <Text style={styles.entryDetailValue}>{entry.withWho}</Text>
+            </View>
+          ) : null}
+
+          {entry.dish ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Piatto</Text>
+              <Text style={styles.entryDetailValue}>{entry.dish}</Text>
+            </View>
+          ) : null}
+
+          {entry.spend ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Spesa</Text>
+              <Text style={styles.entryDetailValue}>{entry.spend} €</Text>
+            </View>
+          ) : null}
+
+          {entry.wouldReturn !== null ? (
+            <View style={styles.entryDetailRow}>
+              <Text style={styles.entryDetailLabel}>Torneresti?</Text>
+              <Text style={[styles.entryDetailValue, { color: entry.wouldReturn ? colors.green : colors.muted }]}>
+                {entry.wouldReturn ? "Sì, ci tornerei" : "No, non ci tornerei"}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={{ flex: 1 }} />
+
+          <PressableScale
+            style={styles.sheetDeleteButton}
+            onPress={() => void deleteExperienceEntry(entry.id)}
+          >
+            <Text style={styles.sheetDeleteButtonText}>Elimina esperienza</Text>
+          </PressableScale>
+        </>
+      );
+    }
+
+    if (activeSheet === "badges") {
+      const categoryOrder: BadgeCategory[] = [
+        "occasione",
+        "gusto",
+        "atmosfera",
+        "personale",
+      ];
+
+      return (
+        <>
+          <SheetHeader title="Badge" onClose={closeSheet} />
 
           <Text style={styles.sheetDescription}>
-            I badge raccontano il tuo stato personale del locale: atmosfera,
-            occasione e motivi per cui vuoi ricordarlo.
+            Scegli i tratti che vuoi ricordare. Appaiono sulla scheda del posto.
           </Text>
 
-          <View style={styles.badgeLibrary}>
-            {allBadges.map((badge) => {
-              const isActive = experience.badges.includes(badge.label);
+          {categoryOrder.map((category) => {
+            const catBadges = standardBadges.filter(
+              (b) => b.category === category
+            );
+            if (catBadges.length === 0) return null;
 
-              return (
-                <PressableScale
-                  key={badge.id}
-                  style={[
-                    styles.editorialBadge,
-                    isActive && styles.editorialBadgeActive,
-                  ]}
-                  onPress={() => toggleBadge(badge.label)}
-                >
-                  <View
-                    style={[
-                      styles.editorialBadgeIconBox,
-                      { backgroundColor: `${badge.color}24` },
-                      isActive && { backgroundColor: badge.color },
-                    ]}
-                  >
-                    <Text
+            return (
+              <View key={category} style={styles.badgeCategorySection}>
+                <Text style={styles.badgeCategoryLabel}>
+                  {getCategoryLabel(category)}
+                </Text>
+
+                <View style={styles.badgePillRow}>
+                  {catBadges.map((badge) => {
+                    const isActive = experience.badges.some(
+                      (b) => b.toLowerCase() === badge.label.toLowerCase()
+                    );
+
+                    return (
+                      <PressableScale
+                        key={badge.id}
+                        style={[
+                          styles.badgePill,
+                          isActive && {
+                            backgroundColor: `${badge.color}2A`,
+                            borderColor: badge.color,
+                          },
+                        ]}
+                        onPress={() => toggleBadge(badge.label)}
+                      >
+                        <View
+                          style={[
+                            styles.badgePillIconWrap,
+                            { backgroundColor: `${badge.color}40` },
+                            isActive && { backgroundColor: badge.color },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.badgePillIcon,
+                              { color: badge.color },
+                              isActive && { color: "#fff" },
+                            ]}
+                          >
+                            {badge.icon}
+                          </Text>
+                        </View>
+
+                        <Text
+                          style={[
+                            styles.badgePillLabel,
+                            isActive && styles.badgePillLabelActive,
+                          ]}
+                        >
+                          {badge.label}
+                        </Text>
+                      </PressableScale>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+
+          {experience.customBadges.length > 0 && (
+            <View style={styles.badgeCategorySection}>
+              <Text style={styles.badgeCategoryLabel}>I tuoi badge</Text>
+
+              <View style={styles.badgePillRow}>
+                {experience.customBadges.map((badge) => {
+                  const isActive = experience.badges.some(
+                    (b) => b.toLowerCase() === badge.label.toLowerCase()
+                  );
+
+                  return (
+                    <PressableScale
+                      key={badge.id}
                       style={[
-                        styles.editorialBadgeIcon,
-                        { color: badge.color },
-                        isActive && styles.editorialBadgeIconActive,
+                        styles.badgePill,
+                        isActive && {
+                          backgroundColor: `${colors.pink}2A`,
+                          borderColor: colors.pink,
+                        },
                       ]}
+                      onPress={() => toggleBadge(badge.label)}
                     >
-                      {badge.icon}
-                    </Text>
-                  </View>
+                      <View
+                        style={[
+                          styles.badgePillIconWrap,
+                          { backgroundColor: `${colors.pink}40` },
+                          isActive && { backgroundColor: colors.pink },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.badgePillIcon,
+                            { color: colors.pink },
+                            isActive && { color: "#fff" },
+                          ]}
+                        >
+                          {badge.emoji}
+                        </Text>
+                      </View>
 
-                  <View style={styles.editorialBadgeTextBlock}>
-                    <Text
-                      style={[
-                        styles.editorialBadgeTitle,
-                        isActive && styles.editorialBadgeTitleActive,
-                      ]}
-                    >
-                      {badge.label}
-                    </Text>
-
-                    <Text style={styles.editorialBadgeCategory}>
-                      {badge.category}
-                    </Text>
-                  </View>
-
-                  {isActive && <Text style={styles.editorialBadgeCheck}>✓</Text>}
-                </PressableScale>
-              );
-            })}
-          </View>
+                      <Text
+                        style={[
+                          styles.badgePillLabel,
+                          isActive && styles.badgePillLabelActive,
+                        ]}
+                      >
+                        {badge.label}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
           <View style={styles.createBadgeBox}>
             <Text style={styles.sheetSmallTitle}>Crea badge personale</Text>
@@ -2347,8 +2583,10 @@ export default function PlaceDetailScreen() {
             <TextInput
               value={draftBadgeName}
               onChangeText={setDraftBadgeName}
-              placeholder="es. vista mozzafiato"
+              placeholder="es. terrazza sul mare"
               placeholderTextColor={colors.muted}
+              returnKeyType="done"
+              autoCapitalize="words"
               style={styles.sheetInput}
             />
 
@@ -2372,9 +2610,13 @@ export default function PlaceDetailScreen() {
             </ScrollView>
 
             <PressableScale style={styles.sheetPrimaryButton} onPress={createCustomBadge}>
-              <Text style={styles.sheetPrimaryButtonText}>Crea e assegna badge</Text>
+              <Text style={styles.sheetPrimaryButtonText}>Crea e assegna</Text>
             </PressableScale>
           </View>
+
+          <PressableScale style={styles.secondarySheetButton} onPress={closeSheet}>
+            <Text style={styles.secondarySheetButtonText}>Fatto</Text>
+          </PressableScale>
         </>
       );
     }
@@ -2384,43 +2626,64 @@ export default function PlaceDetailScreen() {
 
       return (
         <>
-          <SheetHeader title="Gestisci foto" onClose={closeSheet} />
+          <SheetHeader title="Foto" onClose={closeSheet} />
 
-          <Text style={styles.sheetDescription}>
-            Scegli una copertina chiara e conserva solo le immagini che vuoi davvero
-            ritrovare.
-          </Text>
+          <View style={styles.galleryActionRow}>
+            <PressableScale
+              style={styles.galleryActionCard}
+              onPress={pickCoverImage}
+            >
+              <Text style={styles.galleryActionIcon}>◉</Text>
+              <Text style={styles.galleryActionLabel}>Scegli copertina</Text>
+              <Text style={styles.galleryActionHint}>Con ritaglio</Text>
+            </PressableScale>
 
-          <PressableScale style={styles.sheetPrimaryButton} onPress={pickGalleryImage}>
-            <Text style={styles.sheetPrimaryButtonText}>Aggiungi nuove foto</Text>
-          </PressableScale>
+            <PressableScale
+              style={styles.galleryActionCard}
+              onPress={pickGalleryImage}
+            >
+              <Text style={styles.galleryActionIcon}>▧</Text>
+              <Text style={styles.galleryActionLabel}>Aggiungi foto</Text>
+              <Text style={styles.galleryActionHint}>Selezione multipla</Text>
+            </PressableScale>
+          </View>
 
           {experience.galleryImageUris.length === 0 ? (
             <View style={styles.galleryEmptySheet}>
-              <Text style={styles.galleryEmptySheetIcon}>▧</Text>
               <Text style={styles.galleryEmptySheetTitle}>
                 Nessuna foto salvata.
               </Text>
               <Text style={styles.galleryEmptySheetText}>
-                La prima foto aggiunta diventerà automaticamente la copertina.
+                Aggiungi la copertina con ritaglio, oppure più foto dalla galleria.
               </Text>
             </View>
           ) : (
             <>
-              <View style={styles.coverManagerCard}>
-                <Image source={{ uri: coverUri }} style={styles.coverManagerImage} />
+              {coverUri ? (
+                <View style={styles.coverManagerCard}>
+                  <Image source={{ uri: coverUri }} style={styles.coverManagerImage} />
 
-                <View style={styles.coverManagerOverlay}>
-                  <View>
-                    <Text style={styles.coverManagerKicker}>COPERTINA ATTUALE</Text>
-                    <Text numberOfLines={1} style={styles.coverManagerTitle}>
-                      {effectiveName}
-                    </Text>
+                  <View style={styles.coverManagerOverlay}>
+                    <View>
+                      <Text style={styles.coverManagerKicker}>COPERTINA</Text>
+                      <Text numberOfLines={1} style={styles.coverManagerTitle}>
+                        {effectiveName}
+                      </Text>
+                    </View>
+
+                    <PressableScale
+                      style={styles.coverChangePill}
+                      onPress={pickCoverImage}
+                    >
+                      <Text style={styles.coverChangePillText}>Cambia</Text>
+                    </PressableScale>
                   </View>
                 </View>
-              </View>
+              ) : null}
 
-              <Text style={styles.sheetSmallTitle}>Foto salvate</Text>
+              <Text style={styles.sheetSmallTitle}>
+                Galleria · {experience.galleryImageUris.length} foto
+              </Text>
 
               <View style={styles.galleryGrid}>
                 {experience.galleryImageUris.map((imageUri) => {
@@ -2435,27 +2698,21 @@ export default function PlaceDetailScreen() {
 
                       {isCover && (
                         <View style={styles.galleryCoverFlag}>
-                          <Text style={styles.galleryCoverFlagText}>Copertina</Text>
+                          <Text style={styles.galleryCoverFlagText}>Cover</Text>
                         </View>
                       )}
 
                       <View style={styles.galleryImageActions}>
-                        <PressableScale
-                          style={[
-                            styles.coverSelectButton,
-                            isCover && styles.coverSelectButtonActive,
-                          ]}
-                          onPress={() => setCover(imageUri)}
-                        >
-                          <Text
-                            style={[
-                              styles.coverSelectButtonText,
-                              isCover && styles.coverSelectButtonTextActive,
-                            ]}
+                        {!isCover && (
+                          <PressableScale
+                            style={styles.coverSelectButton}
+                            onPress={() => setCover(imageUri)}
                           >
-                            {isCover ? "Attiva" : "Usa"}
-                          </Text>
-                        </PressableScale>
+                            <Text style={styles.coverSelectButtonText}>
+                              Usa cover
+                            </Text>
+                          </PressableScale>
+                        )}
 
                         <PressableScale
                           style={styles.removeImageButton}
@@ -2489,6 +2746,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftEditorialTitle}
             placeholder="es. Guida Michelin, Gambero Rosso..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2498,6 +2756,7 @@ export default function PlaceDetailScreen() {
             onChangeText={setDraftEditorialSource}
             placeholder="Nome guida, articolo, rivista..."
             placeholderTextColor={colors.muted}
+            returnKeyType="next"
             style={styles.sheetInput}
           />
 
@@ -2509,6 +2768,8 @@ export default function PlaceDetailScreen() {
             placeholderTextColor={colors.muted}
             autoCapitalize="none"
             keyboardType="url"
+            inputMode="url"
+            returnKeyType="done"
             style={styles.sheetInput}
           />
 
@@ -2526,34 +2787,40 @@ export default function PlaceDetailScreen() {
   }
 
   return (
-    <View style={styles.root}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <View style={styles.safeTop} />
+    <View style={[styles.root, { backgroundColor: colors.black }]}>
+      <ScrollView style={[styles.screen, { backgroundColor: colors.black }]} contentContainerStyle={styles.content}>
+        <View style={{ height: insets.top + 8 }} />
 
-        <View style={styles.coverCard}>
+        <View style={[styles.coverCard, { height: coverCardHeight }]}>
           {hasCover ? (
             <Image source={{ uri: coverDisplayUri }} style={styles.coverImage} />
           ) : (
-            <View style={styles.coverPlaceholder}>
+            <View style={[styles.coverPlaceholder, { backgroundColor: colors.card }]}>
               <View style={styles.coverOrbLarge} />
               <View style={styles.coverOrbSmall} />
+              <View style={styles.coverOrbAccent} />
               <View style={styles.coverLineOne} />
               <View style={styles.coverLineTwo} />
-              <Text style={styles.coverInitial}>{getInitial(name)}</Text>
-              <Text style={styles.coverMonogramLabel}>MELLORY</Text>
             </View>
           )}
 
           <View style={styles.coverOverlay} />
 
-          <View style={styles.coverHeader}>
-            <PressableScale style={styles.roundBackButton} onPress={handleBackPress}>
+          <View style={[styles.coverHeader, { top: insets.top + 8 }]}>
+            <PressableScale
+              style={styles.roundBackButton}
+              onPress={handleBackPress}
+              accessibilityRole="button"
+              accessibilityLabel="Indietro"
+            >
               <Text style={styles.roundBackText}>‹</Text>
             </PressableScale>
 
             <PressableScale
               style={styles.coverPhotoButton}
               onPress={() => openSheet("gallery")}
+              accessibilityRole="button"
+              accessibilityLabel="Gestisci foto"
             >
               <View style={styles.coverPhotoIconFrame}>
                 <View style={styles.coverPhotoIconHorizon} />
@@ -2586,64 +2853,42 @@ export default function PlaceDetailScreen() {
             <Text numberOfLines={1} style={styles.placeAddress}>
               {effectiveDetail}
             </Text>
-
-            {coverBadges.length > 0 && (
-              <View style={styles.coverBadgeRow}>
-                {coverBadges.map((badge) => (
-                  <View key={badge} style={styles.coverBadgeChip}>
-                    <View
-                      style={[
-                        styles.coverBadgeDot,
-                        { backgroundColor: getBadgeColor(badge) },
-                      ]}
-                    >
-                      <Text style={styles.coverBadgeIcon}>
-                        {getBadgeIcon(badge, experience.customBadges)}
-                      </Text>
-                    </View>
-
-                    <Text style={styles.coverBadgeChipText}>{badge}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
           </View>
         </View>
 
-        <View style={styles.mainPanel}>
-          <View style={styles.recapPanel}>
+        <View style={[styles.mainPanel, { backgroundColor: colors.black }]}>
+          <View style={[styles.recapPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.recapHeader}>
-              <View style={styles.recapTitleBlock}>
-                <Text style={styles.recapKicker}>RECAP PERSONALE</Text>
-
-                <Text style={styles.recapTitle}>Tutto a colpo d’occhio</Text>
-
-                <Text style={styles.recapSubtitle}>
-                  Una sintesi chiara e discreta di quello che hai già salvato su
-                  questo locale.
-                </Text>
-              </View>
+              <Text style={styles.recapKicker}>RECAP PERSONALE</Text>
+              <Text style={styles.recapTitle}>Tutto a colpo d’occhio</Text>
             </View>
 
             <View style={styles.recapGrid}>
               {recapItems.map((item) => (
-                <View key={item.id} style={styles.recapItem}>
+                <View key={item.id} style={[styles.recapItem, { backgroundColor: colors.black, borderColor: colors.border }]}>
                   <View style={styles.recapItemTop}>
-                    <View
-                      style={[
-                        styles.recapDot,
-                        {
-                          backgroundColor: item.color,
-                        },
-                      ]}
-                    />
-
+                    <View style={[styles.recapDot, { backgroundColor: item.color }]} />
                     <Text style={styles.recapItemLabel}>{item.label}</Text>
                   </View>
 
-                  <Text numberOfLines={1} style={styles.recapItemValue}>
-                    {item.value}
-                  </Text>
+                  {item.id === "status" ? (
+                    activeStatuses.length > 0 ? (
+                      <View style={styles.recapStatusDots}>
+                        {activeStatuses.map((s) => {
+                          const opt = listOptions.find((o) => o.status === s);
+                          return opt ? (
+                            <View key={s} style={[styles.recapStatusBubble, { backgroundColor: `${opt.color}22` }]}>
+                              <Text style={[styles.recapStatusEmoji, { color: opt.color }]}>{opt.emoji}</Text>
+                            </View>
+                          ) : null;
+                        })}
+                      </View>
+                    ) : (
+                      <Text style={[styles.recapItemValue, { color: colors.muted }]}>—</Text>
+                    )
+                  ) : (
+                    <Text numberOfLines={1} style={styles.recapItemValue}>{item.value}</Text>
+                  )}
                 </View>
               ))}
             </View>
@@ -2660,12 +2905,16 @@ export default function PlaceDetailScreen() {
                   key={option.status}
                   style={[
                     styles.statusChip,
+                    { backgroundColor: colors.card, borderColor: colors.border },
                     isActive && {
                       backgroundColor: `${option.color}22`,
                       borderColor: `${option.color}88`,
                     },
                   ]}
                   onPress={() => toggleStatus(option.status)}
+                  accessibilityRole="button"
+                  accessibilityLabel={isActive ? `Rimuovi da ${option.title}` : `Aggiungi a ${option.title}`}
+                  accessibilityState={{ selected: isActive }}
                 >
                   <View
                     style={[
@@ -2698,9 +2947,9 @@ export default function PlaceDetailScreen() {
             })}
           </View>
 
-          <View style={styles.stateBadgePanel}>
+          <View style={[styles.stateBadgePanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.stateBadgeHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.stateBadgeKicker}>BADGE DEL POSTO</Text>
                 <Text style={styles.stateBadgeTitle}>
                   {experience.badges.length > 0
@@ -2724,29 +2973,29 @@ export default function PlaceDetailScreen() {
                 {stateBadgesPreview.map((badge) => (
                   <PressableScale
                     key={badge}
-                    style={styles.stateBadgeChip}
+                    style={[styles.stateBadgeChip, { backgroundColor: colors.card2, borderColor: colors.border }]}
                     onPress={() => toggleBadge(badge)}
                   >
                     <View
                       style={[
                         styles.stateBadgeIconBox,
-                        { backgroundColor: `${getBadgeColor(badge)}26` },
+                        { backgroundColor: `${getBadgeColor(badge, standardBadges, colors.pink)}40` },
                       ]}
                     >
                       <Text
                         style={[
                           styles.stateBadgeIcon,
-                          { color: getBadgeColor(badge) },
+                          { color: getBadgeColor(badge, standardBadges, colors.pink) },
                         ]}
                       >
-                        {getBadgeIcon(badge, experience.customBadges)}
+                        {getBadgeIcon(badge, experience.customBadges, standardBadges)}
                       </Text>
                     </View>
 
                     <View style={styles.stateBadgeTextBlock}>
                       <Text style={styles.stateBadgeName}>{badge}</Text>
                       <Text style={styles.stateBadgeCategory}>
-                        {getBadgeCategory(badge)}
+                        {getCategoryLabel(getBadgeCategory(badge, standardBadges))}
                       </Text>
                     </View>
                   </PressableScale>
@@ -2754,15 +3003,15 @@ export default function PlaceDetailScreen() {
               </View>
             ) : (
               <Text style={styles.stateBadgeEmptyText}>
-                Usa badge piccoli e colorati per segnare se il posto è romantico,
-                gourmet, da amici, di design o da ricordare per un motivo preciso.
+                Usa i badge per segnare se il posto è Romantico, Gourmet, Nascosto
+                o di Design. Puoi anche crearne di personali.
               </Text>
             )}
           </View>
 
-          <View style={styles.customListsPanel}>
+          <View style={[styles.customListsPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.stateBadgeHeader}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.stateBadgeKicker}>LISTE PERSONALIZZATE</Text>
                 <Text style={styles.stateBadgeTitle}>
                   {customListsForPlace.length > 0
@@ -2784,7 +3033,7 @@ export default function PlaceDetailScreen() {
             {customListsForPlace.length > 0 ? (
               <View style={styles.savedCustomListWrap}>
                 {customListsForPlace.map((list) => (
-                  <View key={list.id} style={styles.savedCustomListChip}>
+                  <View key={list.id} style={[styles.savedCustomListChip, { backgroundColor: colors.black, borderColor: colors.border }]}>
                     <View
                       style={[
                         styles.savedCustomListDot,
@@ -2805,7 +3054,11 @@ export default function PlaceDetailScreen() {
 
           <View style={styles.actionGrid}>
             <ActionBox symbol="☰" label="Liste" onPress={() => openSheet("lists")} />
-            <ActionBox symbol="✎" label="Nota" onPress={() => openSheet("note")} />
+            <ActionBox symbol="✎" label="Nota" onPress={() => {
+              setSelectedNoteId(null);
+              setDraftNote("");
+              openSheet("note");
+            }} />
             <ActionBox
               symbol="▣"
               label="Esperienza"
@@ -2816,11 +3069,11 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="INFO DEL POSTO"
-            actionLabel={infoRows.length > 0 ? "Modifica" : undefined}
-            onAction={infoRows.length > 0 ? () => openSheet("details") : undefined}
+            actionLabel={infoRows.length > 0 ? "Modifica" : "Aggiungi"}
+            onAction={() => openSheet("details")}
           >
             {infoRows.length > 0 ? (
-              <View style={styles.infoCard}>
+              <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 {infoRows.map((row, index) => (
                   <View key={row.label}>
                     {index > 0 ? <View style={styles.divider} /> : null}
@@ -2851,13 +3104,13 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="ORARI"
-            actionLabel={hasRealHours ? "Modifica" : undefined}
-            onAction={hasRealHours ? () => openSheet("hours") : undefined}
+            actionLabel={hasRealHours ? "Modifica" : "Aggiungi"}
+            onAction={() => openSheet("hours")}
           >
             {hasRealHours ? (
               <View style={styles.hoursCard}>
                 <View style={styles.rowBetween}>
-                  <Text style={styles.hoursTitle}>Orari</Text>
+                  <Text style={styles.hoursTitle}>Apertura</Text>
                   {displayedOpenNowState !== null ? (
                     <View
                       style={[
@@ -2935,8 +3188,8 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="CONTATTI"
-            actionLabel={hasRealContacts ? "Modifica" : undefined}
-            onAction={hasRealContacts ? () => openSheet("details") : undefined}
+            actionLabel={hasRealContacts ? "Modifica" : "Aggiungi"}
+            onAction={() => openSheet("details")}
           >
             {hasRealContacts ? (
               <View style={styles.contactRow}>
@@ -2976,7 +3229,7 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="LA TUA GALLERIA"
-            actionLabel="Gestisci foto"
+            actionLabel={hasGallery ? "Gestisci" : "Aggiungi foto"}
             onAction={() => openSheet("gallery")}
           >
             {hasGallery ? (
@@ -3018,7 +3271,7 @@ export default function PlaceDetailScreen() {
               Vota per categoria. La media diventa il tuo Mellory Score.
             </Text>
 
-            <View style={styles.scoreCard}>
+            <View style={[styles.scoreCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <SmoothScoreCircle
                 key={`score-${scoreColor}-${score ?? "empty"}`}
                 score={score}
@@ -3053,39 +3306,71 @@ export default function PlaceDetailScreen() {
 
           <Section
             title="LE TUE NOTE"
-            actionLabel="Scrivi nota"
-            onAction={() => openSheet("note")}
+            actionLabel="Aggiungi nota"
+            onAction={() => {
+              setSelectedNoteId(null);
+              setDraftNote("");
+              openSheet("note");
+            }}
           >
-            <Text style={styles.noteText}>
-              {experience.note ||
-                "Nessuna nota ancora. Aggiungi un pensiero per ricordartelo."}
-            </Text>
+            {experience.notes.length === 0 ? (
+              <Text style={styles.noteText}>
+                Nessuna nota ancora. Aggiungi un pensiero per ricordartelo.
+              </Text>
+            ) : (
+              experience.notes.map((noteEntry) => (
+                <PressableScale
+                  key={noteEntry.id}
+                  style={[styles.noteCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSelectedNoteId(noteEntry.id);
+                    setDraftNote(noteEntry.text);
+                    openSheet("note");
+                  }}
+                >
+                  <Text style={styles.noteCardDate}>{formatEntryDate(noteEntry.createdAt)}</Text>
+                  <Text style={styles.noteCardText} numberOfLines={5}>{noteEntry.text}</Text>
+                </PressableScale>
+              ))
+            )}
           </Section>
 
           <Section
             title="DIARIO ESPERIENZE"
-            actionLabel="Aggiungi esperienza"
+            actionLabel={experience.experiences.length > 0 ? "Aggiungi altra" : "Aggiungi"}
             onAction={() => openSheet("experience")}
           >
-            <Text style={styles.diarySubtitle}>
-              Quando torni, scrivi com&apos;è andata.
-            </Text>
-
             {experience.experiences.length === 0 ? (
-              <PressableScale
-                style={styles.diaryEmptyCard}
-                onPress={() => openSheet("experience")}
-              >
-                <Text style={styles.diaryEmptyIcon}>▣</Text>
-                <Text style={styles.diaryEmptyTitle}>Nessuna esperienza ancora.</Text>
-                <Text style={styles.diaryEmptyText}>
-                  Dopo una visita puoi segnare occasione, compagnia, piatto
-                  migliore, spesa e voglia di tornarci.
+              <>
+                <Text style={styles.diarySubtitle}>
+                  Quando torni, scrivi com&apos;è andata.
                 </Text>
-              </PressableScale>
+                <PressableScale
+                  style={[styles.diaryEmptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => openSheet("experience")}
+                >
+                  <Text style={styles.diaryEmptyIcon}>▣</Text>
+                  <Text style={styles.diaryEmptyTitle}>Nessuna esperienza ancora.</Text>
+                  <Text style={styles.diaryEmptyText}>
+                    Dopo una visita puoi segnare occasione, compagnia, piatto
+                    migliore, spesa e voglia di tornarci.
+                  </Text>
+                </PressableScale>
+              </>
             ) : (
               experience.experiences.map((entry) => (
-                <View key={entry.id} style={styles.timelineCard}>
+                <PressableScale
+                  key={entry.id}
+                  style={[styles.timelineCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSelectedEntryId(entry.id);
+                    openSheet("experienceDetail");
+                  }}
+                >
+                  <Text style={styles.timelineDate}>
+                    {formatEntryDate(entry.createdAt)}
+                  </Text>
+
                   <Text style={styles.timelineTitle}>
                     {entry.occasion || "Esperienza salvata"}
                   </Text>
@@ -3096,14 +3381,19 @@ export default function PlaceDetailScreen() {
                       .join(" · ")}
                   </Text>
 
-                  <Text style={styles.timelineReturn}>
-                    {entry.wouldReturn === null
-                      ? "Ritorno non indicato"
-                      : entry.wouldReturn
-                        ? "Ci tornerei"
-                        : "Non ci tornerei"}
-                  </Text>
-                </View>
+                  {entry.wouldReturn !== null && (
+                    <Text
+                      style={[
+                        styles.timelineReturn,
+                        { color: entry.wouldReturn ? colors.green : colors.muted },
+                      ]}
+                    >
+                      {entry.wouldReturn ? "Ci tornerei" : "Non ci tornerei"}
+                    </Text>
+                  )}
+
+                  <Text style={styles.timelineTapHint}>Leggi tutto ›</Text>
+                </PressableScale>
               ))
             )}
           </Section>
@@ -3113,14 +3403,12 @@ export default function PlaceDetailScreen() {
             actionLabel="Aggiungi premio"
             onAction={() => openSheet("editorial")}
           >
-            <Text style={styles.editorialTitle}>Riconoscimenti editoriali</Text>
-
             {allEditorialRecognitions.length > 0 ? (
               <View style={styles.editorialList}>
                 {allEditorialRecognitions.map((recognition) => (
                   <PressableScale
                     key={recognition.id}
-                    style={styles.editorialCard}
+                    style={[styles.editorialCard, { backgroundColor: colors.card }]}
                     onPress={() => openEditorialRecognition(recognition)}
                   >
                     <View style={styles.awardIcon}>
@@ -3159,27 +3447,39 @@ export default function PlaceDetailScreen() {
           </Section>
         </View>
 
-        <View style={styles.bottomSpace} />
+        <View style={{ height: insets.bottom + 90 }} />
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { bottom: insets.bottom + 12 }]}>
         <PressableScale
           style={[
             styles.bottomAction,
             activeStatuses.includes("favorite") && styles.bottomActionSaved,
           ]}
           onPress={() => toggleStatus("favorite")}
+          accessibilityRole="button"
+          accessibilityLabel={activeStatuses.includes("favorite") ? "Rimuovi dai preferiti" : "Salva come preferito"}
         >
           <Text style={styles.bottomActionText}>
             {activeStatuses.includes("favorite") ? "♥ Salvato" : "♡ Salva"}
           </Text>
         </PressableScale>
 
-        <PressableScale style={styles.bottomAction} onPress={() => openSheet("lists")}>
+        <PressableScale
+          style={styles.bottomAction}
+          onPress={() => openSheet("lists")}
+          accessibilityRole="button"
+          accessibilityLabel="Gestisci liste"
+        >
           <Text style={styles.bottomActionText}>☰ Lista</Text>
         </PressableScale>
 
-        <PressableScale style={styles.bottomActionPrimary} onPress={openMaps}>
+        <PressableScale
+          style={styles.bottomActionPrimary}
+          onPress={openMaps}
+          accessibilityRole="button"
+          accessibilityLabel="Apri navigazione"
+        >
           <Text style={styles.bottomActionPrimaryText}>➤ Naviga</Text>
         </PressableScale>
       </View>
@@ -3193,16 +3493,28 @@ export default function PlaceDetailScreen() {
         <View style={styles.modalBackdrop}>
           <PressableScale style={styles.modalBackdropPressable} onPress={closeSheet} />
 
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
+          <KeyboardAvoidingView
+            behavior={
+              Platform.OS === "ios"
+                ? "padding"
+                : Platform.OS === "android"
+                  ? "height"
+                  : undefined
+            }
+          >
+            <View style={[styles.sheet, { maxHeight: windowHeight * 0.84, backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.sheetHandle} />
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.sheetContent}
-            >
-              {renderSheetContent()}
-            </ScrollView>
-          </View>
+              <ScrollView
+                style={{ flex: 1 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.sheetContent}
+              >
+                {renderSheetContent()}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
@@ -3325,7 +3637,12 @@ function ActionBox({
   onPress: () => void;
 }) {
   return (
-    <PressableScale style={styles.actionBox} onPress={onPress}>
+    <PressableScale
+      style={styles.actionBox}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
       <Text style={styles.actionIcon}>{symbol}</Text>
       <Text style={styles.actionLabel}>{label}</Text>
     </PressableScale>
@@ -3366,7 +3683,7 @@ function SheetHeader({
 }) {
   return (
     <View style={styles.sheetHeader}>
-      <Text style={styles.sheetTitle}>{title}</Text>
+      <Text style={styles.sheetTitle} numberOfLines={2}>{title}</Text>
 
       <PressableScale onPress={onClose}>
         <Text style={styles.sheetClose}>×</Text>
@@ -3383,6 +3700,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.black,
+    position: "relative",
   },
   screen: {
     flex: 1,
@@ -3390,12 +3708,14 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 14,
+    maxWidth: 560,
+    width: "100%",
+    alignSelf: "center",
   },
   safeTop: {
     height: 18,
   },
   coverCard: {
-    height: 380,
     borderRadius: 34,
     backgroundColor: colors.card,
     overflow: "hidden",
@@ -3419,7 +3739,7 @@ const styles = StyleSheet.create({
     width: 230,
     height: 230,
     borderRadius: 999,
-    backgroundColor: "rgba(216, 78, 127, 0.12)",
+    backgroundColor: "rgba(192, 26, 47, 0.07)",
     right: -76,
     top: 30,
   },
@@ -3429,15 +3749,24 @@ const styles = StyleSheet.create({
     height: 118,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(226, 189, 53, 0.18)",
+    borderColor: colors.border,
     left: 28,
     bottom: 66,
+  },
+  coverOrbAccent: {
+    position: "absolute",
+    width: 72,
+    height: 72,
+    borderRadius: 999,
+    backgroundColor: "rgba(199, 168, 91, 0.09)",
+    left: 54,
+    top: 38,
   },
   coverLineOne: {
     position: "absolute",
     width: 210,
     height: 1,
-    backgroundColor: "rgba(255, 248, 239, 0.08)",
+    backgroundColor: colors.border,
     left: 32,
     top: 118,
     transform: [{ rotate: "-18deg" }],
@@ -3450,21 +3779,6 @@ const styles = StyleSheet.create({
     right: 18,
     bottom: 112,
     transform: [{ rotate: "24deg" }],
-  },
-  coverInitial: {
-    color: "rgba(255, 248, 239, 0.9)",
-    fontSize: 112,
-    lineHeight: 120,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -2,
-  },
-  coverMonogramLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginTop: 2,
   },
   coverOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -3539,7 +3853,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 20,
     right: 20,
-    bottom: 30,
+    bottom: 22,
   },
   coverGuideRow: {
     flexDirection: "row",
@@ -3576,52 +3890,17 @@ const styles = StyleSheet.create({
   },
   placeTitle: {
     color: colors.cream,
-    fontSize: 44,
-    lineHeight: 48,
-    fontFamily: "serif",
+    fontSize: 30,
+    lineHeight: 34,
+    fontFamily: undefined,
     fontWeight: "900",
-    letterSpacing: -1.2,
-    marginBottom: 8,
+    letterSpacing: -0.7,
+    marginBottom: 6,
   },
   placeAddress: {
     color: "#D7CEC4",
     fontSize: 15,
     fontWeight: "700",
-  },
-  coverBadgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 14,
-  },
-  coverBadgeChip: {
-    minHeight: 34,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,248,239,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.2)",
-    paddingLeft: 6,
-    paddingRight: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-  },
-  coverBadgeDot: {
-    width: 23,
-    height: 23,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coverBadgeIcon: {
-    color: colors.black,
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  coverBadgeChipText: {
-    color: colors.cream,
-    fontSize: 12,
-    fontWeight: "900",
   },
   mainPanel: {
     backgroundColor: colors.black,
@@ -3639,36 +3918,47 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   recapHeader: {
-    marginBottom: 16,
-  },
-  recapTitleBlock: {
-    maxWidth: 310,
+    marginBottom: 4,
   },
   recapKicker: {
     color: colors.muted,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 2.2,
-    marginBottom: 7,
+    marginBottom: 5,
   },
   recapTitle: {
     color: colors.cream,
-    fontSize: 27,
-    lineHeight: 32,
-    fontFamily: "serif",
+    fontSize: 18,
+    lineHeight: 22,
+    fontFamily: undefined,
     fontWeight: "900",
-    letterSpacing: -0.4,
-    marginBottom: 7,
+    letterSpacing: -0.3,
+    marginBottom: 8,
   },
-  recapSubtitle: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
+  recapStatusDots: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    gap: 5,
+    overflow: "hidden",
+  },
+  recapStatusBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  recapStatusEmoji: {
+    fontSize: 16,
+    fontWeight: "900",
   },
   recapGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
+    marginTop: 14,
   },
   recapItem: {
     width: "48%",
@@ -3820,10 +4110,11 @@ const styles = StyleSheet.create({
   },
   stateBadgeTitle: {
     color: colors.cream,
-    fontSize: 24,
-    lineHeight: 29,
-    fontFamily: "serif",
-    fontWeight: "900",
+    fontSize: 17,
+    lineHeight: 23,
+    fontFamily: undefined,
+    fontWeight: "800",
+    letterSpacing: -0.2,
   },
   stateBadgeButton: {
     minHeight: 38,
@@ -3846,9 +4137,9 @@ const styles = StyleSheet.create({
   stateBadgeChip: {
     minHeight: 52,
     borderRadius: 18,
-    backgroundColor: colors.black,
+    backgroundColor: colors.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,248,239,0.07)",
+    borderColor: "rgba(255,248,239,0.12)",
     paddingHorizontal: 10,
     paddingVertical: 8,
     flexDirection: "row",
@@ -4055,7 +4346,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 26,
     lineHeight: 31,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     flex: 1,
   },
@@ -4166,7 +4457,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 22,
     lineHeight: 27,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 8,
   },
@@ -4245,7 +4536,7 @@ const styles = StyleSheet.create({
   smoothScoreValue: {
     fontSize: 72,
     lineHeight: 76,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     letterSpacing: -2,
   },
@@ -4325,7 +4616,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 22,
     lineHeight: 27,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 8,
   },
@@ -4342,10 +4633,18 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 10,
   },
+  timelineDate: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    marginBottom: 5,
+    textTransform: "uppercase",
+  },
   timelineTitle: {
     color: colors.cream,
     fontSize: 18,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 5,
   },
@@ -4364,7 +4663,7 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 28,
     lineHeight: 33,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 14,
   },
@@ -4423,7 +4722,7 @@ const styles = StyleSheet.create({
   awardTitle: {
     color: colors.cream,
     fontSize: 18,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 3,
   },
@@ -4490,7 +4789,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    maxHeight: "84%",
     backgroundColor: colors.card,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
@@ -4517,11 +4815,13 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   sheetTitle: {
+    flex: 1,
     color: colors.cream,
-    fontSize: 28,
-    lineHeight: 33,
-    fontFamily: "serif",
+    fontSize: 22,
+    lineHeight: 28,
+    fontFamily: undefined,
     fontWeight: "900",
+    paddingRight: 12,
   },
   sheetClose: {
     color: colors.cream,
@@ -4636,7 +4936,7 @@ const styles = StyleSheet.create({
   emptySheetTitle: {
     color: colors.cream,
     fontSize: 21,
-    fontFamily: "serif",
+    fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 8,
   },
@@ -4698,6 +4998,8 @@ const styles = StyleSheet.create({
     minHeight: 130,
     borderRadius: 18,
     backgroundColor: colors.black,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.16)",
     color: colors.cream,
     fontSize: 15,
     lineHeight: 23,
@@ -4770,6 +5072,75 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
+  sheetDeleteButton: {
+    minHeight: 48,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,80,80,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  sheetDeleteButtonText: {
+    color: "#FF5050",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  noteCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.08)",
+    padding: 16,
+    marginBottom: 10,
+  },
+  noteCardDate: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 7,
+  },
+  noteCardText: {
+    color: colors.cream,
+    fontSize: 15,
+    lineHeight: 23,
+  },
+  entryDetailDate: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 20,
+  },
+  entryDetailRow: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,248,239,0.07)",
+  },
+  entryDetailLabel: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+    marginBottom: 5,
+  },
+  entryDetailValue: {
+    color: colors.cream,
+    fontSize: 17,
+    fontWeight: "700",
+    lineHeight: 24,
+  },
+  timelineTapHint: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 10,
+  },
   inputLabel: {
     color: colors.muted,
     fontSize: 11,
@@ -4781,6 +5152,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     backgroundColor: colors.black,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.14)",
     color: colors.cream,
     fontSize: 15,
     paddingHorizontal: 14,
@@ -4841,6 +5214,53 @@ const styles = StyleSheet.create({
   badgeLibrary: {
     gap: 9,
     marginBottom: 20,
+  },
+  badgeCategorySection: {
+    marginBottom: 20,
+  },
+  badgeCategoryLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: 10,
+  },
+  badgePillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  badgePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    backgroundColor: colors.card2,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.16)",
+    paddingLeft: 6,
+    paddingRight: 14,
+    minHeight: 44,
+  },
+  badgePillIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgePillIcon: {
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  badgePillLabel: {
+    color: colors.cream,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  badgePillLabelActive: {
+    color: colors.cream,
   },
   editorialBadge: {
     minHeight: 62,
@@ -4921,21 +5341,49 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: "900",
   },
+  galleryActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 18,
+  },
+  galleryActionCard: {
+    flex: 1,
+    minHeight: 96,
+    borderRadius: 22,
+    backgroundColor: colors.black,
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.10)",
+    padding: 16,
+    justifyContent: "center",
+    gap: 5,
+  },
+  galleryActionIcon: {
+    color: colors.pink,
+    fontSize: 22,
+    fontWeight: "900",
+    marginBottom: 2,
+  },
+  galleryActionLabel: {
+    color: colors.cream,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  galleryActionHint: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "600",
+  },
   galleryEmptySheet: {
     backgroundColor: colors.black,
     borderRadius: 24,
     padding: 20,
-    marginTop: 16,
-  },
-  galleryEmptySheetIcon: {
-    color: colors.pink,
-    fontSize: 30,
-    marginBottom: 10,
+    marginTop: 4,
   },
   galleryEmptySheetTitle: {
     color: colors.cream,
-    fontSize: 22,
-    fontFamily: "serif",
+    fontSize: 18,
+    fontFamily: undefined,
     fontWeight: "900",
     marginBottom: 8,
   },
@@ -4945,12 +5393,11 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   coverManagerCard: {
-    height: 230,
+    height: 210,
     borderRadius: 26,
     overflow: "hidden",
     backgroundColor: colors.black,
-    marginTop: 18,
-    marginBottom: 10,
+    marginBottom: 16,
   },
   coverManagerImage: {
     width: "100%",
@@ -4958,9 +5405,11 @@ const styles = StyleSheet.create({
   },
   coverManagerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.34)",
-    justifyContent: "flex-end",
-    padding: 18,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    padding: 16,
   },
   coverManagerKicker: {
     color: colors.yellow,
@@ -4971,9 +5420,26 @@ const styles = StyleSheet.create({
   },
   coverManagerTitle: {
     color: colors.cream,
-    fontSize: 26,
-    lineHeight: 31,
-    fontFamily: "serif",
+    fontSize: 22,
+    lineHeight: 27,
+    fontFamily: undefined,
+    fontWeight: "900",
+    maxWidth: 200,
+  },
+  coverChangePill: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,248,239,0.20)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-end",
+  },
+  coverChangePillText: {
+    color: colors.cream,
+    fontSize: 12,
     fontWeight: "900",
   },
   galleryGrid: {
@@ -5017,19 +5483,16 @@ const styles = StyleSheet.create({
     minHeight: 34,
     borderRadius: 999,
     backgroundColor: "rgba(7,6,4,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255,248,239,0.25)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  coverSelectButtonActive: {
-    backgroundColor: colors.cream,
+    paddingHorizontal: 12,
   },
   coverSelectButtonText: {
     color: colors.cream,
     fontSize: 11,
     fontWeight: "900",
-  },
-  coverSelectButtonTextActive: {
-    color: colors.black,
   },
   removeImageButton: {
     minHeight: 34,

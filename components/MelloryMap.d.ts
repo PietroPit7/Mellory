@@ -16,11 +16,22 @@ export type MelloryMapCenter = {
   zoom: number;
 };
 
+export type MelloryMapLayer = "streets" | "satellite";
+
 export type MelloryMapProps = {
   markers: MelloryMapMarker[];
   center: MelloryMapCenter;
   onMarkerPress: (placeId: string) => void;
   onRegionChange?: (center: MelloryMapCenter) => void;
+  onPoiPress?: (poi: {
+    name: string;
+    placeId: string;
+    latitude: number;
+    longitude: number;
+  }) => void;
+  fullScreen?: boolean;
+  mapLayer?: MelloryMapLayer;
+  isLight?: boolean;
 };
 
 export default function MelloryMap(props: MelloryMapProps): ReactElement;

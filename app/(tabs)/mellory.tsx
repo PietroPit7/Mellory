@@ -1,12 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Animated, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PressableScale } from "@/components/pressable-scale";
-import { melloryThemeVars } from "@/contexts/mellory-theme";
-
-const colors = melloryThemeVars;
+import {
+  type MelloryThemeColors,
+  useMelloryTheme,
+} from "@/contexts/mellory-theme";
 
 const FAVORITES_STORAGE_KEY = "mellory:favorites";
 const TRY_STORAGE_KEY = "mellory:try";
@@ -448,6 +451,19 @@ function mergePlacesWithStatuses({
 }
 
 export default function MyMelloryScreen() {
+  const { colors } = useMelloryTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const screenFade = useRef(new Animated.Value(0)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFade.setValue(0);
+      Animated.timing(screenFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    }, [screenFade])
+  );
+
   const [favoritePlaces, setFavoritePlaces] = useState<SavedPlace[]>([]);
   const [tryPlaces, setTryPlaces] = useState<SavedPlace[]>([]);
   const [visitedPlaces, setVisitedPlaces] = useState<SavedPlace[]>([]);
@@ -622,6 +638,7 @@ export default function MyMelloryScreen() {
   }
 
   async function removeFavorite(placeId: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextFavoritePlaces = favoritePlaces.filter(
       (place) => place.id !== placeId
     );
@@ -632,6 +649,7 @@ export default function MyMelloryScreen() {
   }
 
   async function removeTry(placeId: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextTryPlaces = tryPlaces.filter((place) => place.id !== placeId);
 
     setTryPlaces(nextTryPlaces);
@@ -640,6 +658,7 @@ export default function MyMelloryScreen() {
   }
 
   async function removeVisited(placeId: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextVisitedPlaces = visitedPlaces.filter(
       (place) => place.id !== placeId
     );
@@ -650,6 +669,7 @@ export default function MyMelloryScreen() {
   }
 
   async function removeRetry(placeId: string) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const nextRetryPlaces = retryPlaces.filter((place) => place.id !== placeId);
 
     setRetryPlaces(nextRetryPlaces);
@@ -658,9 +678,13 @@ export default function MyMelloryScreen() {
   }
 
   return (
+    <Animated.View style={{ flex: 1, opacity: screenFade }}>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <View style={{ height: insets.top + 16 }} />
+
       <View style={styles.topRule} />
 
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.kicker}>ARCHIVIO PERSONALE</Text>
@@ -670,11 +694,25 @@ export default function MyMelloryScreen() {
           </Text>
         </View>
 
-        <PressableScale style={styles.settingsButton} onPress={openSettings}>
-          <Text style={styles.settingsIcon}>⚙</Text>
+        <PressableScale style={styles.settingsButton} onPress={openSettings} accessibilityLabel="Impostazioni" accessibilityRole="button">
+          <View style={styles.sliderIcon}>
+            <View style={styles.sliderRow}>
+              <View style={styles.sliderKnob} />
+              <View style={styles.sliderTrack} />
+            </View>
+            <View style={styles.sliderRow}>
+              <View style={styles.sliderTrack} />
+              <View style={styles.sliderKnob} />
+            </View>
+            <View style={styles.sliderRow}>
+              <View style={styles.sliderKnob} />
+              <View style={styles.sliderTrack} />
+            </View>
+          </View>
         </PressableScale>
       </View>
 
+      {/* Hero card */}
       <View style={styles.heroCard}>
         <View style={styles.heroGlow} />
 
@@ -717,6 +755,7 @@ export default function MyMelloryScreen() {
         </View>
       </View>
 
+      {/* Empty state */}
       {!hasPlaces && (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIconWrap}>
@@ -725,8 +764,7 @@ export default function MyMelloryScreen() {
 
           <Text style={styles.emptyTitle}>Il tuo archivio è pronto.</Text>
           <Text style={styles.emptyText}>
-            Apri la mappa, esplora una città o usa la tua posizione. Tocca ♡ per
-            salvare un preferito oppure + per aggiungere un posto da provare.
+            Apri la mappa e tocca ♡ su un locale per salvarlo. Oppure usa il + nella home per aggiungere un posto manualmente.
           </Text>
 
           <PressableScale style={styles.emptyButton} onPress={openMap}>
@@ -735,6 +773,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
+      {/* Quick stats panel */}
       {hasPlaces && (
         <View style={styles.quickPanel}>
           <Text style={styles.quickKicker}>IL TUO STATO</Text>
@@ -747,7 +786,8 @@ export default function MyMelloryScreen() {
             </View>
 
             <View style={styles.quickCardAccent}>
-              <Text style={styles.quickIconAccent}>✓</Text>
+              <View style={styles.quickCardGlow} />
+              <Text style={styles.quickIconAccent}>✦</Text>
               <Text style={styles.quickValueAccent}>{tryPlaces.length}</Text>
               <Text style={styles.quickLabelAccent}>da provare</Text>
             </View>
@@ -777,6 +817,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
+      {/* Latest places carousel */}
       {latestPlaces.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -822,6 +863,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
+      {/* Favorites */}
       {favoritePlaces.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -884,8 +926,10 @@ export default function MyMelloryScreen() {
                   style={styles.removeButton}
                   onPress={(event) => {
                     event.stopPropagation?.();
-                    removeFavorite(place.id);
+                    void removeFavorite(place.id);
                   }}
+                  accessibilityLabel="Rimuovi"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeIcon}>×</Text>
                 </PressableScale>
@@ -895,6 +939,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
+      {/* Try */}
       {tryPlaces.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -957,8 +1002,10 @@ export default function MyMelloryScreen() {
                   style={styles.removeButton}
                   onPress={(event) => {
                     event.stopPropagation?.();
-                    removeTry(place.id);
+                    void removeTry(place.id);
                   }}
+                  accessibilityLabel="Rimuovi"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeIcon}>×</Text>
                 </PressableScale>
@@ -968,6 +1015,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
+      {/* Visited */}
       {visitedPlaces.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1030,8 +1078,10 @@ export default function MyMelloryScreen() {
                   style={styles.removeButton}
                   onPress={(event) => {
                     event.stopPropagation?.();
-                    removeVisited(place.id);
+                    void removeVisited(place.id);
                   }}
+                  accessibilityLabel="Rimuovi"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeIcon}>×</Text>
                 </PressableScale>
@@ -1041,6 +1091,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
+      {/* Retry */}
       {retryPlaces.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1103,8 +1154,10 @@ export default function MyMelloryScreen() {
                   style={styles.removeButton}
                   onPress={(event) => {
                     event.stopPropagation?.();
-                    removeRetry(place.id);
+                    void removeRetry(place.id);
                   }}
+                  accessibilityLabel="Rimuovi"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.removeIcon}>×</Text>
                 </PressableScale>
@@ -1114,6 +1167,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
+      {/* Custom lists */}
       {customLists.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1132,9 +1186,7 @@ export default function MyMelloryScreen() {
               <View
                 style={[
                   styles.customListAccent,
-                  {
-                    backgroundColor: list.color,
-                  },
+                  { backgroundColor: list.color },
                 ]}
               />
 
@@ -1158,6 +1210,7 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
+      {/* Bottom editorial card */}
       {hasPlaces && (
         <View style={styles.bottomCard}>
           <Text style={styles.bottomKicker}>LA SCHEDA PERSONALE</Text>
@@ -1169,670 +1222,691 @@ export default function MyMelloryScreen() {
         </View>
       )}
 
-      <View style={styles.bottomSpace} />
+      <View style={{ height: 88 + insets.bottom + 16 }} />
     </ScrollView>
+    </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.black,
-  },
-  content: {
-    paddingHorizontal: 22,
-    paddingTop: 0,
-  },
-  topRule: {
-    height: 1,
-    backgroundColor: colors.yellow,
-    opacity: 0.95,
-    marginBottom: 28,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 16,
-    marginBottom: 26,
-  },
-  headerText: {
-    flex: 1,
-  },
-  kicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 8,
-  },
-  title: {
-    color: colors.cream,
-    fontSize: 52,
-    lineHeight: 56,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -1.8,
-  },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: 19,
-    lineHeight: 26,
-    marginTop: 7,
-    maxWidth: 315,
-  },
-  settingsButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 999,
-    backgroundColor: "rgba(255, 248, 239, 0.03)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.42)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-  settingsIcon: {
-    color: colors.cream,
-    fontSize: 25,
-    lineHeight: 28,
-    fontWeight: "700",
-  },
-  heroCard: {
-    backgroundColor: colors.card,
-    borderRadius: 34,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.1)",
-    padding: 24,
-    marginBottom: 18,
-    overflow: "hidden",
-  },
-  heroGlow: {
-    position: "absolute",
-    right: -55,
-    top: -70,
-    width: 180,
-    height: 180,
-    borderRadius: 999,
-    backgroundColor: "rgba(216, 78, 127, 0.18)",
-  },
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 28,
-  },
-  heroBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 999,
-    backgroundColor: colors.paper,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroBadgeText: {
-    color: colors.paperText,
-    fontSize: 28,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  heroMeta: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-  },
-  heroTitle: {
-    color: colors.cream,
-    fontSize: 39,
-    lineHeight: 43,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -1.1,
-    marginBottom: 13,
-  },
-  heroText: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 25,
-    maxWidth: 310,
-  },
-  heroStatsRow: {
-    minHeight: 86,
-    borderRadius: 26,
-    backgroundColor: "rgba(255, 248, 239, 0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    marginTop: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 6,
-  },
-  heroMiniStat: {
-    flex: 1,
-    alignItems: "center",
-  },
-  heroMiniValue: {
-    color: colors.cream,
-    fontSize: 30,
-    lineHeight: 34,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  heroMiniLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    marginTop: 4,
-  },
-  heroMiniDivider: {
-    width: 1,
-    height: 38,
-    backgroundColor: "rgba(255, 248, 239, 0.1)",
-  },
-  emptyCard: {
-    backgroundColor: colors.paper,
-    borderRadius: 32,
-    padding: 24,
-    marginBottom: 18,
-  },
-  emptyIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 999,
-    backgroundColor: "rgba(216, 78, 127, 0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(216, 78, 127, 0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 22,
-  },
-  emptyIcon: {
-    color: colors.pink,
-    fontSize: 25,
-    fontWeight: "900",
-  },
-  emptyTitle: {
-    color: colors.paperText,
-    fontSize: 32,
-    lineHeight: 37,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 10,
-  },
-  emptyText: {
-    color: colors.paperText,
-    fontSize: 16,
-    lineHeight: 25,
-  },
-  emptyButton: {
-    minHeight: 52,
-    borderRadius: 999,
-    backgroundColor: colors.black,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 20,
-  },
-  emptyButtonText: {
-    color: colors.cream,
-    fontSize: 15,
-    fontWeight: "900",
-  },
-  quickPanel: {
-    marginBottom: 24,
-  },
-  quickKicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 14,
-  },
-  quickRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  quickCard: {
-    flex: 1,
-    minHeight: 138,
-    borderRadius: 28,
-    backgroundColor: colors.paper,
-    padding: 18,
-    justifyContent: "space-between",
-  },
-  quickCardAccent: {
-    flex: 1,
-    minHeight: 138,
-    borderRadius: 28,
-    backgroundColor: colors.pink,
-    padding: 18,
-    justifyContent: "space-between",
-  },
-  quickIcon: {
-    color: colors.pink,
-    fontSize: 28,
-    fontWeight: "900",
-  },
-  quickIconAccent: {
-    color: colors.cream,
-    fontSize: 27,
-    fontWeight: "900",
-  },
-  quickValue: {
-    color: colors.paperText,
-    fontSize: 39,
-    lineHeight: 42,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  quickValueAccent: {
-    color: colors.cream,
-    fontSize: 39,
-    lineHeight: 42,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  quickLabel: {
-    color: colors.paperText,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "900",
-  },
-  quickLabelAccent: {
-    color: "rgba(255, 248, 239, 0.82)",
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "900",
-  },
-  extraQuickRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 12,
-  },
-  extraQuickCard: {
-    flex: 1,
-    minHeight: 82,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    padding: 14,
-    justifyContent: "space-between",
-  },
-  extraQuickValue: {
-    color: colors.cream,
-    fontSize: 25,
-    lineHeight: 29,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  extraQuickLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    lineHeight: 16,
-    fontWeight: "900",
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 14,
-  },
-  sectionHeaderText: {
-    flex: 1,
-  },
-  overline: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    color: colors.cream,
-    fontSize: 30,
-    lineHeight: 35,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -0.8,
-  },
-  countPill: {
-    minWidth: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: colors.paper,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  countPillPink: {
-    minWidth: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: colors.pink,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  countPillGreen: {
-    minWidth: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: colors.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  countPillOrange: {
-    minWidth: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: colors.orange,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  countPillText: {
-    color: colors.paperText,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  countPillTextPink: {
-    color: colors.cream,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  countPillTextGreen: {
-    color: colors.cream,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  countPillTextOrange: {
-    color: colors.cream,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  latestRow: {
-    gap: 12,
-    paddingRight: 22,
-  },
-  latestCard: {
-    width: 178,
-    minHeight: 196,
-    borderRadius: 30,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    padding: 18,
-    justifyContent: "space-between",
-  },
-  latestMark: {
-    width: 50,
-    height: 50,
-    borderRadius: 999,
-    backgroundColor: "rgba(216, 78, 127, 0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(216, 78, 127, 0.3)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  latestMarkText: {
-    color: colors.pink,
-    fontSize: 25,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  latestName: {
-    color: colors.cream,
-    fontSize: 22,
-    lineHeight: 26,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginTop: 18,
-  },
-  latestCategory: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: "700",
-    marginTop: 8,
-  },
-  latestDistance: {
-    color: colors.pink,
-    fontSize: 13,
-    fontWeight: "900",
-    marginTop: 10,
-  },
-  placeCard: {
-    minHeight: 138,
-    borderRadius: 30,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    marginBottom: 12,
-    flexDirection: "row",
-    overflow: "hidden",
-  },
-  placeAccent: {
-    width: 4,
-    backgroundColor: colors.paper,
-  },
-  placeAccentPink: {
-    width: 4,
-    backgroundColor: colors.pink,
-  },
-  placeAccentGreen: {
-    width: 4,
-    backgroundColor: colors.green,
-  },
-  placeAccentOrange: {
-    width: 4,
-    backgroundColor: colors.orange,
-  },
-  placeMark: {
-    width: 74,
-    backgroundColor: colors.card2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeMarkSecondary: {
-    width: 74,
-    backgroundColor: "rgba(216, 78, 127, 0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeMarkMuted: {
-    width: 74,
-    backgroundColor: "rgba(255, 248, 239, 0.05)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeMarkText: {
-    color: colors.pink,
-    fontSize: 34,
-    fontFamily: "serif",
-    fontWeight: "900",
-  },
-  placeBody: {
-    flex: 1,
-    paddingVertical: 17,
-    paddingHorizontal: 15,
-    justifyContent: "center",
-  },
-  placeName: {
-    color: colors.cream,
-    fontSize: 22,
-    lineHeight: 26,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 7,
-  },
-  placeCategory: {
-    color: colors.textMuted,
-    fontSize: 15,
-    marginBottom: 8,
-  },
-  placeDetail: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 11,
-  },
-  placeExtraDetail: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: -5,
-    marginBottom: 10,
-  },
-  placeFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  placeDistance: {
-    color: colors.pink,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  placeTag: {
-    color: colors.paperText,
-    backgroundColor: colors.paper,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    fontSize: 11,
-    fontWeight: "900",
-    overflow: "hidden",
-  },
-  placeTagPink: {
-    color: colors.cream,
-    backgroundColor: colors.pink,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    fontSize: 11,
-    fontWeight: "900",
-    overflow: "hidden",
-  },
-  placeTagGreen: {
-    color: colors.cream,
-    backgroundColor: colors.green,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    fontSize: 11,
-    fontWeight: "900",
-    overflow: "hidden",
-  },
-  placeTagOrange: {
-    color: colors.cream,
-    backgroundColor: colors.orange,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    fontSize: 11,
-    fontWeight: "900",
-    overflow: "hidden",
-  },
-  removeButton: {
-    width: 46,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  removeIcon: {
-    color: colors.muted,
-    fontSize: 28,
-    lineHeight: 30,
-    fontWeight: "700",
-  },
-  openListsButton: {
-    minHeight: 42,
-    borderRadius: 999,
-    backgroundColor: colors.pink,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  openListsButtonText: {
-    color: colors.cream,
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  customListCard: {
-    minHeight: 112,
-    borderRadius: 30,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(255, 248, 239, 0.08)",
-    marginBottom: 12,
-    flexDirection: "row",
-    overflow: "hidden",
-  },
-  customListAccent: {
-    width: 7,
-  },
-  customListBody: {
-    flex: 1,
-    paddingVertical: 18,
-    paddingHorizontal: 17,
-    justifyContent: "center",
-  },
-  customListTitle: {
-    color: colors.cream,
-    fontSize: 24,
-    lineHeight: 29,
-    fontFamily: "serif",
-    fontWeight: "900",
-    marginBottom: 6,
-  },
-  customListText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 8,
-  },
-  customListMeta: {
-    color: colors.pink,
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  customListArrow: {
-    width: 42,
-    color: colors.muted,
-    fontSize: 34,
-    lineHeight: 112,
-    textAlign: "center",
-  },
-  bottomCard: {
-    backgroundColor: colors.paper,
-    borderRadius: 32,
-    padding: 24,
-    marginTop: 2,
-  },
-  bottomKicker: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 3,
-    marginBottom: 14,
-  },
-  bottomTitle: {
-    color: colors.paperText,
-    fontSize: 32,
-    lineHeight: 37,
-    fontFamily: "serif",
-    fontWeight: "900",
-    letterSpacing: -0.8,
-    marginBottom: 10,
-  },
-  bottomText: {
-    color: colors.paperText,
-    fontSize: 16,
-    lineHeight: 25,
-  },
-  bottomSpace: {
-    height: 118,
-  },
-});
-
-
+function createStyles(colors: MelloryThemeColors) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.black,
+    },
+    content: {
+      paddingHorizontal: 22,
+      maxWidth: 560,
+      width: "100%",
+      alignSelf: "center",
+    },
+    topRule: {
+      height: 1,
+      backgroundColor: colors.yellow,
+      opacity: 0.95,
+      marginBottom: 28,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 16,
+      marginBottom: 26,
+    },
+    headerText: {
+      flex: 1,
+    },
+    kicker: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+      marginBottom: 8,
+    },
+    title: {
+      color: colors.cream,
+      fontSize: 52,
+      lineHeight: 56,
+      fontWeight: "900",
+      letterSpacing: -1.8,
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontSize: 19,
+      lineHeight: 26,
+      marginTop: 7,
+      maxWidth: 315,
+    },
+    settingsButton: {
+      width: 58,
+      height: 58,
+      borderRadius: 999,
+      backgroundColor: colors.softBorder,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 4,
+    },
+    sliderIcon: {
+      gap: 5,
+      width: 22,
+    },
+    sliderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    sliderTrack: {
+      flex: 1,
+      height: 1.5,
+      borderRadius: 1,
+      backgroundColor: colors.cream,
+    },
+    sliderKnob: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      borderWidth: 1.5,
+      borderColor: colors.cream,
+      backgroundColor: colors.card2,
+    },
+    heroCard: {
+      backgroundColor: colors.card,
+      borderRadius: 34,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 24,
+      marginBottom: 18,
+      overflow: "hidden",
+    },
+    heroGlow: {
+      position: "absolute",
+      right: -55,
+      top: -70,
+      width: 180,
+      height: 180,
+      borderRadius: 999,
+      backgroundColor: `${colors.pink}1A`,
+    },
+    heroTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 28,
+    },
+    heroBadge: {
+      width: 52,
+      height: 52,
+      borderRadius: 999,
+      backgroundColor: colors.paper,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heroBadgeText: {
+      color: colors.paperText,
+      fontSize: 28,
+      fontWeight: "900",
+    },
+    heroMeta: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+    },
+    heroTitle: {
+      color: colors.cream,
+      fontSize: 39,
+      lineHeight: 43,
+      fontWeight: "900",
+      letterSpacing: -1.1,
+      marginBottom: 13,
+    },
+    heroText: {
+      color: colors.textMuted,
+      fontSize: 16,
+      lineHeight: 25,
+      maxWidth: 310,
+    },
+    heroStatsRow: {
+      minHeight: 86,
+      borderRadius: 26,
+      backgroundColor: colors.softBorder,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 6,
+    },
+    heroMiniStat: {
+      flex: 1,
+      alignItems: "center",
+    },
+    heroMiniValue: {
+      color: colors.cream,
+      fontSize: 30,
+      lineHeight: 34,
+      fontWeight: "900",
+    },
+    heroMiniLabel: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      marginTop: 4,
+    },
+    heroMiniDivider: {
+      width: 1,
+      height: 38,
+      backgroundColor: colors.border,
+    },
+    emptyCard: {
+      backgroundColor: colors.paper,
+      borderRadius: 32,
+      padding: 24,
+      marginBottom: 18,
+    },
+    emptyIconWrap: {
+      width: 52,
+      height: 52,
+      borderRadius: 999,
+      backgroundColor: `${colors.pink}14`,
+      borderWidth: 1,
+      borderColor: `${colors.pink}29`,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 22,
+    },
+    emptyIcon: {
+      color: colors.pink,
+      fontSize: 25,
+      fontWeight: "900",
+    },
+    emptyTitle: {
+      color: colors.paperText,
+      fontSize: 32,
+      lineHeight: 37,
+      fontWeight: "900",
+      marginBottom: 10,
+    },
+    emptyText: {
+      color: colors.paperText,
+      fontSize: 16,
+      lineHeight: 25,
+    },
+    emptyButton: {
+      minHeight: 52,
+      borderRadius: 999,
+      backgroundColor: colors.black,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 20,
+    },
+    emptyButtonText: {
+      color: colors.cream,
+      fontSize: 15,
+      fontWeight: "900",
+    },
+    quickPanel: {
+      marginBottom: 24,
+    },
+    quickKicker: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+      marginBottom: 14,
+    },
+    quickRow: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    quickCard: {
+      flex: 1,
+      minHeight: 130,
+      borderRadius: 20,
+      backgroundColor: colors.paper,
+      padding: 18,
+      justifyContent: "space-between",
+    },
+    quickCardAccent: {
+      flex: 1,
+      minHeight: 130,
+      borderRadius: 20,
+      backgroundColor: colors.card2,
+      borderWidth: 1.5,
+      borderColor: `${colors.pink}55`,
+      padding: 18,
+      justifyContent: "space-between",
+      overflow: "hidden",
+    },
+    quickCardGlow: {
+      position: "absolute",
+      right: -22,
+      top: -22,
+      width: 90,
+      height: 90,
+      borderRadius: 45,
+      backgroundColor: `${colors.pink}1E`,
+    },
+    quickIcon: {
+      color: colors.pink,
+      fontSize: 28,
+      fontWeight: "900",
+    },
+    quickIconAccent: {
+      color: colors.pink,
+      fontSize: 27,
+      fontWeight: "900",
+    },
+    quickValue: {
+      color: colors.paperText,
+      fontSize: 39,
+      lineHeight: 42,
+      fontWeight: "900",
+    },
+    quickValueAccent: {
+      color: colors.pink,
+      fontSize: 39,
+      lineHeight: 42,
+      fontWeight: "900",
+    },
+    quickLabel: {
+      color: colors.paperText,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: "900",
+    },
+    quickLabelAccent: {
+      color: colors.textMuted,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: "900",
+    },
+    extraQuickRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 12,
+    },
+    extraQuickCard: {
+      flex: 1,
+      minHeight: 78,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      padding: 14,
+      justifyContent: "space-between",
+    },
+    extraQuickValue: {
+      color: colors.cream,
+      fontSize: 25,
+      lineHeight: 29,
+      fontWeight: "900",
+    },
+    extraQuickLabel: {
+      color: colors.muted,
+      fontSize: 11,
+      lineHeight: 16,
+      fontWeight: "900",
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      gap: 12,
+      marginBottom: 14,
+    },
+    sectionHeaderText: {
+      flex: 1,
+    },
+    overline: {
+      color: colors.muted,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 2.5,
+      marginBottom: 8,
+      textTransform: "uppercase",
+    },
+    sectionTitle: {
+      color: colors.cream,
+      fontSize: 28,
+      lineHeight: 33,
+      fontWeight: "900",
+      letterSpacing: -1,
+    },
+    countPill: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: colors.paper,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countPillPink: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: colors.pink,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countPillGreen: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: colors.green,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countPillOrange: {
+      minWidth: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: colors.orange,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countPillText: {
+      color: colors.paperText,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    countPillTextPink: {
+      color: colors.cream,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    countPillTextGreen: {
+      color: colors.cream,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    countPillTextOrange: {
+      color: colors.cream,
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    latestRow: {
+      gap: 12,
+      paddingRight: 22,
+    },
+    latestCard: {
+      width: 178,
+      minHeight: 196,
+      borderRadius: 20,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      padding: 18,
+      justifyContent: "space-between",
+    },
+    latestMark: {
+      width: 50,
+      height: 50,
+      borderRadius: 999,
+      backgroundColor: `${colors.pink}14`,
+      borderWidth: 1,
+      borderColor: `${colors.pink}2E`,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    latestMarkText: {
+      color: colors.pink,
+      fontSize: 25,
+      fontWeight: "900",
+    },
+    latestName: {
+      color: colors.cream,
+      fontSize: 18,
+      lineHeight: 23,
+      fontWeight: "900",
+      marginTop: 14,
+      letterSpacing: -0.3,
+    },
+    latestCategory: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: "600",
+      marginTop: 6,
+    },
+    latestDistance: {
+      color: colors.pink,
+      fontSize: 13,
+      fontWeight: "900",
+      marginTop: 10,
+    },
+    placeCard: {
+      minHeight: 108,
+      borderRadius: 18,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      marginBottom: 10,
+      flexDirection: "row",
+      overflow: "hidden",
+    },
+    placeAccent: {
+      width: 4,
+      backgroundColor: colors.paper,
+    },
+    placeAccentPink: {
+      width: 4,
+      backgroundColor: colors.pink,
+    },
+    placeAccentGreen: {
+      width: 4,
+      backgroundColor: colors.green,
+    },
+    placeAccentOrange: {
+      width: 4,
+      backgroundColor: colors.orange,
+    },
+    placeMark: {
+      width: 62,
+      backgroundColor: colors.card2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    placeMarkSecondary: {
+      width: 62,
+      backgroundColor: `${colors.pink}12`,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    placeMarkMuted: {
+      width: 62,
+      backgroundColor: colors.softBorder,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    placeMarkText: {
+      color: colors.pink,
+      fontSize: 26,
+      fontWeight: "900",
+    },
+    placeBody: {
+      flex: 1,
+      minWidth: 0,
+      paddingVertical: 14,
+      paddingHorizontal: 13,
+      justifyContent: "center",
+    },
+    placeName: {
+      color: colors.cream,
+      fontSize: 16,
+      lineHeight: 21,
+      fontWeight: "800",
+      letterSpacing: -0.2,
+      marginBottom: 4,
+    },
+    placeCategory: {
+      color: colors.textMuted,
+      fontSize: 13,
+      marginBottom: 5,
+    },
+    placeDetail: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "600",
+      marginBottom: 9,
+    },
+    placeExtraDetail: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "700",
+      marginTop: -2,
+      marginBottom: 8,
+    },
+    placeFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 6,
+      flexWrap: "wrap",
+    },
+    placeDistance: {
+      color: colors.pink,
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    placeTag: {
+      color: colors.paperText,
+      backgroundColor: colors.paper,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      fontSize: 10,
+      fontWeight: "900",
+      overflow: "hidden",
+    },
+    placeTagPink: {
+      color: colors.cream,
+      backgroundColor: colors.pink,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      fontSize: 10,
+      fontWeight: "900",
+      overflow: "hidden",
+    },
+    placeTagGreen: {
+      color: colors.cream,
+      backgroundColor: colors.green,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      fontSize: 10,
+      fontWeight: "900",
+      overflow: "hidden",
+    },
+    placeTagOrange: {
+      color: colors.cream,
+      backgroundColor: colors.orange,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      fontSize: 10,
+      fontWeight: "900",
+      overflow: "hidden",
+    },
+    removeButton: {
+      width: 40,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    removeIcon: {
+      color: colors.muted,
+      fontSize: 24,
+      lineHeight: 28,
+      fontWeight: "700",
+    },
+    openListsButton: {
+      minHeight: 42,
+      borderRadius: 999,
+      backgroundColor: colors.pink,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    openListsButtonText: {
+      color: colors.cream,
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    customListCard: {
+      minHeight: 104,
+      borderRadius: 18,
+      backgroundColor: colors.card,
+      borderWidth: 0.5,
+      borderColor: colors.softBorder,
+      marginBottom: 10,
+      flexDirection: "row",
+      overflow: "hidden",
+    },
+    customListAccent: {
+      width: 7,
+    },
+    customListBody: {
+      flex: 1,
+      minWidth: 0,
+      paddingVertical: 16,
+      paddingHorizontal: 16,
+      justifyContent: "center",
+    },
+    customListTitle: {
+      color: colors.cream,
+      fontSize: 17,
+      lineHeight: 22,
+      fontWeight: "800",
+      letterSpacing: -0.2,
+      marginBottom: 5,
+    },
+    customListText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      lineHeight: 19,
+      marginBottom: 7,
+    },
+    customListMeta: {
+      color: colors.pink,
+      fontSize: 11,
+      fontWeight: "900",
+    },
+    customListArrow: {
+      width: 36,
+      color: colors.muted,
+      fontSize: 24,
+      textAlign: "center",
+      alignSelf: "center",
+    },
+    bottomCard: {
+      backgroundColor: colors.paper,
+      borderRadius: 22,
+      padding: 24,
+      marginTop: 4,
+      marginBottom: 0,
+    },
+    bottomKicker: {
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 3,
+      marginBottom: 14,
+    },
+    bottomTitle: {
+      color: colors.paperText,
+      fontSize: 32,
+      lineHeight: 37,
+      fontWeight: "900",
+      marginBottom: 10,
+    },
+    bottomText: {
+      color: colors.paperText,
+      fontSize: 16,
+      lineHeight: 25,
+    },
+  });
+}
