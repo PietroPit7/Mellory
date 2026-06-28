@@ -16,10 +16,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PressableScale } from "@/components/pressable-scale";
 import { melloryDarkColors as colors } from "@/contexts/mellory-theme";
-
-export const ONBOARDING_KEY = "mellory:onboarding-completed";
-export const PROFILE_KEY = "mellory:user-profile";
-const CUSTOM_LISTS_KEY = "mellory:custom-lists";
+import {
+  CUSTOM_LISTS_KEY,
+  ONBOARDING_KEY,
+  PROFILE_KEY,
+} from "@/services/storage-keys";
 
 type FoodOption = {
   id: string;

@@ -10,9 +10,9 @@ export default function NotFoundScreen() {
       <View style={styles.root}>
         <Text style={styles.code}>404</Text>
         <Text style={styles.title}>Pagina non trovata</Text>
-        <Text style={styles.sub}>Questo indirizzo non esiste nell'app.</Text>
+        <Text style={styles.sub}>Questo indirizzo non esiste in questa app.</Text>
         <Link href="/(tabs)" style={styles.link}>
-          <Text style={styles.linkText}>Torna all'app →</Text>
+          <Text style={styles.linkText}>{"Torna alla home >"}</Text>
         </Link>
       </View>
     </>

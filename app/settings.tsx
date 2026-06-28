@@ -6,15 +6,12 @@ import {
   Alert,
   Animated,
   Platform,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-
-import { PROFILE_KEY } from "./onboarding";
 
 import { PressableScale } from "@/components/pressable-scale";
 import {
@@ -28,6 +25,7 @@ import {
   type NavigationService,
   setPreferredNavigationService,
 } from "@/services/navigation-preferences";
+import { PROFILE_KEY } from "@/services/storage-keys";
 
 const appearanceOptions: {
   id: MelloryThemePreference;

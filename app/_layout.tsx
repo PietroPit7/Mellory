@@ -8,8 +8,7 @@ import {
   MelloryThemeProvider,
   useMelloryTheme,
 } from "@/contexts/mellory-theme";
-
-import { ONBOARDING_KEY } from "./onboarding";
+import { ONBOARDING_KEY } from "@/services/storage-keys";
 
 function WebGlobalStyles() {
   useEffect(() => {
