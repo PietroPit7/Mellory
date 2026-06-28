@@ -113,7 +113,7 @@ export default function MelloryMap({
           longitudeDelta: initialDelta,
         }}
         showsUserLocation
-        showsPointsOfInterests
+        showsPointsOfInterest
         showsBuildings
         showsCompass={false}
         showsScale={false}
