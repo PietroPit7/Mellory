@@ -1,8 +1,10 @@
+import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Tabs } from "expo-router";
 import { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useResponsiveLayout } from "@/components/responsive-layout";
+import { DESKTOP_TAB_RAIL_WIDTH, useResponsiveLayout } from "@/components/responsive-layout";
 import { type MelloryThemeColors, useMelloryTheme } from "@/contexts/mellory-theme";
 
 type TabIconName = "discover" | "list" | "map" | "bookmark";
@@ -68,27 +70,9 @@ function TabIcon({
     return (
       <Animated.View style={[styles.iconBox, animStyle]}>
         <View style={styles.mapIcon}>
-          <View
-            style={[
-              styles.mapPanel,
-              styles.mapPanelLeft,
-              { borderColor: tint },
-            ]}
-          />
-          <View
-            style={[
-              styles.mapPanel,
-              styles.mapPanelCenter,
-              { borderColor: tint },
-            ]}
-          />
-          <View
-            style={[
-              styles.mapPanel,
-              styles.mapPanelRight,
-              { borderColor: tint },
-            ]}
-          />
+          <View style={[styles.mapPanel, styles.mapPanelLeft, { borderColor: tint }]} />
+          <View style={[styles.mapPanel, styles.mapPanelCenter, { borderColor: tint }]} />
+          <View style={[styles.mapPanel, styles.mapPanelRight, { borderColor: tint }]} />
         </View>
       </Animated.View>
     );
@@ -100,23 +84,75 @@ function TabIcon({
         <View
           style={[
             styles.bookmarkPointLeft,
-            {
-              borderBottomColor: tint,
-              backgroundColor: colors.card,
-            },
+            { borderBottomColor: tint, backgroundColor: colors.card },
           ]}
         />
         <View
           style={[
             styles.bookmarkPointRight,
-            {
-              borderBottomColor: tint,
-              backgroundColor: colors.card,
-            },
+            { borderBottomColor: tint, backgroundColor: colors.card },
           ]}
         />
       </View>
     </Animated.View>
+  );
+}
+
+const TAB_ICON_NAMES: Record<string, TabIconName> = {
+  index: "discover",
+  lists: "list",
+  map: "map",
+  mellory: "bookmark",
+};
+
+function DesktopRail({
+  state,
+  navigation,
+  colors,
+}: BottomTabBarProps & { colors: MelloryThemeColors }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={[
+        railStyles.rail,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          top: insets.top + 18,
+          bottom: insets.bottom + 18,
+        },
+      ]}
+      accessibilityRole="tablist"
+    >
+      {state.routes.map((route, index) => {
+        const focused = state.index === index;
+        const iconName = TAB_ICON_NAMES[route.name];
+        if (!iconName) return null;
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: "tabPress",
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!focused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+
+        return (
+          <Pressable
+            key={route.key}
+            onPress={onPress}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: focused }}
+            style={railStyles.item}
+          >
+            <TabIcon name={iconName} focused={focused} colors={colors} />
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -126,29 +162,17 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      {...(isDesktopWeb
+        ? { tabBar: (props) => <DesktopRail {...props} colors={colors} /> }
+        : {})}
       screenOptions={{
         headerShown: false,
-        tabBarPosition: isDesktopWeb ? "left" : "bottom",
+        tabBarPosition: "bottom",
         tabBarActiveTintColor: colors.pink,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelPosition: "below-icon",
         tabBarStyle: isDesktopWeb
-          ? {
-              position: "absolute",
-              left: 18,
-              top: 18,
-              bottom: 18,
-              width: 78,
-              height: undefined,
-              borderRadius: 30,
-              backgroundColor: colors.card,
-              borderWidth: 1,
-              borderColor: colors.border,
-              paddingTop: 18,
-              paddingBottom: 18,
-              elevation: 0,
-              shadowOpacity: 0,
-            }
+          ? { display: "none" }
           : {
               position: "absolute",
               left: 0,
@@ -171,12 +195,12 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: "700",
-          letterSpacing: isDesktopWeb ? 0.4 : 0.8,
+          letterSpacing: 0.8,
           textTransform: "uppercase",
           marginTop: 3,
         },
         tabBarItemStyle: {
-          height: isDesktopWeb ? 76 : 62,
+          height: 62,
           paddingTop: 2,
           paddingBottom: 0,
           alignItems: "center",
@@ -223,10 +247,31 @@ export default function TabLayout() {
           ),
         }}
       />
-
     </Tabs>
   );
 }
+
+const railStyles = StyleSheet.create({
+  rail: {
+    position: "absolute",
+    left: 18,
+    width: DESKTOP_TAB_RAIL_WIDTH - 28,
+    borderRadius: 30,
+    borderWidth: 1,
+    paddingVertical: 18,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 18,
+    zIndex: 50,
+  },
+  item: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
 
 const styles = StyleSheet.create({
   iconBox: {
